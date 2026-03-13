@@ -7,18 +7,15 @@
     <title>Phil - Deine Community</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
         function handleGoogleLogin(response) {
-            // Zeigt dem User, dass es lädt
-            document.getElementById('login-text').innerText = "Wird eingeloggt...";
-            // Schickt die Daten sicher an unsere script.js
+            document.getElementById('login-text').innerText = "Wird authentifiziert...";
             window.dispatchEvent(new CustomEvent('googleLoginSuccess', {
                 detail: response
             }));
         }
     </script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body>
@@ -30,13 +27,10 @@
                 <div class="logo-pulse"><i class="fas fa-play"></i></div>
                 <h2>Willkommen bei Phil</h2>
                 <p id="login-text" style="color: #aaa; margin-bottom: 30px; font-size: 14px;">Logge dich mit deinem offiziellen Google Account ein.</p>
-
                 <div id="g_id_onload" data-client_id="825368838802-830ev6a720t4hb5qrb7jo5de7orb4pr0.apps.googleusercontent.com" data-context="signin" data-ux_mode="popup" data-callback="handleGoogleLogin" data-auto_prompt="false">
                 </div>
-
                 <div style="display: flex; justify-content: center; width: 100%;">
-                    <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_black" data-text="signin_with" data-size="large" data-logo_alignment="left" data-width="250">
-                    </div>
+                    <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_black" data-text="signin_with" data-size="large" data-width="250"></div>
                 </div>
             </div>
         </div>
@@ -97,14 +91,32 @@
             <div class="profile-header">
                 <img src="" id="profile-pic" class="profile-image">
                 <h2 id="profile-name">Benutzername</h2>
-                <p id="profile-bio" class="profile-bio">Hier könnte deine coole Bio stehen. Beschreibe dich!</p>
+                <div id="profile-level" class="creator-level">Level 1 Creator 🌟</div>
+                <p id="profile-bio" class="profile-bio">Hier könnte deine coole Bio stehen.</p>
+
                 <div class="profile-stats">
                     <div class="stat-box"><strong id="stat-following">0</strong><span>Folge ich</span></div>
                     <div class="stat-box"><strong id="stat-followers">0</strong><span>Follower</span></div>
                     <div class="stat-box"><strong id="stat-likes">0</strong><span>Likes</span></div>
                 </div>
+
                 <button id="profile-action-btn" class="profile-action-btn">Folgen</button>
                 <div id="admin-controls" style="width: 100%;"></div>
+
+                <div id="private-stats" style="display: none; width: 100%; margin-top: 20px; background: #111; border-radius: 15px; padding: 15px; border: 1px solid #333;">
+                    <div style="display: flex; justify-content: space-around; text-align: center;">
+                        <div>
+                            <i class="fas fa-coins" style="color: #ffd700; font-size: 20px; margin-bottom: 5px;"></i>
+                            <strong id="my-coins" style="display: block; font-size: 16px;">1000</strong>
+                            <span style="font-size: 10px; color: #888;">Deine Coins</span>
+                        </div>
+                        <div>
+                            <i class="fas fa-eye" style="color: #00f2fe; font-size: 20px; margin-bottom: 5px;"></i>
+                            <strong id="my-views" style="display: block; font-size: 16px;">0</strong>
+                            <span style="font-size: 10px; color: #888;">Profil Aufrufe</span>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="profile-tabs">
                 <div class="profile-tab active"><i class="fas fa-bars"></i></div>

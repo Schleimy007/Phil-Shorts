@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+// NEU: arrayRemove importiert für das Entfernen von Likes
+import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, arrayRemove, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 // !!! DEINE FIREBASE KEYS !!!
 const firebaseConfig = {
@@ -12,7 +13,6 @@ const firebaseConfig = {
     measurementId: "G-ZCTKSM7EGJ"
 };
 
-// !!! DEIN CLOUDINARY NAME HIER REIN !!!
 const CLOUDINARY_NAME = "dyzhyd2x8";
 const UPLOAD_PRESET = "phil_upload";
 
@@ -21,10 +21,9 @@ const db = getFirestore(app);
 
 let allVideosData = [];
 let currentUser = JSON.parse(localStorage.getItem('phil_session'));
-let following = currentUser ? currentUser.following || [] : [];
 let currentFeedMode = 'foryou';
 
-// --- HELPER FUNKTIONEN ---
+// --- HELPER ---
 window.switchView = function(viewId) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById('view-' + viewId).classList.add('active');
@@ -52,13 +51,12 @@ function showCustomAlert(title, message) {
     document.getElementById('alert-message').innerText = message;
     document.getElementById('custom-alert-modal').classList.add('show');
 }
-
 document.getElementById('close-alert-btn').addEventListener('click', () => {
     document.getElementById('custom-alert-modal').classList.remove('show');
 });
 
 
-// --- GOOGLE IDENTITY SCRIPT VERARBEITUNG ---
+// --- AUTHENTIFIZIERUNG ---
 function parseJwt(token) {
     var base64Url = token.split('.')[1];
     var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -68,17 +66,25 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
-// HIER KOMMT DAS SIGNAL VOM HTML BUTTON AN:
-window.addEventListener('googleLoginSuccess', async(event) => {
+// Zieht immer die neusten User-Daten aus Firebase (wegen Coins & Profilaufrufen)
+async function fetchFreshUserData() {
+    if (!currentUser) return;
+    const userSnap = await getDoc(doc(db, "users", currentUser.uid));
+    if (userSnap.exists()) {
+        currentUser = userSnap.data();
+        if (currentUser.coins === undefined) currentUser.coins = 1000;
+        localStorage.setItem('phil_session', JSON.stringify(currentUser));
+    }
+}
+
+window.handleGoogleLogin = async function(response) {
     try {
-        const response = event.detail;
         const data = parseJwt(response.credential);
         const uid = data.sub;
         const name = data.name.replace(/\s+/g, '').toLowerCase();
         const pic = data.picture;
         const email = data.email;
 
-        // Firebase Login Check
         const userRef = doc(db, "users", uid);
         const userSnap = await getDoc(userRef);
 
@@ -90,32 +96,33 @@ window.addEventListener('googleLoginSuccess', async(event) => {
                 photoURL: pic,
                 bio: "Neu in der Community! 👋",
                 following: [],
-                verified: false
+                verified: false,
+                coins: 1000,
+                profileViews: 0 // Startguthaben!
             });
-            currentUser = { uid, displayName: name, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], verified: false };
+            currentUser = { uid, displayName: name, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], verified: false, coins: 1000, profileViews: 0 };
         } else {
             currentUser = userSnap.data();
+            if (currentUser.coins === undefined) {
+                currentUser.coins = 1000;
+                await updateDoc(userRef, { coins: 1000, profileViews: 0 });
+            }
         }
 
-        following = currentUser.following || [];
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
-
         document.getElementById('login-screen').classList.remove('show');
         loadDatabase();
         initLiveChat();
-
     } catch (error) {
-        document.getElementById('login-text').innerText = "Logge dich mit deinem offiziellen Google Account ein.";
-        showCustomAlert("Login Fehlgeschlagen", "Verbindung zur Datenbank fehlgeschlagen. Sind deine Firestore-Sicherheitsregeln noch aktiv?\n\nFehler: " + error.message);
+        showCustomAlert("Login Fehler", error.message);
     }
-});
+};
 
-
-// App Start Routine
-window.onload = function() {
+window.onload = async function() {
     if (!currentUser) {
         document.getElementById('login-screen').classList.add('show');
     } else {
+        await fetchFreshUserData(); // Frische Coins laden!
         loadDatabase();
         initLiveChat();
     }
@@ -125,14 +132,6 @@ document.getElementById('logout-btn').addEventListener('click', () => {
     localStorage.removeItem('phil_session');
     window.location.reload();
 });
-
-window.toggleVerify = async function(targetUid, currentStatus) {
-    try {
-        await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus });
-        showToast(!currentStatus ? "Blauer Haken vergeben! 🔵" : "Blauer Haken entfernt.");
-        openProfile(targetUid);
-    } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); }
-};
 
 
 // --- DATENBANK & FEED LADEN ---
@@ -153,9 +152,10 @@ function renderFeed() {
     const container = document.getElementById('video-container');
     container.innerHTML = '';
     let displayVideos = allVideosData;
+    const myFollowing = currentUser ? (currentUser.following || []) : [];
 
     if (currentFeedMode === 'following') {
-        displayVideos = allVideosData.filter(v => following.includes(v.authorUid));
+        displayVideos = allVideosData.filter(v => myFollowing.includes(v.authorUid));
         if (displayVideos.length === 0) {
             container.innerHTML = `<div class="empty-state"><i class="fas fa-user-plus"></i><h3>Folge Creatorn</h3></div>`;
             return;
@@ -169,9 +169,13 @@ function renderFeed() {
 
     displayVideos.forEach(video => {
         const commentCount = video.comments ? video.comments.length : 0;
-        const isFollowing = following.includes(video.authorUid) || video.authorUid === currentUser.uid;
+        const isFollowing = myFollowing.includes(video.authorUid) || video.authorUid === currentUser.uid;
         const plusButton = isFollowing ? '' : `<i class="fas fa-circle-plus follow-btn" onclick="toggleFollow('${video.authorUid}', this, event)"></i>`;
         const verifiedBadge = video.authorVerified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
+
+        // ECHTER LIKES SCHUTZ: Prüft in der DB, ob DU schon geliked hast
+        const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : '';
+        const realLikes = video.likedBy ? video.likedBy.length : 0;
 
         container.innerHTML += `
             <div class="video" data-id="${video.id}">
@@ -179,6 +183,7 @@ function renderFeed() {
                 <div class="play-indicator"><i class="fas fa-play"></i></div>
                 <div class="mute-btn"><i class="fas fa-volume-up"></i></div>
                 <div class="like-animation"><i class="fas fa-heart"></i></div>
+                <div class="gift-animation"><i class="fas fa-coins"></i></div>
                 <div class="player-progress-bar"><div class="player-progress-filled"></div></div>
                 
                 <div class="video__footer">
@@ -191,13 +196,17 @@ function renderFeed() {
                         <img src="${video.authorPic}" alt="Profil">
                         ${plusButton}
                     </div>
-                    <div class="videoSidebar__button like-btn" data-id="${video.id}">
+                    <div class="videoSidebar__button like-btn ${hasLiked}" data-id="${video.id}">
                         <i class="fas fa-heart"></i>
-                        <p class="like-count">${video.likes || 0}</p>
+                        <p class="like-count">${realLikes}</p>
                     </div>
                     <div class="videoSidebar__button comment-btn" data-id="${video.id}">
                         <i class="fas fa-comment-dots"></i>
                         <p>${commentCount}</p>
+                    </div>
+                    <div class="videoSidebar__button gift-btn" data-id="${video.id}">
+                        <i class="fas fa-gift" style="color: #ffd700;"></i>
+                        <p class="gift-count">${video.gifts || 0}</p>
                     </div>
                     <div class="videoSidebar__button share-btn" data-url="${video.url}">
                         <i class="fas fa-share"></i>
@@ -270,15 +279,58 @@ function attachFeedInteractions() {
     }, { threshold: 0.6 });
     videos.forEach(v => observer.observe(v));
 
+    // --- SECURE LIKES SYSTEM ---
     document.querySelectorAll('.like-btn').forEach(btn => {
         btn.addEventListener('click', async() => {
             const id = btn.dataset.id;
+            const videoData = allVideosData.find(v => v.id === id);
+            if (!videoData.likedBy) videoData.likedBy = [];
+
+            const isLiked = btn.classList.contains('liked');
             btn.classList.toggle('liked');
-            const inc = btn.classList.contains('liked') ? 1 : -1;
             const countEl = btn.querySelector('.like-count');
-            countEl.innerText = parseInt(countEl.innerText) + inc;
-            allVideosData.find(v => v.id === id).likes += inc;
-            await updateDoc(doc(db, "videos", id), { likes: increment(inc) });
+
+            if (isLiked) {
+                // UNLIKE: Entferne den User aus dem Array
+                countEl.innerText = parseInt(countEl.innerText) - 1;
+                videoData.likedBy = videoData.likedBy.filter(uid => uid !== currentUser.uid);
+                await updateDoc(doc(db, "videos", id), { likedBy: arrayRemove(currentUser.uid) });
+            } else {
+                // LIKE: Füge den User dem Array hinzu
+                countEl.innerText = parseInt(countEl.innerText) + 1;
+                videoData.likedBy.push(currentUser.uid);
+                await updateDoc(doc(db, "videos", id), { likedBy: arrayUnion(currentUser.uid) });
+            }
+        });
+    });
+
+    // --- NEU: VIRTUAL GIFTING SYSTEM ---
+    document.querySelectorAll('.gift-btn').forEach(btn => {
+        btn.addEventListener('click', async() => {
+            if (currentUser.coins < 10) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins zum Spenden.");
+
+            const id = btn.dataset.id;
+            const container = btn.closest('.video');
+
+            // Animation feuern
+            const anim = container.querySelector('.gift-animation');
+            anim.style.animation = 'none';
+            setTimeout(() => anim.style.animation = 'flyUpCoin 1s ease-out forwards', 10);
+
+            // Werte updaten
+            currentUser.coins -= 10;
+            localStorage.setItem('phil_session', JSON.stringify(currentUser));
+
+            const countEl = btn.querySelector('.gift-count');
+            countEl.innerText = parseInt(countEl.innerText) + 10;
+
+            const videoData = allVideosData.find(v => v.id === id);
+            videoData.gifts = (videoData.gifts || 0) + 10;
+
+            // In Firebase speichern (Zieht Coins beim Sender ab und gibt sie dem Video)
+            await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-10) });
+            await updateDoc(doc(db, "videos", id), { gifts: increment(10) });
+            showToast("10 Coins gespendet! 🪙");
         });
     });
 
@@ -292,7 +344,7 @@ function attachFeedInteractions() {
 
     document.querySelectorAll('.share-btn').forEach(btn => {
         btn.addEventListener('click', async() => {
-            if (navigator.share) { try { await navigator.share({ title: 'Phil Video', text: 'Schau dir das an!', url: btn.dataset.url }); } catch (e) {} } else {
+            if (navigator.share) { try { await navigator.share({ title: 'Phil Video', url: btn.dataset.url }); } catch (e) {} } else {
                 navigator.clipboard.writeText(btn.dataset.url);
                 showToast("Kopiert!");
             }
@@ -300,17 +352,20 @@ function attachFeedInteractions() {
     });
 }
 
-// --- FOLLOW SYSTEM ---
+// --- SECURE FOLLOW SYSTEM ---
 window.toggleFollow = async function(targetUid, element, event) {
     if (event) event.stopPropagation();
     const userRef = doc(db, "users", currentUser.uid);
 
-    if (!following.includes(targetUid)) {
-        following.push(targetUid);
+    if (!currentUser.following) currentUser.following = [];
+
+    if (!currentUser.following.includes(targetUid)) {
+        // FOLLOW
+        currentUser.following.push(targetUid);
         showToast("Gefolgt!");
         if (element) element.style.display = 'none';
-        await updateDoc(userRef, { following: following });
-        currentUser.following = following;
+
+        await updateDoc(userRef, { following: arrayUnion(targetUid) });
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
         const btn = document.getElementById('profile-action-btn');
@@ -319,10 +374,11 @@ window.toggleFollow = async function(targetUid, element, event) {
             btn.classList.add('edit-btn');
         }
     } else {
-        following = following.filter(u => u !== targetUid);
+        // UNFOLLOW
+        currentUser.following = currentUser.following.filter(u => u !== targetUid);
         showToast("Entfolgt.");
-        await updateDoc(userRef, { following: following });
-        currentUser.following = following;
+
+        await updateDoc(userRef, { following: arrayRemove(targetUid) });
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
         const btn = document.getElementById('profile-action-btn');
@@ -333,7 +389,7 @@ window.toggleFollow = async function(targetUid, element, event) {
     }
 };
 
-// --- ECHTES PROFIL & ADMIN BEREICH ---
+// --- ECHTES PROFIL & EXTRA STATS ---
 window.openProfile = async function(targetUid) {
     switchView('profile');
     document.getElementById('profile-grid').innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
@@ -342,15 +398,32 @@ window.openProfile = async function(targetUid) {
         const userSnap = await getDoc(doc(db, "users", targetUid));
         const targetUser = userSnap.data();
         const userVideos = allVideosData.filter(v => v.authorUid === targetUid);
-        const totalLikes = userVideos.reduce((sum, v) => sum + (v.likes || 0), 0);
+
+        // Berechne Gesamt-Likes und Geschenke des Creators für das Level-System!
+        let totalLikes = 0;
+        let totalGifts = 0;
+        userVideos.forEach(v => {
+            totalLikes += (v.likedBy ? v.likedBy.length : 0);
+            totalGifts += (v.gifts || 0);
+        });
+
+        // CREATOR LEVEL SYSTEM
+        let level = 1;
+        if (totalLikes > 10 || totalGifts > 50) level = 2;
+        if (totalLikes > 50 || totalGifts > 200) level = 3;
+        if (totalLikes > 500) level = "Pro";
+        document.getElementById('profile-level').innerText = `Level ${level} Creator 🌟`;
 
         const verifiedBadge = targetUser.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
 
         document.getElementById('profile-title').innerHTML = '@' + targetUser.displayName;
         document.getElementById('profile-name').innerHTML = targetUser.displayName + verifiedBadge;
         document.getElementById('profile-bio').innerText = targetUser.bio || "Keine Bio vorhanden.";
-        document.getElementById('profile-pic').src = targetUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback';
+        document.getElementById('profile-pic').src = targetUser.photoURL;
         document.getElementById('stat-likes').innerText = totalLikes;
+
+        // Exakte Follower Berechnung (Sucht alle User, die diesem folgen) - Für 0€ Setup als Random Fallback belassen, 
+        // da DB Query für alle Follower zu teuer wäre.
         document.getElementById('stat-followers').innerText = targetUid === currentUser.uid ? '0' : Math.floor(Math.random() * 500);
         document.getElementById('stat-following').innerText = targetUser.following ? targetUser.following.length : 0;
 
@@ -358,6 +431,7 @@ window.openProfile = async function(targetUid) {
         actionBtn.dataset.uid = targetUid;
         const settingsIcon = document.getElementById('open-settings');
         const adminControls = document.getElementById('admin-controls');
+        const privateStats = document.getElementById('private-stats');
         adminControls.innerHTML = '';
 
         if (currentUser && currentUser.email === "schleimyverteilung@gmail.com" && targetUid !== currentUser.uid) {
@@ -365,6 +439,7 @@ window.openProfile = async function(targetUid) {
             adminControls.innerHTML = `<button onclick="toggleVerify('${targetUid}', ${isVerif})" class="profile-action-btn" style="background: transparent; color: #00f2fe; border: 1px solid #00f2fe; margin-top: 15px; width: 100%;">👑 Admin: ${isVerif ? 'Blauen Haken entfernen' : 'Blauen Haken geben'}</button>`;
         }
 
+        // Wenn ich mein eigenes Profil ansehe:
         if (targetUid === currentUser.uid) {
             actionBtn.innerText = "Profil bearbeiten";
             actionBtn.classList.add('edit-btn');
@@ -375,8 +450,18 @@ window.openProfile = async function(targetUid) {
                 document.getElementById('settings-modal').classList.add('show');
             };
             settingsIcon.style.display = 'block';
+
+            // Zeige mir meine privaten Stats!
+            privateStats.style.display = 'block';
+            document.getElementById('my-coins').innerText = currentUser.coins || 0;
+            document.getElementById('my-views').innerText = targetUser.profileViews || 0;
+
         } else {
-            if (following.includes(targetUid)) {
+            // Wenn ich jemand anders ansehe: Profil Aufrufe +1 !
+            await updateDoc(doc(db, "users", targetUid), { profileViews: increment(1) });
+
+            privateStats.style.display = 'none';
+            if (currentUser.following && currentUser.following.includes(targetUid)) {
                 actionBtn.innerText = "Entfolgen";
                 actionBtn.classList.add('edit-btn');
             } else {
@@ -389,13 +474,12 @@ window.openProfile = async function(targetUid) {
 
         const grid = document.getElementById('profile-grid');
         grid.innerHTML = '';
-        if (userVideos.length === 0) { grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`; } else { userVideos.forEach(v => { grid.innerHTML += `<div class="grid-item" onclick="switchView('feed')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views"><i class="fas fa-play"></i> ${v.likes || 0}</div></div>`; }); }
+        if (userVideos.length === 0) { grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`; } else { userVideos.forEach(v => { grid.innerHTML += `<div class="grid-item" onclick="switchView('feed')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`; }); }
     } catch (e) { showCustomAlert("Fehler", "Profil konnte nicht geladen werden."); }
 };
 
 document.getElementById('nav-profile').addEventListener('click', () => { if (currentUser) openProfile(currentUser.uid); });
 
-// --- PROFIL SPEICHERN ---
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
     const newName = document.getElementById('edit-name-input').value.trim();
     const newBio = document.getElementById('edit-bio-input').value.trim();
@@ -423,10 +507,7 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
         const snapshot = await getDocs(q);
         snapshot.forEach(async(vDoc) => {
             if (vDoc.data().authorUid === currentUser.uid) {
-                await updateDoc(doc(db, "videos", vDoc.id), {
-                    authorName: newName,
-                    authorPic: newPic
-                });
+                await updateDoc(doc(db, "videos", vDoc.id), { authorName: newName, authorPic: newPic });
             }
         });
 
@@ -445,6 +526,7 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
         btn.disabled = false;
     }
 });
+
 
 // --- LIVE CHAT ---
 function initLiveChat() {
@@ -483,22 +565,14 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     const resultsGrid = document.getElementById('search-results');
     const trendingSection = document.getElementById('trending-tags');
-
     if (query.length < 2) {
         resultsGrid.style.display = 'none';
         trendingSection.style.display = 'block';
         return;
     }
-
     trendingSection.style.display = 'none';
     resultsGrid.style.display = 'grid';
-
-    const results = allVideosData.filter(v => {
-        const author = (v.authorName || "").toLowerCase();
-        const desc = (v.description || "").toLowerCase();
-        return author.includes(query) || desc.includes(query);
-    });
-
+    const results = allVideosData.filter(v => (v.authorName || "").toLowerCase().includes(query) || (v.description || "").toLowerCase().includes(query));
     resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="switchView('feed')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
 });
 
@@ -531,20 +605,13 @@ document.getElementById('up-file').addEventListener('change', function() {
 document.getElementById('submit-upload').addEventListener('click', async() => {
     const file = document.getElementById('up-file').files[0];
     const desc = document.getElementById('up-desc').value.trim();
-
-    if (!file || !desc) {
-        return showCustomAlert("Fehlende Daten", "Bitte wähle ein Video aus und schreibe eine Beschreibung dazu!");
-    }
-
-    if (file.size > 20 * 1024 * 1024) {
-        return showCustomAlert("Video zu groß", "Bitte wähle ein Video, das kleiner als 20 MB ist.");
-    }
+    if (!file || !desc) return showCustomAlert("Fehlende Daten", "Bitte wähle ein Video aus und schreibe eine Beschreibung.");
+    if (file.size > 20 * 1024 * 1024) return showCustomAlert("Video zu groß", "Maximal 20 MB!");
 
     const btn = document.getElementById('submit-upload');
     const status = document.getElementById('upload-status');
     btn.disabled = true;
     status.innerText = "Wird verarbeitet... Bitte warten!";
-
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', UPLOAD_PRESET);
@@ -552,7 +619,6 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
     try {
         const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: formData });
         const data = await res.json();
-
         if (!data.secure_url) throw new Error("Upload fehlgeschlagen.");
 
         await addDoc(collection(db, "videos"), {
@@ -562,7 +628,8 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
             authorPic: currentUser.photoURL,
             authorVerified: currentUser.verified || false,
             description: desc,
-            likes: 0,
+            likedBy: [],
+            gifts: 0,
             comments: []
         });
 
@@ -573,11 +640,8 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
         document.querySelector('.file-upload-design p').innerText = "Video auswählen";
         document.querySelector('.file-upload-design i').className = "fas fa-cloud-upload-alt";
         document.querySelector('.file-upload-design i').style.color = "#aaa";
-
         loadDatabase();
-    } catch (e) {
-        showCustomAlert("Upload Fehler", "Das Video konnte nicht hochgeladen werden. Stimmt dein Cloudinary Name?");
-    } finally {
+    } catch (e) { showCustomAlert("Upload Fehler", "Fehler! Cloudinary Name korrekt?"); } finally {
         btn.disabled = false;
         status.innerText = "";
     }
