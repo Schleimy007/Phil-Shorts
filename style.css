@@ -27,7 +27,14 @@ body {
 }
 
 
-/* GLASSMORPHISM NAVIGATIONS */
+/* BLAUER HAKEN VERIFIZIERUNG */
+
+.verified-badge {
+    color: #00f2fe;
+    margin-left: 5px;
+    font-size: 0.9em;
+    filter: drop-shadow(0 0 3px rgba(0, 242, 254, 0.4));
+}
 
 .glass-nav {
     background: rgba(0, 0, 0, 0.85);
@@ -40,9 +47,6 @@ body {
     backdrop-filter: blur(10px);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
-
-
-/* VIEWS LOGIC */
 
 .view {
     position: absolute;
@@ -64,9 +68,6 @@ body {
     pointer-events: auto;
     z-index: 5;
 }
-
-
-/* GOOGLE LOGIN SCREEN */
 
 .full-screen-overlay {
     position: absolute;
@@ -124,35 +125,6 @@ body {
     }
 }
 
-.google-btn {
-    width: 100%;
-    background: white;
-    color: black;
-    border: none;
-    padding: 12px;
-    border-radius: 30px;
-    font-weight: bold;
-    font-size: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    cursor: pointer;
-    transition: transform 0.1s;
-}
-
-.google-btn:active {
-    transform: scale(0.95);
-}
-
-.google-btn img {
-    width: 24px;
-    height: 24px;
-}
-
-
-/* ALERTS */
-
 .toast {
     position: absolute;
     top: 70px;
@@ -176,9 +148,6 @@ body {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
-
-
-/* TOP HEADER (FEED) */
 
 .app__header {
     position: absolute;
@@ -243,9 +212,6 @@ body {
     cursor: pointer;
     padding: 5px;
 }
-
-
-/* FEED & VIDEOS */
 
 .app__videos {
     height: 100%;
@@ -456,9 +422,6 @@ body {
     animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-
-/* PROFIL & GRID */
-
 .profile-header {
     display: flex;
     flex-direction: column;
@@ -572,9 +535,6 @@ body {
     gap: 5px;
 }
 
-
-/* DISCORD STYLE CHAT */
-
 #view-chat {
     display: flex;
     flex-direction: column;
@@ -620,6 +580,7 @@ body {
     height: 36px;
     border-radius: 50%;
     object-fit: cover;
+    cursor: pointer;
 }
 
 .chat-bubble {
@@ -646,6 +607,7 @@ body {
     margin-left: 2px;
     display: block;
     font-weight: 600;
+    cursor: pointer;
 }
 
 .chat-msg.me .chat-username {
@@ -692,9 +654,6 @@ body {
 .chat-send-btn:active {
     transform: scale(0.9);
 }
-
-
-/* SUCHE & TRENDING */
 
 .search-input-box {
     flex: 1;
@@ -759,9 +718,6 @@ body {
     font-size: 13px;
     color: #888;
 }
-
-
-/* MODALS & UPLOAD */
 
 .modal {
     position: absolute;
@@ -919,9 +875,6 @@ body {
     font-weight: 600;
 }
 
-
-/* BOTTOM NAV */
-
 .app__bottom-nav {
     position: absolute;
     bottom: 0;
@@ -972,9 +925,6 @@ body {
 .plus-box i {
     font-size: 16px;
 }
-
-
-/* Utilities */
 
 .loading-screen,
 .empty-state {
