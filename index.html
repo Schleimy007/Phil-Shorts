@@ -7,6 +7,17 @@
     <title>Phil - Deine Community</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        function handleGoogleLogin(response) {
+            // Zeigt dem User, dass es lädt
+            document.getElementById('login-text').innerText = "Wird eingeloggt...";
+            // Schickt die Daten sicher an unsere script.js
+            window.dispatchEvent(new CustomEvent('googleLoginSuccess', {
+                detail: response
+            }));
+        }
+    </script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
@@ -18,9 +29,9 @@
             <div class="login-box">
                 <div class="logo-pulse"><i class="fas fa-play"></i></div>
                 <h2>Willkommen bei Phil</h2>
-                <p style="color: #aaa; margin-bottom: 30px; font-size: 14px;">Logge dich mit deinem offiziellen Google Account ein.</p>
+                <p id="login-text" style="color: #aaa; margin-bottom: 30px; font-size: 14px;">Logge dich mit deinem offiziellen Google Account ein.</p>
 
-                <div id="g_id_onload" data-client_id="825368838802-a9n5b3qqmmoip0nanftd0h4eic4tt14t.apps.googleusercontent.com" data-context="signin" data-ux_mode="popup" data-callback="handleGoogleLogin" data-auto_prompt="false">
+                <div id="g_id_onload" data-client_id="825368838802-830ev6a720t4hb5qrb7jo5de7orb4pr0.apps.googleusercontent.com" data-context="signin" data-ux_mode="popup" data-callback="handleGoogleLogin" data-auto_prompt="false">
                 </div>
 
                 <div style="display: flex; justify-content: center; width: 100%;">

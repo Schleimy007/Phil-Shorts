@@ -12,9 +12,6 @@ const firebaseConfig = {
     measurementId: "G-ZCTKSM7EGJ"
 };
 
-// DEINE CLIENT ID FÜR DEN MULTI-LOGIN 
-const GOOGLE_CLIENT_ID = "825368838802-830ev6a720t4hb5qrb7jo5de7orb4pr0.apps.googleusercontent.com";
-
 // !!! DEIN CLOUDINARY NAME HIER REIN !!!
 const CLOUDINARY_NAME = "dyzhyd2x8";
 const UPLOAD_PRESET = "phil_upload";
@@ -50,18 +47,18 @@ function showToast(msg) {
     setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
-// --- NEU: CUSTOM ALERT MODAL ---
 function showCustomAlert(title, message) {
     document.getElementById('alert-title').innerText = title;
     document.getElementById('alert-message').innerText = message;
     document.getElementById('custom-alert-modal').classList.add('show');
 }
+
 document.getElementById('close-alert-btn').addEventListener('click', () => {
     document.getElementById('custom-alert-modal').classList.remove('show');
 });
 
 
-// --- GOOGLE IDENTITY SCRIPT (OFFIZIELL) ---
+// --- GOOGLE IDENTITY SCRIPT VERARBEITUNG ---
 function parseJwt(token) {
     var base64Url = token.split('.')[1];
     var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -71,49 +68,53 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
-window.handleGoogleLogin = async(response) => {
-    const data = parseJwt(response.credential);
-    const uid = data.sub;
-    const name = data.name.replace(/\s+/g, '').toLowerCase();
-    const pic = data.picture;
-    const email = data.email;
+// HIER KOMMT DAS SIGNAL VOM HTML BUTTON AN:
+window.addEventListener('googleLoginSuccess', async(event) => {
+    try {
+        const response = event.detail;
+        const data = parseJwt(response.credential);
+        const uid = data.sub;
+        const name = data.name.replace(/\s+/g, '').toLowerCase();
+        const pic = data.picture;
+        const email = data.email;
 
-    const userRef = doc(db, "users", uid);
-    const userSnap = await getDoc(userRef);
+        // Firebase Login Check
+        const userRef = doc(db, "users", uid);
+        const userSnap = await getDoc(userRef);
 
-    if (!userSnap.exists()) {
-        await setDoc(userRef, {
-            uid: uid,
-            displayName: name,
-            email: email,
-            photoURL: pic,
-            bio: "Neu in der Community! 👋",
-            following: [],
-            verified: false
-        });
-        currentUser = { uid, displayName: name, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], verified: false };
-    } else {
-        currentUser = userSnap.data();
+        if (!userSnap.exists()) {
+            await setDoc(userRef, {
+                uid: uid,
+                displayName: name,
+                email: email,
+                photoURL: pic,
+                bio: "Neu in der Community! 👋",
+                following: [],
+                verified: false
+            });
+            currentUser = { uid, displayName: name, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], verified: false };
+        } else {
+            currentUser = userSnap.data();
+        }
+
+        following = currentUser.following || [];
+        localStorage.setItem('phil_session', JSON.stringify(currentUser));
+
+        document.getElementById('login-screen').classList.remove('show');
+        loadDatabase();
+        initLiveChat();
+
+    } catch (error) {
+        document.getElementById('login-text').innerText = "Logge dich mit deinem offiziellen Google Account ein.";
+        showCustomAlert("Login Fehlgeschlagen", "Verbindung zur Datenbank fehlgeschlagen. Sind deine Firestore-Sicherheitsregeln noch aktiv?\n\nFehler: " + error.message);
     }
+});
 
-    following = currentUser.following || [];
-    localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
-    document.getElementById('login-screen').classList.remove('show');
-    loadDatabase();
-    initLiveChat();
-};
-
+// App Start Routine
 window.onload = function() {
     if (!currentUser) {
         document.getElementById('login-screen').classList.add('show');
-        google.accounts.id.initialize({
-            client_id: GOOGLE_CLIENT_ID,
-            callback: handleGoogleLogin
-        });
-        google.accounts.id.renderButton(
-            document.getElementById("google-button-container"), { theme: "outline", size: "large", type: "standard", shape: "pill", width: 250 }
-        );
     } else {
         loadDatabase();
         initLiveChat();
@@ -121,7 +122,6 @@ window.onload = function() {
 };
 
 document.getElementById('logout-btn').addEventListener('click', () => {
-    google.accounts.id.disableAutoSelect();
     localStorage.removeItem('phil_session');
     window.location.reload();
 });
@@ -395,7 +395,7 @@ window.openProfile = async function(targetUid) {
 
 document.getElementById('nav-profile').addEventListener('click', () => { if (currentUser) openProfile(currentUser.uid); });
 
-// --- NEU: PROFIL SPEICHERN (inkl. Datenbank-Sync für alte Videos) ---
+// --- PROFIL SPEICHERN ---
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
     const newName = document.getElementById('edit-name-input').value.trim();
     const newBio = document.getElementById('edit-bio-input').value.trim();
@@ -408,20 +408,17 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
     btn.disabled = true;
 
     try {
-        // 1. Update den User in Firebase
         await updateDoc(doc(db, "users", currentUser.uid), {
             displayName: newName,
             bio: newBio,
             photoURL: newPic
         });
 
-        // 2. Lokal updaten
         currentUser.displayName = newName;
         currentUser.bio = newBio;
         currentUser.photoURL = newPic;
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
-        // 3. WICHTIG: Alte Videos in Firebase updaten, damit die Suche funktioniert
         const q = query(collection(db, "videos"));
         const snapshot = await getDocs(q);
         snapshot.forEach(async(vDoc) => {
@@ -433,7 +430,6 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
             }
         });
 
-        // 4. UI sofort anpassen
         document.getElementById('profile-name').innerHTML = newName + (currentUser.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '');
         document.getElementById('profile-title').innerText = '@' + newName;
         document.getElementById('profile-bio').innerText = newBio;
@@ -441,7 +437,7 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
 
         showToast("Profil erfolgreich aktualisiert!");
         document.getElementById('settings-modal').classList.remove('show');
-        loadDatabase(); // Lädt den Feed neu, um Namen zu refreshen
+        loadDatabase();
     } catch (e) {
         showCustomAlert("Fehler", "Fehler beim Speichern der Profildaten.");
     } finally {
@@ -449,14 +445,6 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
         btn.disabled = false;
     }
 });
-
-document.getElementById('open-settings').addEventListener('click', () => {
-    document.getElementById('edit-name-input').value = currentUser.displayName;
-    document.getElementById('edit-pic-input').value = currentUser.photoURL;
-    document.getElementById('edit-bio-input').value = currentUser.bio;
-    document.getElementById('settings-modal').classList.add('show');
-});
-
 
 // --- LIVE CHAT ---
 function initLiveChat() {
@@ -490,7 +478,7 @@ document.getElementById('send-chat-btn').addEventListener('click', async() => {
 });
 document.getElementById('chat-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-chat-btn').click(); });
 
-// --- SUCHE BUGFIX ---
+// --- SUCHE ---
 document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     const resultsGrid = document.getElementById('search-results');
@@ -506,7 +494,6 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     resultsGrid.style.display = 'grid';
 
     const results = allVideosData.filter(v => {
-        // Fallback, falls ein Video mal fehlerhaft gespeichert wurde
         const author = (v.authorName || "").toLowerCase();
         const desc = (v.description || "").toLowerCase();
         return author.includes(query) || desc.includes(query);
@@ -549,7 +536,6 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
         return showCustomAlert("Fehlende Daten", "Bitte wähle ein Video aus und schreibe eine Beschreibung dazu!");
     }
 
-    // SICHERHEIT: Max. Dateigröße für Uploads
     if (file.size > 20 * 1024 * 1024) {
         return showCustomAlert("Video zu groß", "Bitte wähle ein Video, das kleiner als 20 MB ist.");
     }
