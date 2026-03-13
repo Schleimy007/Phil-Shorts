@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Phil - Deine Community</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="app">
+        <div id="toast" class="toast">Nachricht hier</div>
+
+        <div id="login-screen" class="full-screen-overlay show">
+            <div class="login-box">
+                <div class="logo-pulse"><i class="fas fa-play"></i></div>
+                <h2>Willkommen bei Phil</h2>
+                <p style="color: #aaa; margin-bottom: 30px; font-size: 14px;">Logge dich ein, um Videos hochzuladen, zu liken und mit der Community zu chatten.</p>
+                <button id="google-login-btn" class="google-btn">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google">
+                    Mit Google anmelden
+                </button>
+            </div>
+        </div>
+
+        <div id="view-feed" class="view active">
+            <div class="app__header">
+                <span class="header__link" id="tab-following">Folge ich</span>
+                <span class="header__link active" id="tab-foryou">Für dich</span>
+                <i class="fas fa-search search-icon" onclick="switchView('search')"></i>
+            </div>
+            <div class="app__videos" id="video-container">
+                <div class="loading-screen"><i class="fas fa-spinner fa-spin"></i>
+                    <p>Lade Algorithmus...</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-search" class="view">
+            <div class="top-bar glass-nav">
+                <h3 style="margin-right: 15px;">Entdecken</h3>
+                <div class="search-input-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="search-input" placeholder="Suchen..." class="search-bar">
+                </div>
+            </div>
+            <div class="trending-section" id="trending-tags">
+                <h4 style="padding: 15px; font-size: 14px; color: #888; text-transform: uppercase;">Angesagte Hashtags</h4>
+                <div class="trend-item" onclick="document.getElementById('search-input').value='phil'; document.getElementById('search-input').dispatchEvent(new Event('input'));">
+                    <div class="trend-icon"><i class="fas fa-fire"></i></div>
+                    <div class="trend-info"><strong>phil</strong>
+                        <p>Trending in deiner Region</p>
+                    </div>
+                </div>
+                <div class="trend-item" onclick="document.getElementById('search-input').value='viral'; document.getElementById('search-input').dispatchEvent(new Event('input'));">
+                    <div class="trend-icon"><i class="fas fa-bolt"></i></div>
+                    <div class="trend-info"><strong>viral</strong>
+                        <p>Beliebt bei Creatorn</p>
+                    </div>
+                </div>
+            </div>
+            <div class="grid-container" id="search-results" style="display: none; padding-top: 10px;"></div>
+        </div>
+
+        <div id="view-chat" class="view">
+            <div class="top-bar glass-nav">
+                <h3><i class="fas fa-hashtag" style="color: #888; margin-right: 8px;"></i>general</h3>
+                <i class="fas fa-user-friends" style="color: #aaa;"></i>
+            </div>
+            <div class="chat-container" id="chat-box">
+                <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>
+            </div>
+            <div class="chat-input-wrapper glass-nav-bottom">
+                <input type="text" id="chat-input" placeholder="Nachricht an #general..." class="chat-input">
+                <button id="send-chat-btn" class="chat-send-btn"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
+
+        <div id="view-profile" class="view">
+            <div class="top-bar glass-nav">
+                <i class="fas fa-chevron-left back-btn" onclick="switchView('feed')"></i>
+                <h3 id="profile-title" style="font-weight: 600;">@username</h3>
+                <i class="fas fa-bars back-btn" id="open-settings" style="display:none;"></i>
+            </div>
+            <div class="profile-header">
+                <img src="" id="profile-pic" class="profile-image">
+                <h2 id="profile-name">Benutzername</h2>
+                <p id="profile-bio" class="profile-bio">Hier könnte deine coole Bio stehen. Beschreibe dich!</p>
+                <div class="profile-stats">
+                    <div class="stat-box"><strong id="stat-following">0</strong><span>Folge ich</span></div>
+                    <div class="stat-box"><strong id="stat-followers">0</strong><span>Follower</span></div>
+                    <div class="stat-box"><strong id="stat-likes">0</strong><span>Likes</span></div>
+                </div>
+                <button id="profile-action-btn" class="profile-action-btn">Folgen</button>
+            </div>
+            <div class="profile-tabs">
+                <div class="profile-tab active"><i class="fas fa-bars"></i></div>
+                <div class="profile-tab"><i class="fas fa-heart"></i></div>
+            </div>
+            <div class="grid-container" id="profile-grid"></div>
+        </div>
+
+        <div class="app__bottom-nav glass-nav-bottom">
+            <div class="nav__item active" onclick="switchView('feed')">
+                <i class="fas fa-home"></i><span>Home</span>
+            </div>
+            <div class="nav__item" onclick="switchView('search')">
+                <i class="fas fa-compass"></i><span>Entdecken</span>
+            </div>
+            <div class="nav__item add-btn" id="open-upload">
+                <div class="plus-box"><i class="fas fa-plus"></i></div>
+            </div>
+            <div class="nav__item" onclick="switchView('chat')">
+                <i class="fas fa-comment-dots"></i><span>Chat</span>
+            </div>
+            <div class="nav__item" id="nav-profile">
+                <i class="fas fa-user"></i><span>Profil</span>
+            </div>
+        </div>
+
+        <div id="comment-modal" class="modal">
+            <div class="modal-header">
+                <h4>Kommentare</h4><i class="fas fa-times close-modal" id="close-comments"></i>
+            </div>
+            <div class="modal-body" id="comment-list"></div>
+            <div class="modal-footer">
+                <input type="text" id="new-comment-input" placeholder="Sag etwas Nettes..." class="comment-input">
+                <button id="submit-comment" class="comment-submit"><i class="fas fa-arrow-up"></i></button>
+            </div>
+        </div>
+
+        <div id="upload-modal" class="modal">
+            <div class="modal-header">
+                <h4>Neues Video</h4><i class="fas fa-times close-modal" id="close-upload"></i>
+            </div>
+            <div class="modal-body upload-body">
+                <div class="file-upload-wrapper">
+                    <input type="file" id="up-file" class="file-input-hidden" accept="video/*" required>
+                    <div class="file-upload-design" onclick="document.getElementById('up-file').click()">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <p>Video auswählen</p>
+                    </div>
+                </div>
+                <textarea id="up-desc" class="comment-input" placeholder="Beschreibe dein Video... #hashtags" rows="3" style="resize:none; border-radius:15px;"></textarea>
+                <p id="upload-status" style="text-align: center; font-size: 14px; font-weight: bold; color: #ff0050;"></p>
+                <button id="submit-upload" class="profile-action-btn" style="width:100%; padding:15px; font-size:16px;">Veröffentlichen</button>
+            </div>
+        </div>
+
+        <div id="settings-modal" class="modal">
+            <div class="modal-header">
+                <h4>Profil & Einstellungen</h4><i class="fas fa-times close-modal" id="close-settings"></i>
+            </div>
+            <div class="modal-body upload-body">
+                <label style="color:#888; font-size:12px; margin-left:5px;">Deine Bio / Beschreibung</label>
+                <textarea id="edit-bio-input" class="comment-input" placeholder="Wer bist du?" rows="3" style="resize:none; border-radius:15px;"></textarea>
+                <button id="save-bio-btn" class="profile-action-btn" style="width:100%; margin-bottom: 20px;">Bio Speichern</button>
+
+                <hr style="border:0; border-top:1px solid #222; margin: 10px 0 30px 0;">
+
+                <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050;">Abmelden</button>
+            </div>
+        </div>
+
+    </div>
+    <script type="module" src="script.js"></script>
+</body>
+
+</html>
