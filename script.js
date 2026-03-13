@@ -50,6 +50,17 @@ function showToast(msg) {
     setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
+// --- NEU: CUSTOM ALERT MODAL ---
+function showCustomAlert(title, message) {
+    document.getElementById('alert-title').innerText = title;
+    document.getElementById('alert-message').innerText = message;
+    document.getElementById('custom-alert-modal').classList.add('show');
+}
+document.getElementById('close-alert-btn').addEventListener('click', () => {
+    document.getElementById('custom-alert-modal').classList.remove('show');
+});
+
+
 // --- GOOGLE IDENTITY SCRIPT (OFFIZIELL) ---
 function parseJwt(token) {
     var base64Url = token.split('.')[1];
@@ -65,7 +76,7 @@ window.handleGoogleLogin = async(response) => {
     const uid = data.sub;
     const name = data.name.replace(/\s+/g, '').toLowerCase();
     const pic = data.picture;
-    const email = data.email; // Holt sich deine E-Mail!
+    const email = data.email;
 
     const userRef = doc(db, "users", uid);
     const userSnap = await getDoc(userRef);
@@ -78,7 +89,7 @@ window.handleGoogleLogin = async(response) => {
             photoURL: pic,
             bio: "Neu in der Community! 👋",
             following: [],
-            verified: false // Standardmäßig kein blauer Haken
+            verified: false
         });
         currentUser = { uid, displayName: name, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], verified: false };
     } else {
@@ -109,20 +120,18 @@ window.onload = function() {
     }
 };
 
-// MULTI-ACCOUNT LOGOUT
 document.getElementById('logout-btn').addEventListener('click', () => {
-    google.accounts.id.disableAutoSelect(); // Das sorgt dafür, dass Google beim nächsten Start nach dem Account fragt!
+    google.accounts.id.disableAutoSelect();
     localStorage.removeItem('phil_session');
     window.location.reload();
 });
 
-// --- ADMIN RECHTE (Blauen Haken geben) ---
 window.toggleVerify = async function(targetUid, currentStatus) {
     try {
         await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus });
         showToast(!currentStatus ? "Blauer Haken vergeben! 🔵" : "Blauer Haken entfernt.");
-        openProfile(targetUid); // Profil sofort neu laden, um Änderung zu sehen
-    } catch (e) { showToast("Fehler! Bist du wirklich Admin?"); }
+        openProfile(targetUid);
+    } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); }
 };
 
 
@@ -162,8 +171,6 @@ function renderFeed() {
         const commentCount = video.comments ? video.comments.length : 0;
         const isFollowing = following.includes(video.authorUid) || video.authorUid === currentUser.uid;
         const plusButton = isFollowing ? '' : `<i class="fas fa-circle-plus follow-btn" onclick="toggleFollow('${video.authorUid}', this, event)"></i>`;
-
-        // Zeigt den blauen Haken, wenn in der Datenbank gespeichert
         const verifiedBadge = video.authorVerified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
 
         container.innerHTML += `
@@ -341,8 +348,8 @@ window.openProfile = async function(targetUid) {
 
         document.getElementById('profile-title').innerHTML = '@' + targetUser.displayName;
         document.getElementById('profile-name').innerHTML = targetUser.displayName + verifiedBadge;
-        document.getElementById('profile-bio').innerText = targetUser.bio;
-        document.getElementById('profile-pic').src = targetUser.photoURL;
+        document.getElementById('profile-bio').innerText = targetUser.bio || "Keine Bio vorhanden.";
+        document.getElementById('profile-pic').src = targetUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback';
         document.getElementById('stat-likes').innerText = totalLikes;
         document.getElementById('stat-followers').innerText = targetUid === currentUser.uid ? '0' : Math.floor(Math.random() * 500);
         document.getElementById('stat-following').innerText = targetUser.following ? targetUser.following.length : 0;
@@ -351,9 +358,8 @@ window.openProfile = async function(targetUid) {
         actionBtn.dataset.uid = targetUid;
         const settingsIcon = document.getElementById('open-settings');
         const adminControls = document.getElementById('admin-controls');
-        adminControls.innerHTML = ''; // Vorherige Buttons löschen
+        adminControls.innerHTML = '';
 
-        // Prüfe ob der Eingeloggte Nutzer der ADMIN ist (schleimyverteilung@gmail.com)
         if (currentUser && currentUser.email === "schleimyverteilung@gmail.com" && targetUid !== currentUser.uid) {
             const isVerif = targetUser.verified || false;
             adminControls.innerHTML = `<button onclick="toggleVerify('${targetUid}', ${isVerif})" class="profile-action-btn" style="background: transparent; color: #00f2fe; border: 1px solid #00f2fe; margin-top: 15px; width: 100%;">👑 Admin: ${isVerif ? 'Blauen Haken entfernen' : 'Blauen Haken geben'}</button>`;
@@ -363,6 +369,8 @@ window.openProfile = async function(targetUid) {
             actionBtn.innerText = "Profil bearbeiten";
             actionBtn.classList.add('edit-btn');
             actionBtn.onclick = () => {
+                document.getElementById('edit-name-input').value = currentUser.displayName;
+                document.getElementById('edit-pic-input').value = currentUser.photoURL;
                 document.getElementById('edit-bio-input').value = currentUser.bio;
                 document.getElementById('settings-modal').classList.add('show');
             };
@@ -382,26 +390,73 @@ window.openProfile = async function(targetUid) {
         const grid = document.getElementById('profile-grid');
         grid.innerHTML = '';
         if (userVideos.length === 0) { grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`; } else { userVideos.forEach(v => { grid.innerHTML += `<div class="grid-item" onclick="switchView('feed')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views"><i class="fas fa-play"></i> ${v.likes || 0}</div></div>`; }); }
-    } catch (e) {}
+    } catch (e) { showCustomAlert("Fehler", "Profil konnte nicht geladen werden."); }
 };
 
 document.getElementById('nav-profile').addEventListener('click', () => { if (currentUser) openProfile(currentUser.uid); });
 
-document.getElementById('save-bio-btn').addEventListener('click', async() => {
+// --- NEU: PROFIL SPEICHERN (inkl. Datenbank-Sync für alte Videos) ---
+document.getElementById('save-settings-btn').addEventListener('click', async() => {
+    const newName = document.getElementById('edit-name-input').value.trim();
     const newBio = document.getElementById('edit-bio-input').value.trim();
+    const newPic = document.getElementById('edit-pic-input').value.trim() || currentUser.photoURL;
+
+    if (newName.length < 3) return showCustomAlert("Hinweis", "Dein Name muss mindestens 3 Zeichen lang sein.");
+
+    const btn = document.getElementById('save-settings-btn');
+    btn.innerText = "Speichere...";
+    btn.disabled = true;
+
     try {
-        await updateDoc(doc(db, "users", currentUser.uid), { bio: newBio });
+        // 1. Update den User in Firebase
+        await updateDoc(doc(db, "users", currentUser.uid), {
+            displayName: newName,
+            bio: newBio,
+            photoURL: newPic
+        });
+
+        // 2. Lokal updaten
+        currentUser.displayName = newName;
         currentUser.bio = newBio;
+        currentUser.photoURL = newPic;
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
+
+        // 3. WICHTIG: Alte Videos in Firebase updaten, damit die Suche funktioniert
+        const q = query(collection(db, "videos"));
+        const snapshot = await getDocs(q);
+        snapshot.forEach(async(vDoc) => {
+            if (vDoc.data().authorUid === currentUser.uid) {
+                await updateDoc(doc(db, "videos", vDoc.id), {
+                    authorName: newName,
+                    authorPic: newPic
+                });
+            }
+        });
+
+        // 4. UI sofort anpassen
+        document.getElementById('profile-name').innerHTML = newName + (currentUser.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '');
+        document.getElementById('profile-title').innerText = '@' + newName;
         document.getElementById('profile-bio').innerText = newBio;
-        showToast("Bio aktualisiert!");
+        document.getElementById('profile-pic').src = newPic;
+
+        showToast("Profil erfolgreich aktualisiert!");
         document.getElementById('settings-modal').classList.remove('show');
-    } catch (e) { showToast("Fehler beim Speichern!"); }
+        loadDatabase(); // Lädt den Feed neu, um Namen zu refreshen
+    } catch (e) {
+        showCustomAlert("Fehler", "Fehler beim Speichern der Profildaten.");
+    } finally {
+        btn.innerText = "Profil Speichern";
+        btn.disabled = false;
+    }
 });
+
 document.getElementById('open-settings').addEventListener('click', () => {
+    document.getElementById('edit-name-input').value = currentUser.displayName;
+    document.getElementById('edit-pic-input').value = currentUser.photoURL;
     document.getElementById('edit-bio-input').value = currentUser.bio;
     document.getElementById('settings-modal').classList.add('show');
 });
+
 
 // --- LIVE CHAT ---
 function initLiveChat() {
@@ -435,19 +490,28 @@ document.getElementById('send-chat-btn').addEventListener('click', async() => {
 });
 document.getElementById('chat-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-chat-btn').click(); });
 
-// --- SUCHE ---
+// --- SUCHE BUGFIX ---
 document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     const resultsGrid = document.getElementById('search-results');
     const trendingSection = document.getElementById('trending-tags');
+
     if (query.length < 2) {
         resultsGrid.style.display = 'none';
         trendingSection.style.display = 'block';
         return;
     }
+
     trendingSection.style.display = 'none';
     resultsGrid.style.display = 'grid';
-    const results = allVideosData.filter(v => v.authorName.toLowerCase().includes(query) || v.description.toLowerCase().includes(query));
+
+    const results = allVideosData.filter(v => {
+        // Fallback, falls ein Video mal fehlerhaft gespeichert wurde
+        const author = (v.authorName || "").toLowerCase();
+        const desc = (v.description || "").toLowerCase();
+        return author.includes(query) || desc.includes(query);
+    });
+
     resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="switchView('feed')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
 });
 
@@ -480,18 +544,31 @@ document.getElementById('up-file').addEventListener('change', function() {
 document.getElementById('submit-upload').addEventListener('click', async() => {
     const file = document.getElementById('up-file').files[0];
     const desc = document.getElementById('up-desc').value.trim();
-    if (!file || !desc) return showToast("Bitte Video und Beschreibung einfügen!");
+
+    if (!file || !desc) {
+        return showCustomAlert("Fehlende Daten", "Bitte wähle ein Video aus und schreibe eine Beschreibung dazu!");
+    }
+
+    // SICHERHEIT: Max. Dateigröße für Uploads
+    if (file.size > 20 * 1024 * 1024) {
+        return showCustomAlert("Video zu groß", "Bitte wähle ein Video, das kleiner als 20 MB ist.");
+    }
+
     const btn = document.getElementById('submit-upload');
     const status = document.getElementById('upload-status');
     btn.disabled = true;
     status.innerText = "Wird verarbeitet... Bitte warten!";
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('upload_preset', UPLOAD_PRESET);
+
     try {
         const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: formData });
         const data = await res.json();
+
         if (!data.secure_url) throw new Error("Upload fehlgeschlagen.");
+
         await addDoc(collection(db, "videos"), {
             url: data.secure_url,
             authorUid: currentUser.uid,
@@ -502,6 +579,7 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
             likes: 0,
             comments: []
         });
+
         showToast("Video veröffentlicht! 🎉");
         document.getElementById('upload-modal').classList.remove('show');
         document.getElementById('up-file').value = '';
@@ -509,8 +587,11 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
         document.querySelector('.file-upload-design p').innerText = "Video auswählen";
         document.querySelector('.file-upload-design i').className = "fas fa-cloud-upload-alt";
         document.querySelector('.file-upload-design i').style.color = "#aaa";
+
         loadDatabase();
-    } catch (e) { alert("Upload fehlgeschlagen! Cloudinary Name korrekt?"); } finally {
+    } catch (e) {
+        showCustomAlert("Upload Fehler", "Das Video konnte nicht hochgeladen werden. Stimmt dein Cloudinary Name?");
+    } finally {
         btn.disabled = false;
         status.innerText = "";
     }

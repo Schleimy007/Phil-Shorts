@@ -125,6 +125,64 @@ body {
     }
 }
 
+
+/* CUSTOM ALERT MODAL */
+
+.alert-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 3000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    backdrop-filter: blur(3px);
+}
+
+.alert-modal-overlay.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.alert-box {
+    background: #1a1a1a;
+    padding: 30px 20px;
+    border-radius: 20px;
+    text-align: center;
+    width: 80%;
+    border: 1px solid #333;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+    transform: scale(0.8);
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.alert-modal-overlay.show .alert-box {
+    transform: scale(1);
+}
+
+.alert-icon {
+    font-size: 40px;
+    color: #ff0050;
+    margin-bottom: 15px;
+}
+
+.alert-box h3 {
+    margin-bottom: 10px;
+    font-size: 18px;
+}
+
+.alert-box p {
+    color: #aaa;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
 .toast {
     position: absolute;
     top: 70px;
