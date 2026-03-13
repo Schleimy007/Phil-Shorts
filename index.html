@@ -7,6 +7,7 @@
     <title>Phil - Deine Community</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body>
@@ -17,11 +18,8 @@
             <div class="login-box">
                 <div class="logo-pulse"><i class="fas fa-play"></i></div>
                 <h2>Willkommen bei Phil</h2>
-                <p style="color: #aaa; margin-bottom: 30px; font-size: 14px;">Logge dich ein, um Videos hochzuladen, zu liken und mit der Community zu chatten.</p>
-                <button id="google-login-btn" class="google-btn">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google">
-                    Mit Google anmelden
-                </button>
+                <p style="color: #aaa; margin-bottom: 30px; font-size: 14px;">Logge dich mit deinem offiziellen Google Account ein.</p>
+                <div id="google-button-container" style="display: flex; justify-content: center;"></div>
             </div>
         </div>
 
@@ -52,12 +50,6 @@
                     <div class="trend-icon"><i class="fas fa-fire"></i></div>
                     <div class="trend-info"><strong>phil</strong>
                         <p>Trending in deiner Region</p>
-                    </div>
-                </div>
-                <div class="trend-item" onclick="document.getElementById('search-input').value='viral'; document.getElementById('search-input').dispatchEvent(new Event('input'));">
-                    <div class="trend-icon"><i class="fas fa-bolt"></i></div>
-                    <div class="trend-info"><strong>viral</strong>
-                        <p>Beliebt bei Creatorn</p>
                     </div>
                 </div>
             </div>
@@ -94,6 +86,7 @@
                     <div class="stat-box"><strong id="stat-likes">0</strong><span>Likes</span></div>
                 </div>
                 <button id="profile-action-btn" class="profile-action-btn">Folgen</button>
+                <div id="admin-controls" style="width: 100%;"></div>
             </div>
             <div class="profile-tabs">
                 <div class="profile-tab active"><i class="fas fa-bars"></i></div>
@@ -160,7 +153,7 @@
 
                 <hr style="border:0; border-top:1px solid #222; margin: 10px 0 30px 0;">
 
-                <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050;">Abmelden</button>
+                <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050;">Abmelden / Account wechseln</button>
             </div>
         </div>
 
