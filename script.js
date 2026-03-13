@@ -1,5 +1,4 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-// NEU: arrayRemove importiert für das Entfernen von Likes
 import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, arrayRemove, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 // !!! DEINE FIREBASE KEYS !!!
@@ -56,7 +55,7 @@ document.getElementById('close-alert-btn').addEventListener('click', () => {
 });
 
 
-// --- AUTHENTIFIZIERUNG ---
+// --- AUTHENTIFIZIERUNG & GOOGLE BRÜCKE ---
 function parseJwt(token) {
     var base64Url = token.split('.')[1];
     var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -66,19 +65,22 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
-// Zieht immer die neusten User-Daten aus Firebase (wegen Coins & Profilaufrufen)
 async function fetchFreshUserData() {
     if (!currentUser) return;
-    const userSnap = await getDoc(doc(db, "users", currentUser.uid));
-    if (userSnap.exists()) {
-        currentUser = userSnap.data();
-        if (currentUser.coins === undefined) currentUser.coins = 1000;
-        localStorage.setItem('phil_session', JSON.stringify(currentUser));
-    }
+    try {
+        const userSnap = await getDoc(doc(db, "users", currentUser.uid));
+        if (userSnap.exists()) {
+            currentUser = userSnap.data();
+            if (currentUser.coins === undefined) currentUser.coins = 1000;
+            localStorage.setItem('phil_session', JSON.stringify(currentUser));
+        }
+    } catch (e) {}
 }
 
-window.handleGoogleLogin = async function(response) {
+// HIER IST DIE REPARIERTE BRÜCKE FÜR DEN GOOGLE LOGIN!
+window.addEventListener('googleLoginSuccess', async(event) => {
     try {
+        const response = event.detail;
         const data = parseJwt(response.credential);
         const uid = data.sub;
         const name = data.name.replace(/\s+/g, '').toLowerCase();
@@ -98,7 +100,7 @@ window.handleGoogleLogin = async function(response) {
                 following: [],
                 verified: false,
                 coins: 1000,
-                profileViews: 0 // Startguthaben!
+                profileViews: 0
             });
             currentUser = { uid, displayName: name, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], verified: false, coins: 1000, profileViews: 0 };
         } else {
@@ -114,15 +116,16 @@ window.handleGoogleLogin = async function(response) {
         loadDatabase();
         initLiveChat();
     } catch (error) {
-        showCustomAlert("Login Fehler", error.message);
+        showCustomAlert("Login Fehler", "Datenbank-Fehler beim Login: " + error.message);
+        document.getElementById('login-text').innerText = "Logge dich mit deinem offiziellen Google Account ein.";
     }
-};
+});
 
 window.onload = async function() {
     if (!currentUser) {
         document.getElementById('login-screen').classList.add('show');
     } else {
-        await fetchFreshUserData(); // Frische Coins laden!
+        await fetchFreshUserData();
         loadDatabase();
         initLiveChat();
     }
@@ -173,7 +176,7 @@ function renderFeed() {
         const plusButton = isFollowing ? '' : `<i class="fas fa-circle-plus follow-btn" onclick="toggleFollow('${video.authorUid}', this, event)"></i>`;
         const verifiedBadge = video.authorVerified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
 
-        // ECHTER LIKES SCHUTZ: Prüft in der DB, ob DU schon geliked hast
+        // CHECK OB SCHON GELIKED!
         const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : '';
         const realLikes = video.likedBy ? video.likedBy.length : 0;
 
@@ -279,7 +282,7 @@ function attachFeedInteractions() {
     }, { threshold: 0.6 });
     videos.forEach(v => observer.observe(v));
 
-    // --- SECURE LIKES SYSTEM ---
+    // SECURE LIKES
     document.querySelectorAll('.like-btn').forEach(btn => {
         btn.addEventListener('click', async() => {
             const id = btn.dataset.id;
@@ -291,12 +294,10 @@ function attachFeedInteractions() {
             const countEl = btn.querySelector('.like-count');
 
             if (isLiked) {
-                // UNLIKE: Entferne den User aus dem Array
                 countEl.innerText = parseInt(countEl.innerText) - 1;
                 videoData.likedBy = videoData.likedBy.filter(uid => uid !== currentUser.uid);
                 await updateDoc(doc(db, "videos", id), { likedBy: arrayRemove(currentUser.uid) });
             } else {
-                // LIKE: Füge den User dem Array hinzu
                 countEl.innerText = parseInt(countEl.innerText) + 1;
                 videoData.likedBy.push(currentUser.uid);
                 await updateDoc(doc(db, "videos", id), { likedBy: arrayUnion(currentUser.uid) });
@@ -304,7 +305,7 @@ function attachFeedInteractions() {
         });
     });
 
-    // --- NEU: VIRTUAL GIFTING SYSTEM ---
+    // GIFTING
     document.querySelectorAll('.gift-btn').forEach(btn => {
         btn.addEventListener('click', async() => {
             if (currentUser.coins < 10) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins zum Spenden.");
@@ -312,12 +313,10 @@ function attachFeedInteractions() {
             const id = btn.dataset.id;
             const container = btn.closest('.video');
 
-            // Animation feuern
             const anim = container.querySelector('.gift-animation');
             anim.style.animation = 'none';
             setTimeout(() => anim.style.animation = 'flyUpCoin 1s ease-out forwards', 10);
 
-            // Werte updaten
             currentUser.coins -= 10;
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
@@ -327,7 +326,6 @@ function attachFeedInteractions() {
             const videoData = allVideosData.find(v => v.id === id);
             videoData.gifts = (videoData.gifts || 0) + 10;
 
-            // In Firebase speichern (Zieht Coins beim Sender ab und gibt sie dem Video)
             await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-10) });
             await updateDoc(doc(db, "videos", id), { gifts: increment(10) });
             showToast("10 Coins gespendet! 🪙");
@@ -360,7 +358,6 @@ window.toggleFollow = async function(targetUid, element, event) {
     if (!currentUser.following) currentUser.following = [];
 
     if (!currentUser.following.includes(targetUid)) {
-        // FOLLOW
         currentUser.following.push(targetUid);
         showToast("Gefolgt!");
         if (element) element.style.display = 'none';
@@ -374,7 +371,6 @@ window.toggleFollow = async function(targetUid, element, event) {
             btn.classList.add('edit-btn');
         }
     } else {
-        // UNFOLLOW
         currentUser.following = currentUser.following.filter(u => u !== targetUid);
         showToast("Entfolgt.");
 
@@ -399,7 +395,6 @@ window.openProfile = async function(targetUid) {
         const targetUser = userSnap.data();
         const userVideos = allVideosData.filter(v => v.authorUid === targetUid);
 
-        // Berechne Gesamt-Likes und Geschenke des Creators für das Level-System!
         let totalLikes = 0;
         let totalGifts = 0;
         userVideos.forEach(v => {
@@ -407,7 +402,6 @@ window.openProfile = async function(targetUid) {
             totalGifts += (v.gifts || 0);
         });
 
-        // CREATOR LEVEL SYSTEM
         let level = 1;
         if (totalLikes > 10 || totalGifts > 50) level = 2;
         if (totalLikes > 50 || totalGifts > 200) level = 3;
@@ -421,9 +415,6 @@ window.openProfile = async function(targetUid) {
         document.getElementById('profile-bio').innerText = targetUser.bio || "Keine Bio vorhanden.";
         document.getElementById('profile-pic').src = targetUser.photoURL;
         document.getElementById('stat-likes').innerText = totalLikes;
-
-        // Exakte Follower Berechnung (Sucht alle User, die diesem folgen) - Für 0€ Setup als Random Fallback belassen, 
-        // da DB Query für alle Follower zu teuer wäre.
         document.getElementById('stat-followers').innerText = targetUid === currentUser.uid ? '0' : Math.floor(Math.random() * 500);
         document.getElementById('stat-following').innerText = targetUser.following ? targetUser.following.length : 0;
 
@@ -439,7 +430,6 @@ window.openProfile = async function(targetUid) {
             adminControls.innerHTML = `<button onclick="toggleVerify('${targetUid}', ${isVerif})" class="profile-action-btn" style="background: transparent; color: #00f2fe; border: 1px solid #00f2fe; margin-top: 15px; width: 100%;">👑 Admin: ${isVerif ? 'Blauen Haken entfernen' : 'Blauen Haken geben'}</button>`;
         }
 
-        // Wenn ich mein eigenes Profil ansehe:
         if (targetUid === currentUser.uid) {
             actionBtn.innerText = "Profil bearbeiten";
             actionBtn.classList.add('edit-btn');
@@ -451,13 +441,11 @@ window.openProfile = async function(targetUid) {
             };
             settingsIcon.style.display = 'block';
 
-            // Zeige mir meine privaten Stats!
             privateStats.style.display = 'block';
             document.getElementById('my-coins').innerText = currentUser.coins || 0;
             document.getElementById('my-views').innerText = targetUser.profileViews || 0;
 
         } else {
-            // Wenn ich jemand anders ansehe: Profil Aufrufe +1 !
             await updateDoc(doc(db, "users", targetUid), { profileViews: increment(1) });
 
             privateStats.style.display = 'none';
@@ -476,6 +464,14 @@ window.openProfile = async function(targetUid) {
         grid.innerHTML = '';
         if (userVideos.length === 0) { grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`; } else { userVideos.forEach(v => { grid.innerHTML += `<div class="grid-item" onclick="switchView('feed')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`; }); }
     } catch (e) { showCustomAlert("Fehler", "Profil konnte nicht geladen werden."); }
+};
+
+window.toggleVerify = async function(targetUid, currentStatus) {
+    try {
+        await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus });
+        showToast(!currentStatus ? "Blauer Haken vergeben! 🔵" : "Blauer Haken entfernt.");
+        openProfile(targetUid);
+    } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); }
 };
 
 document.getElementById('nav-profile').addEventListener('click', () => { if (currentUser) openProfile(currentUser.uid); });

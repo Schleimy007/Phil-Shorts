@@ -33,9 +33,6 @@ body {
     filter: drop-shadow(0 0 3px rgba(0, 242, 254, 0.4));
 }
 
-
-/* NEU: Gifting Animation */
-
 .gift-animation {
     position: absolute;
     top: 60%;
@@ -514,12 +511,9 @@ body {
     color: #ff0050;
 }
 
-.videoSidebar__button.gifted i {
+.videoSidebar__button.gift-btn i {
     color: #ffd700;
 }
-
-
-/* Goldener Geschenk-Button */
 
 .profile-header {
     display: flex;
