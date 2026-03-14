@@ -1112,7 +1112,7 @@ body {
 }
 
 
-/* --- HIER IST DER WICHTIGE MODAL FIX --- */
+/* --- HIER IST DER BULLETPROOF FIX --- */
 
 .modal {
     position: absolute;
@@ -1124,18 +1124,21 @@ body {
     color: white;
     z-index: 200;
     border-radius: 20px 20px 0 0;
-    transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    /* Transition für Sichtbarkeit hinzugefügt */
+    transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), visibility 0.3s;
     display: flex;
     flex-direction: column;
     border-top: 1px solid #333;
-    /* FIX: Klicks blockieren, wenn das Modal geschlossen ist */
     pointer-events: none;
+    /* Das Modal wird komplett "unsichtbar" und klickbar ignoriert */
+    visibility: hidden;
 }
 
 .modal.show {
     bottom: 0;
-    /* FIX: Modal wieder anklickbar machen, wenn es offen ist */
     pointer-events: auto;
+    /* Das Modal wird wieder normal sichtbar */
+    visibility: visible;
 }
 
 .modal-header {
@@ -1649,6 +1652,7 @@ body {
         width: 60px;
         height: 60px;
     }
+    /* AUCH FÜR PC: HIER DEN FIX EINTRAGEN */
     .modal {
         width: 500px;
         height: 70vh;
@@ -1660,6 +1664,7 @@ body {
         border-radius: 20px;
         opacity: 0;
         pointer-events: none;
+        visibility: hidden;
         transition: all 0.3s ease;
         border: 1px solid #333;
     }
@@ -1669,6 +1674,7 @@ body {
         transform: translate(-50%, -50%) scale(1);
         opacity: 1;
         pointer-events: auto;
+        visibility: visible;
     }
 }
 
