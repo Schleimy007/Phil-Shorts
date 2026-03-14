@@ -757,3 +757,143 @@ document.getElementById('open-upload').addEventListener('click', () => document.
 document.getElementById('close-upload').addEventListener('click', () => document.getElementById('upload-modal').classList.remove('show'));
 document.getElementById('close-comments').addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
 document.getElementById('close-settings').addEventListener('click', () => document.getElementById('settings-modal').classList.remove('show'));
+
+/* =========================================================
+   === RESPONSIVE HTML RESTRUCTURING LOGIC FÜR PC       ===
+   ========================================================= */
+
+// Wrapper-Funktion, um sie nach dem Laden des DOMs auszuführen
+function initResponsiveLayout() {
+    const appContainer = document.querySelector('.app');
+    const videosView = document.getElementById('view-feed');
+    const originalNav = appContainer.querySelector('.app__bottom-nav');
+    const header = appContainer.querySelector('.app__header');
+
+    let currentMode = ''; // 'handy' oder 'pc'
+
+    // Platztalter für Desktop-Container
+    let pcSidebar = null;
+    let pcInfoPanel = null;
+
+    // Funktion zum Erstellen des PC-Seitenleisten-Containers
+    function createPCContainers() {
+        if (!pcSidebar) {
+            // PC Sidebar links erstellen
+            pcSidebar = document.createElement('div');
+            pcSidebar.id = 'pc-nav-sidebar';
+            pcSidebar.innerHTML = `
+                <div class="logo-area">
+                    <div class="logo-pulse"><i class="fas fa-play"></i></div>
+                    Phil Shorts
+                </div>
+                `;
+            appContainer.prepend(pcSidebar); // Als erstes Kind hinzufügen (grid-column: 1)
+        }
+    }
+
+    // Funktion zum Umstrukturieren eines Videos für PC
+    function restructureVideoForPC(videoEl) {
+        let infoPanel = videoEl.querySelector('#pc-info-panel-container');
+        if (!infoPanel) {
+            // Erstelle ein Info-Panel, falls es noch nicht existiert
+            infoPanel = document.createElement('div');
+            infoPanel.id = 'pc-info-panel-container';
+            videoEl.appendChild(infoPanel); // Als grid-column: 2 hinzufügen
+
+            // Verschiebe Video-Footer und Sidebar in das Panel
+            const videoFooter = videoEl.querySelector('.video__footer');
+            const videoSidebar = videoEl.querySelector('.video__sidebar');
+
+            if (videoFooter) infoPanel.appendChild(videoFooter);
+            if (videoSidebar) infoPanel.appendChild(videoSidebar);
+        }
+    }
+
+    // Funktion zum Zurückrollen der Video-Umstrukturierung für Handy
+    function rollBackVideoForHandy(videoEl) {
+        const infoPanel = videoEl.querySelector('#pc-info-panel-container');
+        if (infoPanel) {
+            const videoFooter = infoPanel.querySelector('.video__footer');
+            const videoSidebar = infoPanel.querySelector('.video__sidebar');
+
+            if (videoFooter) videoEl.appendChild(videoFooter);
+            if (videoSidebar) videoEl.appendChild(videoSidebar);
+
+            infoPanel.remove();
+        }
+    }
+
+    // Hauptfunktion zum Überprüfen und Umschalten
+    function checkResponsiveMode() {
+        const isPC = window.innerWidth > 768;
+
+        if (isPC && currentMode !== 'pc') {
+            // --- WECHSEL ZU PC LAYOUT ---
+            currentMode = 'pc';
+            // console.log('Responsive Mode: PC');
+
+            createPCContainers();
+
+            // Verschiebe die Bottom Nav in die PC-Sidebar
+            if (originalNav) pcSidebar.appendChild(originalNav);
+
+            // Restrukturiere alle aktuell geladenen Videos
+            document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC);
+
+            // Optional: Header-Links anpassen falls nötig (bereits im CSS geregelt)
+        } else if (!isPC && currentMode !== 'handy') {
+            // --- WECHSEL ZU HANDY LAYOUT ---
+            currentMode = 'handy';
+            // console.log('Responsive Mode: HANDY');
+
+            // Verschiebe die originalNav zurück in den Hauptcontainer
+            if (originalNav) appContainer.appendChild(originalNav);
+
+            // Entferne die PC-Sidebar
+            if (pcSidebar) {
+                pcSidebar.remove();
+                pcSidebar = null;
+            }
+
+            // Rolle die Restrukturierung aller geladenen Videos zurück
+            document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy);
+        }
+    }
+
+    // Starte die Responsive-Überprüfung
+    checkResponsiveMode();
+    window.addEventListener('resize', checkResponsiveMode);
+
+    // WICHTIG: Wenn neue Videos dynamisch geladen werden (z.B. durch deine Firebase-Logik in script.js),
+    // müssen diese auch umstrukturiert werden. Wir nutzen einen MutationObserver, um dies zu erkennen.
+    if (isPCLayoutActive()) { // Nur PC-Videos beobachten
+        const videoObserver = new MutationObserver(function(mutations) {
+            if (currentMode === 'pc') {
+                mutations.forEach(function(mutation) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.classList && node.classList.contains('video')) {
+                            restructureVideoForPC(node);
+                        }
+                    });
+                });
+            }
+        });
+
+        const videoContainer = document.getElementById('video-container');
+        if (videoContainer) {
+            videoObserver.observe(videoContainer, { childList: true });
+        }
+    }
+
+    // Hilfsfunktion zum Prüfen, ob PC-Layout aktiv ist
+    function isPCLayoutActive() {
+        return window.innerWidth > 768;
+    }
+}
+
+// Führe die Logik nach dem Laden des DOMs aus
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initResponsiveLayout);
+} else {
+    initResponsiveLayout();
+}
