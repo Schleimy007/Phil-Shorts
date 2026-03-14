@@ -34,9 +34,6 @@ body {
     border: 6px solid #222;
 }
 
-
-/* Auf mobilen Geräten den kompletten Bildschirm füllen */
-
 @media (max-width: 768px) {
     .app {
         height: 100vh;
@@ -46,9 +43,6 @@ body {
         border: none;
     }
 }
-
-
-/* --- RESTLICHES CSS --- */
 
 .verified-badge {
     color: #00f2fe;
@@ -404,9 +398,6 @@ body {
         opacity: 0;
     }
 }
-
-
-/* --- TIKTOK HORIZONTAL MUTE CONTAINER & VOLUME SLIDER --- */
 
 .mute-container {
     position: absolute;
@@ -874,9 +865,6 @@ body {
     color: #888;
 }
 
-
-/* ADMIN DASHBOARD CSS */
-
 .admin-stats {
     display: flex;
     gap: 10px;
@@ -1062,9 +1050,6 @@ body {
     color: white;
 }
 
-
-/* Comment Interaktion (Liken & Antworten) */
-
 .comment-actions {
     display: flex;
     gap: 15px;
@@ -1241,9 +1226,6 @@ body {
     font-size: 14px;
     color: #888;
 }
-
-
-/* --- INFINITE SCROLL / END LOADER --- */
 
 .feed-end-loader {
     position: relative;

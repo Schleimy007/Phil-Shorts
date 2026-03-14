@@ -24,11 +24,9 @@ let currentFeedMode = 'foryou';
 let isInitialLoad = true;
 let sortedFeed = [];
 
-// GLOBALE LAUTSTÄRKE EINSTELLUNGEN
 window.globalVolume = 1;
 window.globalMuted = false;
 
-// --- HELPER ---
 window.switchView = function(viewId) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById('view-' + viewId).classList.add('active');
@@ -76,7 +74,6 @@ document.getElementById('close-alert-btn').addEventListener('click', () => {
 });
 
 
-// --- AUTHENTIFIZIERUNG & LIVE USER DATEN ---
 function parseJwt(token) {
     var base64Url = token.split('.')[1];
     var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -157,7 +154,6 @@ window.addEventListener('googleLoginSuccess', async(event) => {
     }
 });
 
-// AUTO-LOGIN CHECK
 window.onload = async function() {
     if (!currentUser) {
         document.getElementById('login-screen').classList.add('show');
@@ -174,8 +170,6 @@ document.getElementById('logout-btn').addEventListener('click', () => {
     window.location.reload();
 });
 
-
-// --- BENACHRICHTIGUNGEN LOGIK ---
 async function addNotification(targetUid, type, text, videoId = null) {
     if (!currentUser || targetUid === currentUser.uid) return;
     await addDoc(collection(db, "users", targetUid, "notifications"), {
@@ -189,8 +183,6 @@ async function addNotification(targetUid, type, text, videoId = null) {
     });
 }
 
-
-// --- DER ECHTE ALGORITHMUS ---
 function applyAlgorithm(videos, mode) {
     if (mode === 'following') {
         let followedVids = videos.filter(v => currentUser && currentUser.following && currentUser.following.includes(v.authorUid));
@@ -221,8 +213,7 @@ function applyAlgorithm(videos, mode) {
     }
 }
 
-
-// --- DIE MAGISCHE LIVE DATENBANK FÜR VIDEOS ---
+// --- ABSOLUT ROBUSTE LIVE-DATENBANK ---
 function initLiveDatabase() {
     document.getElementById('video-container').innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i><p>Lade Algorithmus...</p></div>';
 
@@ -254,36 +245,58 @@ function initLiveDatabase() {
                         }
                     }
                 }
+
+                // HIER WURDE DER FEHLER BEHOBEN: querySelectorAll stellt sicher, dass JEDER Button im HTML das Live-Update erhält.
                 if (change.type === "modified") {
-                    const likeEl = document.querySelector(`.like-btn[data-id="${vData.id}"] .like-count`);
-                    if (likeEl) likeEl.innerText = vData.likedBy ? vData.likedBy.length : 0;
 
-                    const likeBtn = document.querySelector(`.like-btn[data-id="${vData.id}"]`);
-                    if (likeBtn && currentUser) {
-                        if (vData.likedBy && vData.likedBy.includes(currentUser.uid)) likeBtn.classList.add('liked');
-                        else likeBtn.classList.remove('liked');
-                    }
+                    // 1. LIKES UPDATEN
+                    document.querySelectorAll(`.like-btn[data-id="${vData.id}"] .like-count`).forEach(el => {
+                        el.innerText = vData.likedBy ? vData.likedBy.length : 0;
+                    });
+                    document.querySelectorAll(`.like-btn[data-id="${vData.id}"]`).forEach(btn => {
+                        if (currentUser && vData.likedBy && vData.likedBy.includes(currentUser.uid)) {
+                            btn.classList.add('liked');
+                        } else {
+                            btn.classList.remove('liked');
+                        }
+                    });
 
-                    const commentEl = document.querySelector(`.comment-btn[data-id="${vData.id}"] p`);
-                    if (commentEl) commentEl.innerText = vData.comments ? vData.comments.length : 0;
+                    // 2. KOMMENTARE UPDATEN
+                    document.querySelectorAll(`.comment-btn[data-id="${vData.id}"] .comment-count-txt`).forEach(el => {
+                        el.innerText = vData.comments ? vData.comments.length : 0;
+                    });
 
-                    const giftEl = document.querySelector(`.gift-btn[data-id="${vData.id}"] .gift-count`);
-                    if (giftEl) giftEl.innerText = vData.gifts || 0;
+                    // 3. COINS UPDATEN
+                    document.querySelectorAll(`.gift-btn[data-id="${vData.id}"] .gift-count`).forEach(el => {
+                        el.innerText = vData.gifts || 0;
+                    });
 
+                    // Modalfenster-Update
                     if (window.currentCommentVideoId === vData.id && document.getElementById('comment-modal').classList.contains('show')) {
                         renderComments(vData.id);
                     }
                 }
+
                 if (change.type === "removed") {
                     const vidEl = document.querySelector(`.video[data-id="${vData.id}"]`);
                     if (vidEl) vidEl.remove();
                 }
             });
 
-            // Wenn wir im Profil sind, die Videos dort auch updaten (Views/Likes)
+            // PROFIL LIVE STATS UPDATEN
             if (document.getElementById('view-profile').classList.contains('active')) {
                 const currentProfileUid = document.getElementById('profile-action-btn').dataset.uid;
-                if (currentProfileUid) window.renderProfileGrid(currentProfileUid);
+                if (currentProfileUid) {
+                    window.renderProfileGrid(currentProfileUid);
+
+                    let totalLikes = 0;
+                    const userVideos = allVideosData.filter(v => v.authorUid === currentProfileUid);
+                    userVideos.forEach(v => {
+                        totalLikes += (v.likedBy ? v.likedBy.length : 0);
+                    });
+                    const statLikesEl = document.getElementById('stat-likes');
+                    if (statLikesEl) statLikesEl.innerText = totalLikes;
+                }
             }
         }
     }, (error) => {
@@ -325,7 +338,6 @@ function appendLoader(container, isEnd) {
     container.appendChild(loader);
 }
 
-// GLOBALES VOLUMEN UPDATE HELPER
 window.updateGlobalVolumeUI = function() {
     document.querySelectorAll('.video-inner').forEach(container => {
         const v = container.querySelector('.video__player');
@@ -435,10 +447,8 @@ document.getElementById('tab-following').addEventListener('click', function() {
     renderFeed(true);
 });
 
-// --- SCROLL / END-BOUNCE ---
-
+// --- SCROLL ---
 const videoContainer = document.getElementById('video-container');
-
 videoContainer.addEventListener('scroll', () => {
     if (videoContainer.scrollTop + videoContainer.clientHeight >= videoContainer.scrollHeight - 20) {
         setTimeout(() => {
@@ -463,7 +473,6 @@ window.addEventListener('keydown', (e) => {
 let scrollTimeout = null;
 videoContainer.addEventListener('wheel', (e) => {
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
-
     e.preventDefault();
     if (scrollTimeout) return;
 
@@ -477,19 +486,14 @@ videoContainer.addEventListener('wheel', (e) => {
 
         if (rect.top <= containerRect.top + 10 && rect.bottom >= containerRect.bottom - 10) {
             videoContainer.scrollBy({ top: videoContainer.clientHeight * 0.15, behavior: 'smooth' });
-            setTimeout(() => {
-                lastVid.scrollIntoView({ behavior: 'smooth' });
-            }, 800);
+            setTimeout(() => { lastVid.scrollIntoView({ behavior: 'smooth' }); }, 800);
         } else {
             videoContainer.scrollBy({ top: videoContainer.clientHeight, behavior: 'smooth' });
         }
     } else if (e.deltaY < 0) {
         videoContainer.scrollBy({ top: -videoContainer.clientHeight, behavior: 'smooth' });
     }
-
-    scrollTimeout = setTimeout(() => {
-        scrollTimeout = null;
-    }, 600);
+    scrollTimeout = setTimeout(() => { scrollTimeout = null; }, 600);
 }, { passive: false });
 
 const videoObserver = new IntersectionObserver(entries => {
@@ -535,7 +539,6 @@ function attachInteractionsToVideo(videoContainerEl) {
     const muteBtn = container.querySelector('.mute-btn');
     const volumeSlider = container.querySelector('.volume-slider');
 
-    // Initiale globale Lautstärke direkt aufsetzen
     window.updateGlobalVolumeUI();
 
     muteBtn.addEventListener('click', (e) => {
@@ -560,10 +563,8 @@ function attachInteractionsToVideo(videoContainerEl) {
         e.stopPropagation();
         muteContainer.classList.add('active-slider');
     }, { passive: false });
-
     document.addEventListener('mouseup', () => { muteContainer.classList.remove('active-slider'); });
     document.addEventListener('touchend', () => { muteContainer.classList.remove('active-slider'); });
-
     muteContainer.addEventListener('click', (e) => e.stopPropagation());
 
     v.addEventListener('timeupdate', () => { container.querySelector('.player-progress-filled').style.width = (v.currentTime / v.duration * 100) + '%'; });
@@ -573,36 +574,69 @@ function attachInteractionsToVideo(videoContainerEl) {
         const btn = e.currentTarget;
         const id = btn.dataset.id;
         const isLiked = btn.classList.contains('liked');
-        const likeCountEl = btn.querySelector('.like-count');
-        let currentLikes = parseInt(likeCountEl.innerText || 0);
 
         const targetVidData = allVideosData.find(vd => vd.id === id);
 
-        // Optimistic UI - Update SOFORT
+        document.querySelectorAll(`.like-btn[data-id="${id}"]`).forEach(el => {
+            const countEl = el.querySelector('.like-count');
+            let currentLikes = Number(countEl.innerText) || 0;
+            if (isLiked) {
+                el.classList.remove('liked');
+                countEl.innerText = Math.max(0, currentLikes - 1);
+            } else {
+                el.classList.add('liked');
+                countEl.innerText = currentLikes + 1;
+            }
+        });
+
         if (isLiked) {
-            btn.classList.remove('liked');
-            likeCountEl.innerText = Math.max(0, currentLikes - 1);
             await updateDoc(doc(db, "videos", id), { likedBy: arrayRemove(currentUser.uid) });
         } else {
-            btn.classList.add('liked');
-            likeCountEl.innerText = currentLikes + 1;
             await updateDoc(doc(db, "videos", id), { likedBy: arrayUnion(currentUser.uid) });
             if (targetVidData) addNotification(targetVidData.authorUid, "like", "hat dein Video geliket.", id);
         }
     });
 
+    // OPTIMISTIC UI & TRANSFER FÜR COINS
     container.querySelector('.gift-btn').addEventListener('click', async(e) => {
+        if (!currentUser) return;
         if (currentUser.coins < 10) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins zum Spenden.");
+
         const id = e.currentTarget.dataset.id;
+        const targetVidData = allVideosData.find(vd => vd.id === id);
+        if (!targetVidData || !targetVidData.authorUid) return showToast("Fehler beim Spenden!");
+
+        // Spender verliert 10 Coins lokal
+        currentUser.coins -= 10;
+        const myCoinsEl = document.getElementById('my-coins');
+        if (myCoinsEl) myCoinsEl.innerText = currentUser.coins;
+
+        // Video-Anzeige wird sofort aktualisiert
+        document.querySelectorAll(`.gift-btn[data-id="${id}"] .gift-count`).forEach(el => {
+            let currentGifts = Number(el.innerText) || 0;
+            el.innerText = currentGifts + 10;
+        });
 
         const anim = container.querySelector('.gift-animation');
         anim.style.animation = 'none';
-        setTimeout(() => anim.style.animation = 'flyUpCoin 1s ease-out forwards', 10);
+        void anim.offsetWidth; // Reflow
+        anim.style.animation = 'flyUpCoin 1s ease-out forwards';
 
-        currentUser.coins -= 10;
-        await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-10) });
-        await updateDoc(doc(db, "videos", id), { gifts: increment(10) });
         showToast("10 Coins gespendet! 🪙");
+
+        try {
+            // 1. Dem Sender in der DB abziehen
+            await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-10) });
+            // 2. Dem Video als Statistik hinzufügen
+            await updateDoc(doc(db, "videos", id), { gifts: increment(10) });
+
+            // 3. WICHTIG: Das Geld dem Creator GANZ REAL ins Profil überweisen
+            await updateDoc(doc(db, "users", targetVidData.authorUid), { coins: increment(10) });
+            addNotification(targetVidData.authorUid, "gift", "hat dir 10 Coins gespendet!", id);
+        } catch (err) {
+            console.error(err);
+            showCustomAlert("Netzwerkfehler", "Coins konnten im Hintergrund nicht gesendet werden.");
+        }
     });
 
     container.querySelector('.comment-btn').addEventListener('click', (e) => {
@@ -646,8 +680,9 @@ window.deleteComment = async function(videoId, commentIndex) {
                     allVideosData[videoIndex].comments = videoData.comments;
                     renderComments(videoId);
 
-                    const commentBtnCount = document.querySelector(`.comment-btn[data-id="${videoId}"] .comment-count-txt`);
-                    if (commentBtnCount) commentBtnCount.innerText = videoData.comments.length;
+                    document.querySelectorAll(`.comment-btn[data-id="${videoId}"] .comment-count-txt`).forEach(el => {
+                        el.innerText = videoData.comments.length;
+                    });
                 }
 
                 await updateDoc(videoRef, { comments: videoData.comments });
@@ -657,7 +692,6 @@ window.deleteComment = async function(videoId, commentIndex) {
     }
 };
 
-// OPTIMISTIC FOLLOW LOGIK
 window.toggleFollow = async function(targetUid, element, event) {
     if (event) event.stopPropagation();
     if (!currentUser) return;
@@ -669,39 +703,32 @@ window.toggleFollow = async function(targetUid, element, event) {
     const statFollowers = document.getElementById('stat-followers');
 
     if (!currentUser.following.includes(targetUid)) {
-        // SOFORT lokal speichern und UI ändern
         currentUser.following.push(targetUid);
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
         showToast("Gefolgt!");
 
-        // Alle Plus-Buttons im Feed SOFORT verstecken
         document.querySelectorAll(`.follow-btn[data-target="${targetUid}"]`).forEach(btn => btn.style.display = 'none');
 
-        // Falls Profil offen ist, Button & Count ändern
         if (actionBtn && actionBtn.dataset.uid === targetUid) {
             actionBtn.innerText = "Entfolgen";
             actionBtn.classList.add('edit-btn');
-            statFollowers.innerText = parseInt(statFollowers.innerText || 0) + 1;
+            statFollowers.innerText = (Number(statFollowers.innerText) || 0) + 1;
         }
 
-        // Firebase im Hintergrund
         await updateDoc(userRef, { following: arrayUnion(targetUid) });
         await updateDoc(targetRef, { followers: arrayUnion(currentUser.uid) });
         addNotification(targetUid, "follow", "folgt dir jetzt.");
     } else {
-        // SOFORT Entfolgen
         currentUser.following = currentUser.following.filter(uid => uid !== targetUid);
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
         showToast("Entfolgt.");
 
-        // Alle Plus-Buttons im Feed SOFORT wieder einblenden
         document.querySelectorAll(`.follow-btn[data-target="${targetUid}"]`).forEach(btn => btn.style.display = 'block');
 
-        // Profil Button anpassen
         if (actionBtn && actionBtn.dataset.uid === targetUid) {
             actionBtn.innerText = "Folgen";
             actionBtn.classList.remove('edit-btn');
-            statFollowers.innerText = Math.max(0, parseInt(statFollowers.innerText || 0) - 1);
+            statFollowers.innerText = Math.max(0, (Number(statFollowers.innerText) || 0) - 1);
         }
 
         await updateDoc(userRef, { following: arrayRemove(targetUid) });
@@ -711,7 +738,6 @@ window.toggleFollow = async function(targetUid, element, event) {
 
 let currentProfileUnsubscribe = null;
 
-// LIVE PROFILE VIEW & GRID
 window.renderProfileGrid = function(targetUid) {
     const grid = document.getElementById('profile-grid');
     const userVideos = allVideosData.filter(v => v.authorUid === targetUid);
@@ -730,7 +756,6 @@ window.openProfile = async function(targetUid) {
 
     if (currentProfileUnsubscribe) currentProfileUnsubscribe();
 
-    // Live Snapshot für das User Profil
     currentProfileUnsubscribe = onSnapshot(doc(db, "users", targetUid), (docSnap) => {
         if (!docSnap.exists()) return;
         const targetUser = docSnap.data();
@@ -907,7 +932,6 @@ window.giveCoins = async function(targetUid) {
     } catch (e) {}
 };
 
-// --- ECHTER POSTEINGANG (INBOX) STATT GLOBAL CHAT ---
 function initInbox() {
     const inboxBox = document.getElementById('inbox-box');
     if (!currentUser) return;
@@ -932,6 +956,10 @@ function initInbox() {
                 icon = 'fa-comment-dots';
                 color = '#fff';
             }
+            if (n.type === 'gift') {
+                icon = 'fa-gift';
+                color = '#ffd700';
+            }
 
             const clickAction = n.videoId ? `jumpToVideo('${n.videoId}')` : `openProfile('${n.fromUid}')`;
 
@@ -949,7 +977,6 @@ function initInbox() {
     });
 }
 
-
 document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     const resultsGrid = document.getElementById('search-results');
@@ -965,7 +992,6 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
 });
 
-// --- KOMMENTARE (LIKEN & ANTWORTEN) OPTIMISTIC UI ---
 window.likeComment = async function(videoId, cId) {
     if (!currentUser) return;
 
@@ -1027,7 +1053,6 @@ function renderComments(id) {
     }
 }
 
-// OPTIMISTIC UI: KOMMENTAR SCHREIBEN
 document.getElementById('submit-comment').addEventListener('click', async() => {
     const input = document.getElementById('new-comment-input');
     const text = input.value.trim();
@@ -1042,8 +1067,9 @@ document.getElementById('submit-comment').addEventListener('click', async() => {
         allVideosData[videoIndex].comments.push(comment);
         renderComments(window.currentCommentVideoId);
 
-        const commentBtnCount = document.querySelector(`.comment-btn[data-id="${window.currentCommentVideoId}"] .comment-count-txt`);
-        if (commentBtnCount) commentBtnCount.innerText = allVideosData[videoIndex].comments.length;
+        document.querySelectorAll(`.comment-btn[data-id="${window.currentCommentVideoId}"] .comment-count-txt`).forEach(el => {
+            el.innerText = allVideosData[videoIndex].comments.length;
+        });
     }
 
     input.value = '';
