@@ -20,7 +20,13 @@ const db = getFirestore(app);
 
 let allVideosData = [];
 let allKnownUsers = []; // Speichert alle registrierten User für Echtzeit-Haken und Suche
+
+// --- SECURITY KILLSWITCH: Lade User, aber erzwinge verified=false bis die DB etwas anderes sagt! ---
 let currentUser = JSON.parse(localStorage.getItem('phil_session'));
+if (currentUser) {
+    currentUser.verified = false; // Verhindert Fake-Haken durch Manipulation des LocalStorage!
+}
+
 let currentFeedMode = 'foryou';
 let isInitialLoad = true;
 let sortedFeed = [];
@@ -50,7 +56,6 @@ window.jumpToVideo = function(videoId) {
         if (targetVid) {
             targetVid.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
-            // Pausiere alle ANDEREN Videos hart, wenn man zu einem Video springt
             document.querySelectorAll('.video__player').forEach(v => {
                 v.pause();
                 v.currentTime = 0;
@@ -92,10 +97,12 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
-// Hilfsfunktion: Gibt den blauen Haken überall dynamisch aus
+// --- GLOBALE ZENTRALE HAKEN-FUNKTION ---
+// Diese Funktion holt den Haken IMMER aus der Live-Datenbank, egal was im Video-Eintrag steht!
 function getVerifiedBadge(uid, fallbackBool = false) {
     const user = allKnownUsers.find(u => u.uid === uid);
-    const isVerif = user ? user.verified : fallbackBool;
+    // Wenn User existiert, ZWINGEND seinen echten Haken-Status nehmen. Sonst Fallback.
+    const isVerif = user ? (user.verified === true) : fallbackBool;
     return isVerif ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
 }
 
@@ -132,6 +139,21 @@ function initSearchUsers() {
     onSnapshot(collection(db, "users"), (snapshot) => {
         allKnownUsers = [];
         snapshot.forEach(doc => allKnownUsers.push(doc.data()));
+
+        // Live-Update der Haken im gesamten DOM, falls sich ein Haken ändert!
+        document.querySelectorAll('.creator-name').forEach(el => {
+            const onclickAttr = el.getAttribute('onclick');
+            if (onclickAttr) {
+                const match = onclickAttr.match(/'([^']+)'/);
+                if (match && match[1]) {
+                    const uid = match[1];
+                    const user = allKnownUsers.find(u => u.uid === uid);
+                    if (user) {
+                        el.innerHTML = '@' + user.displayName + (user.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '');
+                    }
+                }
+            }
+        });
     });
 }
 
@@ -140,7 +162,11 @@ window.addEventListener('googleLoginSuccess', async(event) => {
         const response = event.detail;
         const data = parseJwt(response.credential);
         const uid = data.sub;
-        const baseName = data.name.replace(/\s+/g, '').toLowerCase();
+
+        // WICHTIG: Erzwungene Filterung: Nur Buchstaben, Zahlen, Unterstriche für den Einzigartigkeits-Check
+        let baseName = data.name.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
+        if (!baseName || baseName.length < 3) baseName = "user" + Math.floor(100 + Math.random() * 900);
+
         const pic = data.picture;
         const email = data.email;
 
@@ -148,7 +174,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
         const userSnap = await getDoc(userRef);
 
         if (!userSnap.exists()) {
-            // Checke ob der Google-Name schon vergeben ist. Wenn ja, hänge eine Zahl an.
+            // Checke ob der Google-Name schon an jemand anderen vergeben ist!
             let finalName = baseName;
             let nameQuery = query(collection(db, "users"), where("displayName", "==", finalName));
             let nameSnap = await getDocs(nameQuery);
@@ -400,7 +426,7 @@ function createVideoElement(video) {
 
     const plusButton = (!isMe) ? `<i class="fas fa-circle-plus follow-btn" data-target="${video.authorUid}" onclick="toggleFollow('${video.authorUid}', this, event)" style="${isFollowing ? 'display: none;' : ''}"></i>` : '';
 
-    // Dynamischer Badge über die Hilfsfunktion (damit er immer live aktualisiert ist)
+    // Zentrale Live-Haken Funktion!
     const verifiedBadge = getVerifiedBadge(video.authorUid, video.authorVerified);
 
     const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : '';
@@ -557,13 +583,11 @@ videoContainer.addEventListener('wheel', (e) => {
     scrollTimeout = setTimeout(() => { scrollTimeout = null; }, 600);
 }, { passive: false });
 
-// --- NEU: STRIKTE KONTROLLE GEGEN MEHRFACHES ABSPIELEN BEIM SCROLLEN ---
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         const container = e.target.closest('.video-inner');
 
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
-            // 1. BEENDE HART ALLE ANDEREN VIDEOS AUF DER SEITE!
             document.querySelectorAll('.video__player').forEach(v => {
                 if (v !== e.target && !v.paused) {
                     v.pause();
@@ -573,12 +597,10 @@ const videoObserver = new IntersectionObserver(entries => {
                 }
             });
 
-            // 2. SPIELE DAS NEUE VIDEO AB
             e.target.play().catch(() => {});
             if (container) container.classList.remove('is-paused');
 
         } else {
-            // WENN ES AUS DEM BILD VERSCHWINDET -> STOPP
             e.target.pause();
             e.target.currentTime = 0;
             if (container) container.classList.add('is-paused');
@@ -604,7 +626,6 @@ function attachInteractionsToVideo(videoContainerEl) {
             e.preventDefault();
         } else {
             if (v.paused) {
-                // Auch beim manuellen Play: Alle anderen Videos stoppen!
                 document.querySelectorAll('.video__player').forEach(vid => {
                     if (vid !== v && !vid.paused) {
                         vid.pause();
@@ -1121,34 +1142,36 @@ window.toggleVerify = async function(targetUid, currentStatus) {
 
 // --- PROFIL & KOMMENTAR SYNC LOGIK ---
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
-    // Erzwinge kleingeschriebene Namen ohne Leerzeichen für Einzigartigkeit
+
+    // --- STRIKTER SICHERHEITS-CHECK FÜR DEN NAMEN ---
     const newNameRaw = document.getElementById('edit-name-input').value.trim();
-    const newName = newNameRaw.replace(/\s+/g, '').toLowerCase();
+    const newName = newNameRaw.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase(); // Nur a-z, 0-9 und _
+
     const newBio = document.getElementById('edit-bio-input').value.trim();
     const newPic = document.getElementById('edit-pic-input').value.trim() || currentUser.photoURL;
 
-    if (newName.length < 3) return showCustomAlert("Hinweis", "Dein Name muss mindestens 3 Zeichen lang sein (ohne Leerzeichen).");
+    if (newName.length < 3) return showCustomAlert("Hinweis", "Dein Name muss mindestens 3 Zeichen lang sein (nur Buchstaben, Zahlen, Unterstriche).");
 
     const btn = document.getElementById('save-settings-btn');
     btn.innerText = "Prüfe Namen...";
     btn.disabled = true;
 
     try {
-        // --- NEU: EINZIGARTIGER NAMENS-CHECK ---
+        // --- EINZIGARTIGKEITS-CHECK (UNIQUE USERNAME) ---
         const nameQuery = query(collection(db, "users"), where("displayName", "==", newName));
         const nameSnap = await getDocs(nameQuery);
         let nameTaken = false;
 
         nameSnap.forEach(d => {
             if (d.id !== currentUser.uid) {
-                nameTaken = true;
+                nameTaken = true; // Name gehört jemand anderem!
             }
         });
 
         if (nameTaken) {
             btn.innerText = "Profil Speichern";
             btn.disabled = false;
-            return showCustomAlert("Name vergeben", "Dieser Name ist bereits vergeben! Bitte wähle einen anderen.");
+            return showCustomAlert("Name vergeben", "Dieser Name existiert bereits! Bitte wähle einen anderen.");
         }
 
         btn.innerText = "Speichere...";
