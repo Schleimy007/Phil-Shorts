@@ -1541,6 +1541,7 @@ window.giveCoins = async function(targetUid) {
     } catch (e) {}
 };
 
+// --- SUCHFUNKTION ---
 document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     const resultsGrid = document.getElementById('search-results');
@@ -1858,11 +1859,23 @@ let editorState = {
 };
 
 let activeDragId = null;
-let startX, startY, initialObjX, initialObjY;
+let activeResizeId = null;
+let activeResizePos = null;
+let startX, startY, initialObjX, initialObjY, startSize;
 
+// RASTER TOGGLE
+let gridVisible = false;
+document.getElementById('btn-toggle-grid').addEventListener('click', (e) => {
+    gridVisible = !gridVisible;
+    document.getElementById('editor-grid').style.display = gridVisible ? 'block' : 'none';
+    e.target.innerHTML = gridVisible ? '<i class="fas fa-border-all"></i> Raster: An' : '<i class="fas fa-border-all"></i> Raster: Aus';
+});
+
+// START DRAG
 function startDrag(e, id) {
-    if(e.target.tagName.toLowerCase() === 'input') return; 
+    if(e.target.tagName.toLowerCase() === 'input' || e.target.classList.contains('resize-handle')) return; 
     e.preventDefault();
+    e.stopPropagation();
     activeDragId = id;
     selectText(id);
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -1874,28 +1887,72 @@ function startDrag(e, id) {
     initialObjY = obj.y;
 }
 
-function dragMove(e) {
-    if (!activeDragId) return;
-    e.preventDefault(); 
+// START RESIZE (Ecken ziehen)
+function startResize(e, id, pos) {
+    e.preventDefault();
+    e.stopPropagation();
+    activeResizeId = id;
+    activeResizePos = pos;
+    selectText(id);
+    
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    const dx = clientX - startX;
-    const dy = clientY - startY;
+    startX = clientX;
+    startY = clientY;
+    
+    const obj = editorState.edits[editorState.currentIndex].find(t => t.id === id);
+    startSize = parseFloat(obj.size);
+}
 
-    const obj = editorState.edits[editorState.currentIndex].find(t => t.id === activeDragId);
-    if (obj) {
-        obj.x = initialObjX + dx;
-        obj.y = initialObjY + dy;
-        const el = document.getElementById('drag-txt-' + obj.id);
-        if(el) {
-            el.style.left = obj.x + 'px';
-            el.style.top = obj.y + 'px';
+// MOVE (Beides in einem)
+function dragMove(e) {
+    if (activeDragId) {
+        e.preventDefault(); 
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+
+        const obj = editorState.edits[editorState.currentIndex].find(t => t.id === activeDragId);
+        if (obj) {
+            obj.x = initialObjX + dx;
+            obj.y = initialObjY + dy;
+            const el = document.getElementById('drag-txt-' + obj.id);
+            if(el) {
+                el.style.left = obj.x + 'px';
+                el.style.top = obj.y + 'px';
+            }
+        }
+    } else if (activeResizeId) {
+        e.preventDefault();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+        
+        let delta = 0;
+        if (activeResizePos === 'tl') delta = -dx - dy;
+        if (activeResizePos === 'tr') delta = dx - dy;
+        if (activeResizePos === 'bl') delta = -dx + dy;
+        if (activeResizePos === 'br') delta = dx + dy;
+
+        let newSize = Math.max(15, startSize + delta);
+        
+        const obj = editorState.edits[editorState.currentIndex].find(t => t.id === activeResizeId);
+        if (obj) {
+            obj.size = newSize;
+            const el = document.getElementById('drag-txt-' + obj.id);
+            if(el) {
+                el.querySelector('.text-content').style.fontSize = newSize + 'px';
+            }
+            document.getElementById('text-ctrl-size').value = newSize;
         }
     }
 }
 
 function endDrag() {
     activeDragId = null;
+    activeResizeId = null;
 }
 
 document.addEventListener('mousemove', dragMove);
@@ -1903,7 +1960,7 @@ document.addEventListener('touchmove', dragMove, {passive: false});
 document.addEventListener('mouseup', endDrag);
 document.addEventListener('touchend', endDrag);
 
-// Element rendern
+// BILD RENDERN
 function renderEditorImage(index) {
     if (editorState.images.length === 0) return;
     document.getElementById('editor-bg').src = editorState.images[index];
@@ -1921,21 +1978,36 @@ function renderEditorImage(index) {
 
 function createDOMTextElement(obj) {
     const layer = document.getElementById('editor-layer');
-    const el = document.createElement('div');
-    el.id = 'drag-txt-' + obj.id;
-    el.className = 'draggable-text';
-    el.innerText = obj.text;
-    el.style.left = obj.x + 'px';
-    el.style.top = obj.y + 'px';
-    el.style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`;
-    el.style.fontSize = obj.size + 'px';
-    el.style.color = obj.color;
-    el.style.fontFamily = obj.font || 'Arial, sans-serif';
-
-    el.addEventListener('mousedown', (e) => startDrag(e, obj.id));
-    el.addEventListener('touchstart', (e) => startDrag(e, obj.id), {passive: false});
     
-    layer.appendChild(el);
+    const wrapper = document.createElement('div');
+    wrapper.id = 'drag-txt-' + obj.id;
+    wrapper.className = 'draggable-text';
+    wrapper.style.left = obj.x + 'px';
+    wrapper.style.top = obj.y + 'px';
+    wrapper.style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`;
+    
+    const textEl = document.createElement('div');
+    textEl.className = 'text-content';
+    textEl.innerText = obj.text;
+    textEl.style.fontSize = obj.size + 'px';
+    textEl.style.color = obj.color;
+    textEl.style.fontFamily = obj.font || 'Arial, sans-serif';
+    
+    wrapper.appendChild(textEl);
+    
+    // Handles für die Ecken
+    ['tl', 'tr', 'bl', 'br'].forEach(pos => {
+        const h = document.createElement('div');
+        h.className = `resize-handle handle-${pos}`;
+        h.addEventListener('mousedown', (e) => startResize(e, obj.id, pos));
+        h.addEventListener('touchstart', (e) => startResize(e, obj.id, pos), {passive: false});
+        wrapper.appendChild(h);
+    });
+
+    wrapper.addEventListener('mousedown', (e) => startDrag(e, obj.id));
+    wrapper.addEventListener('touchstart', (e) => startDrag(e, obj.id), {passive: false});
+    
+    layer.appendChild(wrapper);
 }
 
 function selectText(id) {
@@ -1954,28 +2026,29 @@ function selectText(id) {
     document.getElementById('text-ctrl-font').value = obj.font || 'Arial, sans-serif';
 }
 
-// Hintergrund Klick (um Text abzuwählen)
+// HINTERGRUND KLICK -> TEXT ABWÄHLEN
 document.getElementById('editor-workspace').addEventListener('click', (e) => {
-    if(e.target.id === 'editor-bg' || e.target.id === 'editor-layer') {
+    // Wenn nicht auf einen Text geklickt wurde, wähle alles ab
+    if (!e.target.closest('.draggable-text')) {
         editorState.activeTextId = null;
         document.querySelectorAll('.draggable-text').forEach(el => el.classList.remove('active'));
         document.getElementById('text-controls').style.display = 'none';
     }
 });
 
-// Controls Events
+// TEXT CONTROLS
 document.getElementById('text-ctrl-input').addEventListener('input', (e) => {
     if(!editorState.activeTextId) return;
     const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId);
     obj.text = e.target.value;
-    document.getElementById('drag-txt-' + obj.id).innerText = obj.text;
+    document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').innerText = obj.text;
 });
 
 document.getElementById('text-ctrl-size').addEventListener('input', (e) => {
     if(!editorState.activeTextId) return;
     const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId);
     obj.size = e.target.value;
-    document.getElementById('drag-txt-' + obj.id).style.fontSize = obj.size + 'px';
+    document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.fontSize = obj.size + 'px';
 });
 
 document.getElementById('text-ctrl-rot').addEventListener('input', (e) => {
@@ -1989,7 +2062,7 @@ document.getElementById('text-ctrl-font').addEventListener('change', (e) => {
     if(!editorState.activeTextId) return;
     const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId);
     obj.font = e.target.value;
-    document.getElementById('drag-txt-' + obj.id).style.fontFamily = obj.font;
+    document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.fontFamily = obj.font;
 });
 
 document.querySelectorAll('.color-dot').forEach(dot => {
@@ -1998,7 +2071,7 @@ document.querySelectorAll('.color-dot').forEach(dot => {
         const color = e.target.dataset.color;
         const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId);
         obj.color = color;
-        document.getElementById('drag-txt-' + obj.id).style.color = color;
+        document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.color = color;
     });
 });
 
@@ -2042,7 +2115,7 @@ document.getElementById('btn-next-img').addEventListener('click', () => {
 });
 
 
-// File Input Event
+// FILE UPLOAD EVENT
 document.getElementById('up-file').addEventListener('change', async function(e) {
     const files = e.target.files;
     const txt = document.querySelector('#up-file-btn p');

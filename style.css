@@ -1639,10 +1639,12 @@ body {
         gap: 30px;
         margin-top: 40px;
     }
+    /* FIX: HIER WURDE DIE BREITE GEPATCHT, DAMIT BILDER NICHT SCHWARZ SIND */
     .video-wrapper {
         position: relative;
-        /* Wichtig auf PC */
         width: auto;
+        max-width: 100%;
+        aspect-ratio: 9/16;
         height: 100%;
         max-height: 80vh;
         border-radius: 20px;
@@ -1651,6 +1653,8 @@ body {
         display: flex;
         justify-content: center;
         align-items: center;
+        background: #000;
+        flex-shrink: 0;
     }
     .video__player {
         width: auto;
@@ -1835,7 +1839,7 @@ input:checked+.slider:before {
 }
 
 
-/* NEUER EDITOR STYLING */
+/* NEUER EDITOR STYLING (DRAG & RESIZE) */
 
 .color-dot {
     width: 25px;
@@ -1852,21 +1856,69 @@ input:checked+.slider:before {
 
 .draggable-text {
     position: absolute;
-    font-weight: bold;
-    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
-    cursor: pointer;
-    user-select: none;
-    white-space: pre-wrap;
-    line-height: 1.2;
-    text-align: center;
-    border: 2px dashed transparent;
-    padding: 5px;
+    cursor: move;
     z-index: 10;
-    /* FIX: HIERMIT KANN MAN DIE TEXTE WIEDER GREIFEN UND ZIEHEN! */
     pointer-events: auto;
+    border: 2px dashed transparent;
+    padding: 10px;
+    /* Verhindert Markierung auf Handys */
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 .draggable-text.active {
     border-color: #00f2fe;
     z-index: 20;
+}
+
+.draggable-text .text-content {
+    font-weight: bold;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+    white-space: pre-wrap;
+    line-height: 1.2;
+    text-align: center;
+    pointer-events: none;
+    /* Nur der Container soll auf Drag reagieren */
+}
+
+.resize-handle {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    background: white;
+    border: 2px solid #00f2fe;
+    border-radius: 50%;
+    display: none;
+    z-index: 21;
+}
+
+.draggable-text.active .resize-handle {
+    display: block;
+}
+
+
+/* Positionen der 4 Ecken */
+
+.handle-tl {
+    top: -8px;
+    left: -8px;
+    cursor: nwse-resize;
+}
+
+.handle-tr {
+    top: -8px;
+    right: -8px;
+    cursor: nesw-resize;
+}
+
+.handle-bl {
+    bottom: -8px;
+    left: -8px;
+    cursor: nesw-resize;
+}
+
+.handle-br {
+    bottom: -8px;
+    right: -8px;
+    cursor: nwse-resize;
 }

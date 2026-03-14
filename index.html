@@ -252,9 +252,15 @@
 
                 <div id="image-advanced-editor" style="display:none; background:#1a1a1a; padding:10px; border-radius:15px; border:1px solid #333;">
 
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <label style="color:#888; font-size:12px;">Bild Editor</label>
+                        <button id="btn-toggle-grid" class="profile-action-btn edit-btn" style="min-height:30px; font-size:12px; padding: 0 10px;"><i class="fas fa-border-all"></i> Raster: Aus</button>
+                    </div>
+
                     <div id="editor-workspace" style="position: relative; width: 100%; height: 350px; background: #000; overflow: hidden; border-radius: 10px; touch-action: none;">
                         <img id="editor-bg" style="width: 100%; height: 100%; object-fit: contain; pointer-events: none; display: block;">
-                        <div id="editor-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden;"></div>
+                        <div id="editor-grid" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; display:none; background-image: linear-gradient(to right, rgba(255,255,255,0.2) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.2) 1px, transparent 1px); background-size: 33.33% 33.33%; z-index: 5;"></div>
+                        <div id="editor-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 10;"></div>
                     </div>
 
                     <div id="editor-nav" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
@@ -289,7 +295,7 @@
                             <div class="color-dot" style="background: #39ff14;" data-color="#39ff14"></div>
                         </div>
 
-                        <label style="font-size: 11px; color: #888;">Größe</label>
+                        <label style="font-size: 11px; color: #888;">Größe (oder ziehe die Box-Ecken)</label>
                         <input type="range" id="text-ctrl-size" min="15" max="100" value="24" class="trim-slider slider-blue" style="width: 100%; margin-bottom: 15px;">
 
                         <label style="font-size: 11px; color: #888;">Drehung</label>
