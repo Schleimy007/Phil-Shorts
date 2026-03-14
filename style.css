@@ -448,14 +448,19 @@ body {
     overflow: hidden;
 }
 
+
+/* Hält den Slider offen beim Hovern ODER wenn .active-slider getriggert wird */
+
 @media (min-width: 769px) {
-    .mute-container:hover .volume-slider-wrapper {
+    .mute-container:hover .volume-slider-wrapper,
+    .mute-container.active-slider .volume-slider-wrapper {
         height: 120px;
         opacity: 1;
         margin-top: 5px;
         pointer-events: auto;
     }
-    .mute-container:hover .mute-btn {
+    .mute-container:hover .mute-btn,
+    .mute-container.active-slider .mute-btn {
         background: rgba(0, 0, 0, 0.8);
     }
 }

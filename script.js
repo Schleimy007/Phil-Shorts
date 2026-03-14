@@ -39,6 +39,21 @@ window.switchView = function(viewId) {
     if (viewId !== 'feed') document.querySelectorAll('.video__player').forEach(v => v.pause());
 };
 
+// --- NEUE FUNKTION: Direkt zum Video springen ---
+window.jumpToVideo = function(videoId) {
+    switchView('feed');
+    setTimeout(() => {
+        const targetVid = document.querySelector(`.video[data-id="${videoId}"]`);
+        if (targetVid) {
+            const container = document.getElementById('video-container');
+            container.scrollTo({
+                top: targetVid.offsetTop,
+                behavior: 'smooth'
+            });
+        }
+    }, 50); // Kurze Pause, damit die View erst richtig aktiv wird
+};
+
 function showToast(msg) {
     const toast = document.getElementById('toast');
     toast.innerText = msg;
@@ -389,7 +404,7 @@ function attachInteractionsToVideo(videoContainerEl) {
         lastTap = new Date().getTime();
     });
 
-    // Volume & Mute Logik
+    // Volume & Mute Logik (mit active-slider Trick)
     const muteContainer = container.querySelector('.mute-container');
     const muteBtn = container.querySelector('.mute-btn');
     const volumeSlider = container.querySelector('.volume-slider');
@@ -426,9 +441,24 @@ function attachInteractionsToVideo(videoContainerEl) {
         updateVolumeIcon(v.volume);
     });
 
-    // Verhindert, dass das Video pausiert, wenn man den Slider anklickt
+    // Halte Slider beim Ziehen durchgehend offen (egal wo die Maus hinrutscht)
+    volumeSlider.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        muteContainer.classList.add('active-slider');
+    });
+    volumeSlider.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+        muteContainer.classList.add('active-slider');
+    }, { passive: false });
+
+    document.addEventListener('mouseup', () => {
+        muteContainer.classList.remove('active-slider');
+    });
+    document.addEventListener('touchend', () => {
+        muteContainer.classList.remove('active-slider');
+    });
+
     muteContainer.addEventListener('click', (e) => e.stopPropagation());
-    volumeSlider.addEventListener('mousedown', (e) => e.stopPropagation());
 
     v.addEventListener('timeupdate', () => { container.querySelector('.player-progress-filled').style.width = (v.currentTime / v.duration * 100) + '%'; });
 
@@ -594,7 +624,12 @@ window.openProfile = async function(targetUid) {
 
         const grid = document.getElementById('profile-grid');
         grid.innerHTML = '';
-        if (userVideos.length === 0) { grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`; } else { userVideos.forEach(v => { grid.innerHTML += `<div class="grid-item" onclick="switchView('feed')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`; }); }
+        if (userVideos.length === 0) {
+            grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`;
+        } else {
+            // Profil-Grid verwendet jetzt auch jumpToVideo!
+            userVideos.forEach(v => { grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`; });
+        }
     } catch (e) { showCustomAlert("Fehler", "Profil konnte nicht geladen werden."); }
 };
 
@@ -730,7 +765,8 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     trendingSection.style.display = 'none';
     resultsGrid.style.display = 'grid';
     const results = allVideosData.filter(v => (v.authorName || "").toLowerCase().includes(query) || (v.description || "").toLowerCase().includes(query));
-    resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="switchView('feed')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
+    // Suche verwendet jetzt auch jumpToVideo!
+    resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
 });
 
 function renderComments(id) {
