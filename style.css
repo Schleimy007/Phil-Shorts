@@ -8,7 +8,6 @@
 html,
 body {
     background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-    /* Cooler Hintergrund für PC */
     color: white;
     height: 100vh;
     width: 100vw;
@@ -23,20 +22,18 @@ body {
 /* --- RESPONSIVE APP CONTAINER --- */
 
 .app {
-    height: 90vh;
-    /* Auf PC nicht den ganzen Bildschirm füllen */
-    max-height: 900px;
-    width: 300%;
-    max-width: 400px;
-    /* Handy-Breite auf PC */
+    height: 92vh;
+    /* Etwas höher für PC */
+    max-height: 950px;
+    width: 100%;
+    max-width: 480px;
+    /* Breiter für PC Rhythmus */
     position: relative;
     background-color: #000;
     overflow: hidden;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
     border-radius: 30px;
-    /* Abgerundete Ecken für PC */
     border: 6px solid #222;
-    /* Smartphone-Rahmen-Look */
 }
 
 
@@ -118,7 +115,6 @@ body {
     left: 0;
     width: 100%;
     height: calc(100% - 60px);
-    /* Geändert von 100vh auf 100% */
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
@@ -140,7 +136,6 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    /* Geändert von 100vh auf 100% */
     background: #000;
     z-index: 1000;
     display: flex;
@@ -197,7 +192,6 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    /* Geändert von 100vh auf 100% */
     background: rgba(0, 0, 0, 0.8);
     z-index: 3000;
     display: flex;
@@ -342,6 +336,8 @@ body {
     overflow-y: scroll;
     scrollbar-width: none;
     background-color: #000;
+    scroll-behavior: smooth;
+    /* Sorgt für den sauberen Rhythmus beim JS-Scroll */
 }
 
 .app__videos::-webkit-scrollbar {
@@ -664,7 +660,6 @@ body {
     display: flex;
     flex-direction: column;
     height: calc(100% - 60px);
-    /* Geändert von 100vh auf 100% */
     background: #000;
 }
 
@@ -942,7 +937,6 @@ body {
     left: 0;
     width: 100%;
     height: 75%;
-    /* Geändert von 75vh auf 75% */
     background: #111;
     color: white;
     z-index: 200;

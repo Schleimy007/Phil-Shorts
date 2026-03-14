@@ -315,26 +315,56 @@ document.getElementById('tab-following').addEventListener('click', function() {
     renderFeed();
 });
 
-// --- INTERAKTIONEN & PC STEUERUNG ---
+// --- INTERAKTIONEN & PC STEUERUNG (TIKTOK RHYTHMUS) ---
+
+// Tastatur Rhythmus
 window.addEventListener('keydown', (e) => {
     if (document.getElementById('view-feed').classList.contains('active')) {
         const container = document.getElementById('video-container');
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            container.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+            // Statt window.innerHeight den Container exakt nehmen
+            container.scrollBy({ top: container.clientHeight, behavior: 'smooth' });
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            container.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
+            container.scrollBy({ top: -container.clientHeight, behavior: 'smooth' });
         }
     }
 });
 
+// Mausrad Hijacker für sauberen 1-Video Rhythmus (wie TikTok)
+const videoContainer = document.getElementById('video-container');
+let scrollTimeout = null;
+
+videoContainer.addEventListener('wheel', (e) => {
+    // Wenn das Mausrad eher seitlich bewegt wird (z.B. Trackpad), lass es durch
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+
+    e.preventDefault(); // Stoppt normales unsauberes Scrollen
+
+    if (scrollTimeout) return; // Verhindert Spam-Scrollen
+
+    if (e.deltaY > 0) {
+        videoContainer.scrollBy({ top: videoContainer.clientHeight, behavior: 'smooth' });
+    } else if (e.deltaY < 0) {
+        videoContainer.scrollBy({ top: -videoContainer.clientHeight, behavior: 'smooth' });
+    }
+
+    // Harter Rhythmus: 600ms Sperre bis man weiter scrollen kann
+    scrollTimeout = setTimeout(() => {
+        scrollTimeout = null;
+    }, 600);
+}, { passive: false });
+
+
 // Globaler Observer für Auto-Play
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
-        if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) { e.target.play().catch(() => {}); } else {
+        if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
+            e.target.play().catch(() => {});
+        } else {
             e.target.pause();
-            e.target.currentTime = 0;
+            e.target.currentTime = 0; // Startet Video von vorne beim Weiterscrollen!
         }
     });
 }, { threshold: 0.6 });
@@ -765,15 +795,12 @@ document.getElementById('close-settings').addEventListener('click', () => docume
 // Wrapper-Funktion, um sie nach dem Laden des DOMs auszuführen
 function initResponsiveLayout() {
     const appContainer = document.querySelector('.app');
-    const videosView = document.getElementById('view-feed');
     const originalNav = appContainer.querySelector('.app__bottom-nav');
-    const header = appContainer.querySelector('.app__header');
 
     let currentMode = ''; // 'handy' oder 'pc'
 
     // Platztalter für Desktop-Container
     let pcSidebar = null;
-    let pcInfoPanel = null;
 
     // Funktion zum Erstellen des PC-Seitenleisten-Containers
     function createPCContainers() {
@@ -828,10 +855,7 @@ function initResponsiveLayout() {
         const isPC = window.innerWidth > 768;
 
         if (isPC && currentMode !== 'pc') {
-            // --- WECHSEL ZU PC LAYOUT ---
             currentMode = 'pc';
-            // console.log('Responsive Mode: PC');
-
             createPCContainers();
 
             // Verschiebe die Bottom Nav in die PC-Sidebar
@@ -839,12 +863,8 @@ function initResponsiveLayout() {
 
             // Restrukturiere alle aktuell geladenen Videos
             document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC);
-
-            // Optional: Header-Links anpassen falls nötig (bereits im CSS geregelt)
         } else if (!isPC && currentMode !== 'handy') {
-            // --- WECHSEL ZU HANDY LAYOUT ---
             currentMode = 'handy';
-            // console.log('Responsive Mode: HANDY');
 
             // Verschiebe die originalNav zurück in den Hauptcontainer
             if (originalNav) appContainer.appendChild(originalNav);
@@ -864,9 +884,7 @@ function initResponsiveLayout() {
     checkResponsiveMode();
     window.addEventListener('resize', checkResponsiveMode);
 
-    // WICHTIG: Wenn neue Videos dynamisch geladen werden (z.B. durch deine Firebase-Logik in script.js),
-    // müssen diese auch umstrukturiert werden. Wir nutzen einen MutationObserver, um dies zu erkennen.
-    if (isPCLayoutActive()) { // Nur PC-Videos beobachten
+    if (isPCLayoutActive()) {
         const videoObserver = new MutationObserver(function(mutations) {
             if (currentMode === 'pc') {
                 mutations.forEach(function(mutation) {
