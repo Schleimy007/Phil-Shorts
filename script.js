@@ -186,6 +186,7 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
+// Dynamischer Daten-Abruf (Damit Namen, Bilder und Haken IMMER aktuell sind)
 function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackVerified) {
     const user = allKnownUsers.find(u => u.uid === uid);
     return {
@@ -227,6 +228,7 @@ function initLiveUser() {
             if (currentUser.coins === undefined) currentUser.coins = 1000;
             if (!currentUser.followers) currentUser.followers = [];
             if (!currentUser.following) currentUser.following = [];
+            // Sicherstellen dass currentUser auch einen username hat
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
@@ -245,11 +247,13 @@ function initLiveUser() {
     });
 }
 
+// --- SOFORTIGE ÜBERALL-AKTUALISIERUNG ---
 function initSearchUsers() {
     onSnapshot(collection(db, "users"), (snapshot) => {
         allKnownUsers = [];
         snapshot.forEach(doc => allKnownUsers.push(doc.data()));
 
+        // Patcht das komplette HTML live durch!
         allKnownUsers.forEach(u => {
             const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
             const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
@@ -384,6 +388,7 @@ function applyAlgorithm(videos, mode) {
     }
 }
 
+// --- LIVE DATENBANK FÜR VIDEOS ---
 function initLiveDatabase() {
     document.getElementById('video-container').innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i><p>Lade Algorithmus...</p></div>';
 
@@ -534,6 +539,16 @@ window.updateGlobalVolumeUI = function() {
     });
 };
 
+// CAROUSEL Pfeil-Logik
+window.scrollCarousel = function(vidId, dir, event) {
+    if (event) event.stopPropagation();
+    const container = document.querySelector(`.carousel-container[data-vid="${vidId}"]`);
+    if (container) {
+        const scrollAmount = container.clientWidth;
+        container.scrollBy({ left: dir * scrollAmount, behavior: 'smooth' });
+    }
+};
+
 function createVideoElement(video) {
     const div = document.createElement('div');
     div.className = "video";
@@ -563,10 +578,20 @@ function createVideoElement(video) {
     let muteUIHtml = '';
 
     if (video.mediaType === 'images' && video.urls && video.urls.length > 0) {
+        // NEU: Pfeile für Carousel
+        let arrowsHTML = '';
+        if (video.urls.length > 1) {
+            arrowsHTML = `
+                <div class="carousel-arrow left" onclick="window.scrollCarousel('${video.id}', -1, event)"><i class="fas fa-chevron-left"></i></div>
+                <div class="carousel-arrow right" onclick="window.scrollCarousel('${video.id}', 1, event)"><i class="fas fa-chevron-right"></i></div>
+            `;
+        }
+
         mediaHTML = `
             <div class="carousel-container" data-vid="${video.id}">
                 ${video.urls.map(u => `<div class="carousel-item"><img src="${u}"></div>`).join('')}
             </div>
+            ${arrowsHTML}
             <div class="carousel-dots">
                 ${video.urls.map((_, i) => `<div class="dot ${i===0 ? 'active' : ''}"></div>`).join('')}
             </div>
@@ -1862,12 +1887,15 @@ let activeDragId = null;
 let activeResizeId = null;
 let activeResizePos = null;
 let startX, startY, initialObjX, initialObjY, startSize;
+let startDist = 0;
 
 // RASTER TOGGLE
 let gridVisible = false;
 document.getElementById('btn-toggle-grid').addEventListener('click', (e) => {
     gridVisible = !gridVisible;
-    document.getElementById('editor-grid').style.display = gridVisible ? 'block' : 'none';
+    const gridEl = document.getElementById('editor-grid');
+    gridEl.style.display = gridVisible ? 'block' : 'none';
+    gridEl.style.backgroundSize = '20px 20px'; // Zwingt saubere Skalierung
     e.target.innerHTML = gridVisible ? '<i class="fas fa-border-all"></i> Raster: An' : '<i class="fas fa-border-all"></i> Raster: Aus';
 });
 
@@ -1902,9 +1930,15 @@ function startResize(e, id, pos) {
     
     const obj = editorState.edits[editorState.currentIndex].find(t => t.id === id);
     startSize = parseFloat(obj.size);
+    
+    const workspaceRect = document.getElementById('editor-workspace').getBoundingClientRect();
+    const mouseX = clientX - workspaceRect.left;
+    const mouseY = clientY - workspaceRect.top;
+    
+    startDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2));
 }
 
-// MOVE (Beides in einem)
+// MOVE (Verschieben & Resizen kombiniert)
 function dragMove(e) {
     if (activeDragId) {
         e.preventDefault(); 
@@ -1913,10 +1947,19 @@ function dragMove(e) {
         const dx = clientX - startX;
         const dy = clientY - startY;
 
+        let rawX = initialObjX + dx;
+        let rawY = initialObjY + dy;
+        
+        // SNAP TO GRID
+        if (gridVisible) {
+            rawX = Math.round(rawX / 20) * 20;
+            rawY = Math.round(rawY / 20) * 20;
+        }
+
         const obj = editorState.edits[editorState.currentIndex].find(t => t.id === activeDragId);
         if (obj) {
-            obj.x = initialObjX + dx;
-            obj.y = initialObjY + dy;
+            obj.x = rawX;
+            obj.y = rawY;
             const el = document.getElementById('drag-txt-' + obj.id);
             if(el) {
                 el.style.left = obj.x + 'px';
@@ -1927,25 +1970,25 @@ function dragMove(e) {
         e.preventDefault();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const dx = clientX - startX;
-        const dy = clientY - startY;
-        
-        let delta = 0;
-        if (activeResizePos === 'tl') delta = -dx - dy;
-        if (activeResizePos === 'tr') delta = dx - dy;
-        if (activeResizePos === 'bl') delta = -dx + dy;
-        if (activeResizePos === 'br') delta = dx + dy;
 
-        let newSize = Math.max(15, startSize + delta);
+        const workspaceRect = document.getElementById('editor-workspace').getBoundingClientRect();
+        const mouseX = clientX - workspaceRect.left;
+        const mouseY = clientY - workspaceRect.top;
         
         const obj = editorState.edits[editorState.currentIndex].find(t => t.id === activeResizeId);
         if (obj) {
-            obj.size = newSize;
-            const el = document.getElementById('drag-txt-' + obj.id);
-            if(el) {
-                el.querySelector('.text-content').style.fontSize = newSize + 'px';
+            // Abstands-Math: Ignoriert den Rotationswinkel komplett! Funktioniert immer.
+            const currentDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2));
+            if (startDist > 0) {
+                let newSize = Math.max(15, startSize * (currentDist / startDist));
+                obj.size = newSize;
+                
+                const el = document.getElementById('drag-txt-' + obj.id);
+                if(el) {
+                    el.querySelector('.text-content').style.fontSize = newSize + 'px';
+                }
+                document.getElementById('text-ctrl-size').value = newSize;
             }
-            document.getElementById('text-ctrl-size').value = newSize;
         }
     }
 }
