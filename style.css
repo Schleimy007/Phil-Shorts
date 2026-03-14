@@ -10,8 +10,8 @@ body {
     background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
     /* Cooler Hintergrund für PC */
     color: white;
-    height: 200vh;
-    width: 200vw;
+    height: 100vh;
+    width: 100vw;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
     overflow: hidden;
     display: flex;
@@ -26,7 +26,7 @@ body {
     height: 90vh;
     /* Auf PC nicht den ganzen Bildschirm füllen */
     max-height: 900px;
-    width: 100%;
+    width: 300%;
     max-width: 400px;
     /* Handy-Breite auf PC */
     position: relative;
