@@ -5,26 +5,79 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-html,
+
+/* PC BACKGROUND & ALIGNMENT */
+
 body {
-    background-color: #000;
+    background: radial-gradient(circle at center, #1a1a2e 0%, #000 100%);
     color: white;
-    height: 100vh;
+    height: 100dvh;
+    /* dvh für perfekte Handy-Höhe */
     width: 100vw;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
     overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
+
+/* APP CONTAINER: RESPONSIVE MAGIC */
+
 .app {
-    height: 100vh;
-    width: 100%;
-    max-width: 450px;
-    margin: 0 auto;
     position: relative;
     background-color: #000;
     overflow: hidden;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
 }
+
+
+/* DESKTOP (PC/MAC) */
+
+@media (min-width: 600px) {
+    .app {
+        height: 90dvh;
+        max-height: 900px;
+        width: 400px;
+        border-radius: 25px;
+        border: 1px solid #333;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 40px rgba(255, 0, 80, 0.15);
+    }
+}
+
+
+/* MOBILE */
+
+@media (max-width: 599px) {
+    .app {
+        height: 100dvh;
+        width: 100vw;
+        border-radius: 0;
+        border: none;
+    }
+}
+
+
+/* SCROLLBAR STYLING FÜR PC */
+
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #000;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #333;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #ff0050;
+}
+
+
+/* GLOBALS */
 
 .verified-badge {
     color: #00f2fe;
@@ -83,12 +136,15 @@ body {
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+
+/* VIEWS LOGIC */
+
 .view {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    height: calc(100vh - 60px);
+    height: calc(100% - 60px);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
@@ -104,12 +160,15 @@ body {
     z-index: 5;
 }
 
+
+/* LOGIN SCREEN */
+
 .full-screen-overlay {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    height: 100vh;
+    height: 100%;
     background: #000;
     z-index: 1000;
     display: flex;
@@ -160,12 +219,15 @@ body {
     }
 }
 
+
+/* ALERTS */
+
 .alert-modal-overlay {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    height: 100vh;
+    height: 100%;
     background: rgba(0, 0, 0, 0.8);
     z-index: 3000;
     display: flex;
@@ -239,6 +301,9 @@ body {
     transform: translateX(-50%) translateY(0);
 }
 
+
+/* TOP HEADER (FEED) */
+
 .app__header {
     position: absolute;
     top: 0;
@@ -258,6 +323,10 @@ body {
     cursor: pointer;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
     transition: color 0.2s;
+}
+
+.header__link:hover {
+    color: white;
 }
 
 .header__link.active {
@@ -280,7 +349,11 @@ body {
     font-size: 22px;
     cursor: pointer;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-    transition: transform 0.2s;
+    transition: transform 0.2s, color 0.2s;
+}
+
+.search-icon:hover {
+    color: #ff0050;
 }
 
 .search-icon:active {
@@ -301,7 +374,15 @@ body {
     font-size: 22px;
     cursor: pointer;
     padding: 5px;
+    transition: color 0.2s;
 }
+
+.back-btn:hover {
+    color: #ff0050;
+}
+
+
+/* FEED & VIDEOS */
 
 .app__videos {
     height: 100%;
@@ -310,10 +391,6 @@ body {
     overflow-y: scroll;
     scrollbar-width: none;
     background-color: #000;
-}
-
-.app__videos::-webkit-scrollbar {
-    display: none;
 }
 
 .video {
@@ -394,6 +471,11 @@ body {
     z-index: 20;
     cursor: pointer;
     backdrop-filter: blur(5px);
+    transition: background 0.2s;
+}
+
+.mute-btn:hover {
+    background: rgba(0, 0, 0, 0.6);
 }
 
 .player-progress-bar {
@@ -430,6 +512,11 @@ body {
     pointer-events: auto;
     cursor: pointer;
     display: inline-block;
+    transition: color 0.2s;
+}
+
+.creator-name:hover {
+    color: #ccc;
 }
 
 .video__footer p {
@@ -458,6 +545,11 @@ body {
     border-radius: 50%;
     padding: 2px;
     background: white;
+    transition: transform 0.2s;
+}
+
+.sidebar__profile:hover {
+    transform: scale(1.05);
 }
 
 .sidebar__profile img {
@@ -491,6 +583,11 @@ body {
     transition: transform 0.1s;
 }
 
+.videoSidebar__button:hover i {
+    transform: scale(1.1);
+    transition: transform 0.2s;
+}
+
 .videoSidebar__button:active {
     transform: scale(0.8);
 }
@@ -514,6 +611,9 @@ body {
 .videoSidebar__button.gift-btn i {
     color: #ffd700;
 }
+
+
+/* PROFIL & GRID */
 
 .profile-header {
     display: flex;
@@ -568,7 +668,11 @@ body {
     font-weight: 600;
     font-size: 15px;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background 0.2s, opacity 0.2s;
+}
+
+.profile-action-btn:hover {
+    opacity: 0.9;
 }
 
 .profile-action-btn.edit-btn {
@@ -587,6 +691,11 @@ body {
     color: #888;
     cursor: pointer;
     font-size: 20px;
+    transition: color 0.2s;
+}
+
+.profile-tab:hover {
+    color: #ddd;
 }
 
 .profile-tab.active {
@@ -608,6 +717,11 @@ body {
     position: relative;
     cursor: pointer;
     overflow: hidden;
+    transition: opacity 0.2s;
+}
+
+.grid-item:hover {
+    opacity: 0.8;
 }
 
 .grid-item video {
@@ -628,10 +742,12 @@ body {
     gap: 5px;
 }
 
+
+/* CHAT */
+
 #view-chat {
     display: flex;
     flex-direction: column;
-    height: calc(100vh - 60px);
     background: #000;
 }
 
@@ -744,9 +860,16 @@ body {
     transition: transform 0.1s;
 }
 
+.chat-send-btn:hover {
+    background: #e00045;
+}
+
 .chat-send-btn:active {
     transform: scale(0.9);
 }
+
+
+/* SUCHE & TRENDING */
 
 .search-input-box {
     flex: 1;
@@ -783,6 +906,10 @@ body {
     align-items: center;
     cursor: pointer;
     transition: background 0.2s;
+}
+
+.trend-item:hover {
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .trend-item:active {
@@ -856,6 +983,11 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
+    transition: border 0.2s;
+}
+
+.admin-user-card:hover {
+    border-color: #555;
 }
 
 .admin-user-header {
@@ -884,7 +1016,11 @@ body {
     font-weight: bold;
     cursor: pointer;
     font-size: 12px;
-    transition: transform 0.1s;
+    transition: transform 0.1s, opacity 0.2s;
+}
+
+.admin-btn:hover {
+    opacity: 0.8;
 }
 
 .admin-btn:active {
@@ -903,12 +1039,15 @@ body {
     border: 1px solid #ffd700;
 }
 
+
+/* MODALS */
+
 .modal {
     position: absolute;
     bottom: -100%;
     left: 0;
     width: 100%;
-    height: 75vh;
+    height: 75%;
     background: #111;
     color: white;
     z-index: 200;
@@ -943,6 +1082,11 @@ body {
     cursor: pointer;
     color: #aaa;
     padding: 0 10px;
+    transition: color 0.2s;
+}
+
+.close-modal:hover {
+    color: white;
 }
 
 .modal-body {
@@ -972,6 +1116,7 @@ body {
 
 .delete-comment-icon:hover {
     opacity: 1;
+    transform: scale(1.1);
 }
 
 .comment {
@@ -1016,6 +1161,11 @@ body {
     color: white;
     outline: none;
     font-size: 15px;
+    transition: border 0.2s;
+}
+
+.comment-input:focus {
+    border-color: #555;
 }
 
 .comment-submit {
@@ -1031,6 +1181,11 @@ body {
     justify-content: center;
     align-items: center;
     font-size: 18px;
+    transition: transform 0.1s;
+}
+
+.comment-submit:hover {
+    background: #e00045;
 }
 
 .upload-body {
@@ -1054,7 +1209,11 @@ body {
     padding: 40px 20px;
     cursor: pointer;
     background: #1a1a1a;
-    transition: border 0.2s;
+    transition: border 0.2s, background 0.2s;
+}
+
+.file-upload-design:hover {
+    background: #222;
 }
 
 .file-upload-design:active {
@@ -1072,6 +1231,9 @@ body {
     font-size: 14px;
     font-weight: 600;
 }
+
+
+/* BOTTOM NAV */
 
 .app__bottom-nav {
     position: absolute;
@@ -1095,6 +1257,10 @@ body {
     transition: color 0.2s;
 }
 
+.nav__item:hover {
+    color: #ddd;
+}
+
 .nav__item.active {
     color: white;
 }
@@ -1114,6 +1280,10 @@ body {
     border-left: 4px solid #00f2fe;
     border-right: 4px solid #ff0050;
     transition: transform 0.1s;
+}
+
+.plus-box:hover {
+    opacity: 0.9;
 }
 
 .plus-box:active {

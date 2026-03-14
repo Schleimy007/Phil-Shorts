@@ -72,7 +72,6 @@ async function fetchFreshUserData() {
         if (userSnap.exists()) {
             currentUser = userSnap.data();
             if (currentUser.coins === undefined) currentUser.coins = 1000;
-            // Neues Feature: Sicherstellen, dass auch Array da ist
             if (!currentUser.followers) currentUser.followers = [];
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
         }
@@ -107,7 +106,6 @@ window.addEventListener('googleLoginSuccess', async(event) => {
             currentUser = { uid, displayName: name, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0 };
         } else {
             currentUser = userSnap.data();
-            // Fallback für alte Accounts
             if (currentUser.coins === undefined) {
                 currentUser.coins = 1000;
                 currentUser.followers = [];
@@ -284,7 +282,22 @@ document.getElementById('tab-following').addEventListener('click', function() {
     renderFeed();
 });
 
-// --- INTERAKTIONEN ---
+// --- INTERAKTIONEN & PC STEUERUNG ---
+// PC Steuerung (Pfeiltasten zum Scrollen)
+window.addEventListener('keydown', (e) => {
+    if (document.getElementById('view-feed').classList.contains('active')) {
+        const container = document.getElementById('video-container');
+        // Scroll by half the screen height to trigger the next scroll-snap
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            container.scrollBy({ top: window.innerHeight / 2, behavior: 'smooth' });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            container.scrollBy({ top: -window.innerHeight / 2, behavior: 'smooth' });
+        }
+    }
+});
+
 function attachFeedInteractions() {
     const videos = document.querySelectorAll('.video__player');
     videos.forEach(v => {
@@ -399,7 +412,7 @@ function attachFeedInteractions() {
     });
 }
 
-// --- ECHTES FOLLOW SYSTEM (Inkl. Follower Array beim Profil!) ---
+// --- SECURE FOLLOW SYSTEM ---
 window.toggleFollow = async function(targetUid, element, event) {
     if (event) event.stopPropagation();
 
@@ -409,12 +422,10 @@ window.toggleFollow = async function(targetUid, element, event) {
     if (!currentUser.following) currentUser.following = [];
 
     if (!currentUser.following.includes(targetUid)) {
-        // ICH FOLGE JEMANDEM
         currentUser.following.push(targetUid);
         showToast("Gefolgt!");
         if (element) element.style.display = 'none';
 
-        // Speichern in meiner Following Liste UND in der Follower Liste des Creators
         await updateDoc(userRef, { following: arrayUnion(targetUid) });
         await updateDoc(targetRef, { followers: arrayUnion(currentUser.uid) });
 
@@ -424,16 +435,13 @@ window.toggleFollow = async function(targetUid, element, event) {
         if (btn && btn.dataset.uid === targetUid) {
             btn.innerText = "Entfolgen";
             btn.classList.add('edit-btn');
-            // Counter live hochsetzen
             const followersEl = document.getElementById('stat-followers');
             if (followersEl) followersEl.innerText = parseInt(followersEl.innerText) + 1;
         }
     } else {
-        // ICH ENTFOLGE JEMANDEM
         currentUser.following = currentUser.following.filter(u => u !== targetUid);
         showToast("Entfolgt.");
 
-        // Löschen aus meiner Following Liste UND aus der Follower Liste des Creators
         await updateDoc(userRef, { following: arrayRemove(targetUid) });
         await updateDoc(targetRef, { followers: arrayRemove(currentUser.uid) });
 
@@ -443,7 +451,6 @@ window.toggleFollow = async function(targetUid, element, event) {
         if (btn && btn.dataset.uid === targetUid) {
             btn.innerText = "Folgen";
             btn.classList.remove('edit-btn');
-            // Counter live runtersetzen
             const followersEl = document.getElementById('stat-followers');
             if (followersEl) followersEl.innerText = Math.max(0, parseInt(followersEl.innerText) - 1);
         }
@@ -474,8 +481,6 @@ window.openProfile = async function(targetUid) {
         document.getElementById('profile-level').innerText = `Level ${level} Creator 🌟`;
 
         const verifiedBadge = targetUser.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
-
-        // ECHTE FOLLOWER BERECHNUNG STATT FAKE ZAHLEN!
         const realFollowersCount = targetUser.followers ? targetUser.followers.length : 0;
 
         document.getElementById('profile-title').innerHTML = '@' + targetUser.displayName;
