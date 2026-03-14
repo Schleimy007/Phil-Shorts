@@ -55,7 +55,7 @@ document.getElementById('close-alert-btn').addEventListener('click', () => {
 });
 
 
-// --- AUTHENTIFIZIERUNG ---
+// --- AUTHENTIFIZIERUNG & GOOGLE BRÜCKE ---
 function parseJwt(token) {
     var base64Url = token.split('.')[1];
     var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -72,6 +72,8 @@ async function fetchFreshUserData() {
         if (userSnap.exists()) {
             currentUser = userSnap.data();
             if (currentUser.coins === undefined) currentUser.coins = 1000;
+            // Neues Feature: Sicherstellen, dass auch Array da ist
+            if (!currentUser.followers) currentUser.followers = [];
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
         }
     } catch (e) {}
@@ -97,16 +99,19 @@ window.addEventListener('googleLoginSuccess', async(event) => {
                 photoURL: pic,
                 bio: "Neu in der Community! 👋",
                 following: [],
+                followers: [],
                 verified: false,
                 coins: 1000,
                 profileViews: 0
             });
-            currentUser = { uid, displayName: name, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], verified: false, coins: 1000, profileViews: 0 };
+            currentUser = { uid, displayName: name, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0 };
         } else {
             currentUser = userSnap.data();
+            // Fallback für alte Accounts
             if (currentUser.coins === undefined) {
                 currentUser.coins = 1000;
-                await updateDoc(userRef, { coins: 1000, profileViews: 0 });
+                currentUser.followers = [];
+                await updateDoc(userRef, { coins: 1000, profileViews: 0, followers: [] });
             }
         }
 
@@ -326,6 +331,7 @@ function attachFeedInteractions() {
     }, { threshold: 0.6 });
     videos.forEach(v => observer.observe(v));
 
+    // SECURE LIKES
     document.querySelectorAll('.like-btn').forEach(btn => {
         btn.addEventListener('click', async() => {
             const id = btn.dataset.id;
@@ -348,6 +354,7 @@ function attachFeedInteractions() {
         });
     });
 
+    // GIFTING
     document.querySelectorAll('.gift-btn').forEach(btn => {
         btn.addEventListener('click', async() => {
             if (currentUser.coins < 10) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins zum Spenden.");
@@ -392,32 +399,53 @@ function attachFeedInteractions() {
     });
 }
 
-// --- SECURE FOLLOW SYSTEM ---
+// --- ECHTES FOLLOW SYSTEM (Inkl. Follower Array beim Profil!) ---
 window.toggleFollow = async function(targetUid, element, event) {
     if (event) event.stopPropagation();
+
     const userRef = doc(db, "users", currentUser.uid);
+    const targetRef = doc(db, "users", targetUid);
+
     if (!currentUser.following) currentUser.following = [];
 
     if (!currentUser.following.includes(targetUid)) {
+        // ICH FOLGE JEMANDEM
         currentUser.following.push(targetUid);
         showToast("Gefolgt!");
         if (element) element.style.display = 'none';
+
+        // Speichern in meiner Following Liste UND in der Follower Liste des Creators
         await updateDoc(userRef, { following: arrayUnion(targetUid) });
+        await updateDoc(targetRef, { followers: arrayUnion(currentUser.uid) });
+
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
+
         const btn = document.getElementById('profile-action-btn');
         if (btn && btn.dataset.uid === targetUid) {
             btn.innerText = "Entfolgen";
             btn.classList.add('edit-btn');
+            // Counter live hochsetzen
+            const followersEl = document.getElementById('stat-followers');
+            if (followersEl) followersEl.innerText = parseInt(followersEl.innerText) + 1;
         }
     } else {
+        // ICH ENTFOLGE JEMANDEM
         currentUser.following = currentUser.following.filter(u => u !== targetUid);
         showToast("Entfolgt.");
+
+        // Löschen aus meiner Following Liste UND aus der Follower Liste des Creators
         await updateDoc(userRef, { following: arrayRemove(targetUid) });
+        await updateDoc(targetRef, { followers: arrayRemove(currentUser.uid) });
+
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
+
         const btn = document.getElementById('profile-action-btn');
         if (btn && btn.dataset.uid === targetUid) {
             btn.innerText = "Folgen";
             btn.classList.remove('edit-btn');
+            // Counter live runtersetzen
+            const followersEl = document.getElementById('stat-followers');
+            if (followersEl) followersEl.innerText = Math.max(0, parseInt(followersEl.innerText) - 1);
         }
     }
 };
@@ -447,12 +475,15 @@ window.openProfile = async function(targetUid) {
 
         const verifiedBadge = targetUser.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
 
+        // ECHTE FOLLOWER BERECHNUNG STATT FAKE ZAHLEN!
+        const realFollowersCount = targetUser.followers ? targetUser.followers.length : 0;
+
         document.getElementById('profile-title').innerHTML = '@' + targetUser.displayName;
         document.getElementById('profile-name').innerHTML = targetUser.displayName + verifiedBadge;
         document.getElementById('profile-bio').innerText = targetUser.bio || "Keine Bio vorhanden.";
-        document.getElementById('profile-pic').src = targetUser.photoURL;
+        document.getElementById('profile-pic').src = targetUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback';
         document.getElementById('stat-likes').innerText = totalLikes;
-        document.getElementById('stat-followers').innerText = targetUid === currentUser.uid ? '0' : Math.floor(Math.random() * 500);
+        document.getElementById('stat-followers').innerText = realFollowersCount;
         document.getElementById('stat-following').innerText = targetUser.following ? targetUser.following.length : 0;
 
         const actionBtn = document.getElementById('profile-action-btn');
@@ -460,6 +491,13 @@ window.openProfile = async function(targetUid) {
         const settingsIcon = document.getElementById('open-settings');
         const adminDashboardBtn = document.getElementById('open-admin-dashboard');
         const privateStats = document.getElementById('private-stats');
+        const adminControls = document.getElementById('admin-controls');
+        adminControls.innerHTML = '';
+
+        if (currentUser && currentUser.email === "schleimyverteilung@gmail.com" && targetUid !== currentUser.uid) {
+            const isVerif = targetUser.verified || false;
+            adminControls.innerHTML = `<button onclick="toggleVerify('${targetUid}', ${isVerif})" class="profile-action-btn" style="background: transparent; color: #00f2fe; border: 1px solid #00f2fe; margin-top: 15px; width: 100%;">👑 Admin: ${isVerif ? 'Blauen Haken entfernen' : 'Blauen Haken geben'}</button>`;
+        }
 
         if (targetUid === currentUser.uid) {
             actionBtn.innerText = "Profil bearbeiten";
@@ -472,7 +510,6 @@ window.openProfile = async function(targetUid) {
             };
             settingsIcon.style.display = 'block';
 
-            // ADMIN CHECK: Zeige Dashboard Button, wenn es der Admin Account ist
             if (currentUser.email === "schleimyverteilung@gmail.com") {
                 adminDashboardBtn.style.display = 'block';
             } else {
@@ -502,6 +539,14 @@ window.openProfile = async function(targetUid) {
         grid.innerHTML = '';
         if (userVideos.length === 0) { grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`; } else { userVideos.forEach(v => { grid.innerHTML += `<div class="grid-item" onclick="switchView('feed')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`; }); }
     } catch (e) { showCustomAlert("Fehler", "Profil konnte nicht geladen werden."); }
+};
+
+window.toggleVerify = async function(targetUid, currentStatus) {
+    try {
+        await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus });
+        showToast(!currentStatus ? "Blauer Haken vergeben! 🔵" : "Blauer Haken entfernt.");
+        openProfile(targetUid);
+    } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); }
 };
 
 document.getElementById('nav-profile').addEventListener('click', () => { if (currentUser) openProfile(currentUser.uid); });
@@ -590,7 +635,7 @@ window.toggleVerifyAdmin = async function(targetUid, currentStatus) {
     try {
         await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus });
         showToast(!currentStatus ? "Blauer Haken vergeben!" : "Blauer Haken entfernt.");
-        loadAdminDashboard(); // Liste neu laden
+        loadAdminDashboard();
     } catch (e) { showCustomAlert("Fehler", "Berechtigung verweigert."); }
 };
 
@@ -598,7 +643,7 @@ window.giveCoins = async function(targetUid) {
     try {
         await updateDoc(doc(db, "users", targetUid), { coins: increment(1000) });
         showToast("1000 Coins gutgeschrieben! 💰");
-        loadAdminDashboard(); // Liste neu laden
+        loadAdminDashboard();
     } catch (e) {
         showCustomAlert("Fehler", "Coins konnten nicht gesendet werden.");
     }
