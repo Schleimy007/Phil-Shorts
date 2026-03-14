@@ -52,7 +52,6 @@ window.sendDesktopNotification = function(title, body, type) {
     } catch (e) { console.error(e); }
 };
 
-// UI Aktualisierung der Toggles
 function updateNotifUI() {
     const masterToggle = document.getElementById('notif-master');
     const subSettings = document.getElementById('notif-sub-settings');
@@ -82,7 +81,7 @@ document.getElementById('notif-master').addEventListener('change', async(e) => {
         }
 
         if (Notification.permission === "denied") {
-            showCustomAlert("Blockiert!", "Du hast Benachrichtigungen in Firefox/im Browser blockiert. Klicke auf das Schloss-Symbol in deiner Adressleiste, setze die Berechtigung zurück oder erlaube sie, und versuche es erneut.");
+            showCustomAlert("Blockiert!", "Du hast Benachrichtigungen im Browser blockiert. Erlaube sie über das Schloss-Symbol in der Adressleiste.");
             e.target.checked = false;
             notifSettings.master = false;
             updateNotifUI();
@@ -187,7 +186,6 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
-// Dynamischer Daten-Abruf (Damit Namen, Bilder und Haken IMMER aktuell sind)
 function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackVerified) {
     const user = allKnownUsers.find(u => u.uid === uid);
     return {
@@ -229,7 +227,6 @@ function initLiveUser() {
             if (currentUser.coins === undefined) currentUser.coins = 1000;
             if (!currentUser.followers) currentUser.followers = [];
             if (!currentUser.following) currentUser.following = [];
-            // Sicherstellen dass currentUser auch einen username hat
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
@@ -248,13 +245,11 @@ function initLiveUser() {
     });
 }
 
-// --- SOFORTIGE ÜBERALL-AKTUALISIERUNG ---
 function initSearchUsers() {
     onSnapshot(collection(db, "users"), (snapshot) => {
         allKnownUsers = [];
         snapshot.forEach(doc => allKnownUsers.push(doc.data()));
 
-        // Patcht das komplette HTML live durch!
         allKnownUsers.forEach(u => {
             const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
             const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
@@ -389,7 +384,6 @@ function applyAlgorithm(videos, mode) {
     }
 }
 
-// --- LIVE DATENBANK FÜR VIDEOS & BILDER ---
 function initLiveDatabase() {
     document.getElementById('video-container').innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i><p>Lade Algorithmus...</p></div>';
 
@@ -565,7 +559,6 @@ function createVideoElement(video) {
 
     const mutedAttr = window.globalMuted ? 'muted' : '';
 
-    // --- NEU: BILD ODER VIDEO RENDERN ---
     let mediaHTML = '';
     let muteUIHtml = '';
 
@@ -578,7 +571,6 @@ function createVideoElement(video) {
                 ${video.urls.map((_, i) => `<div class="dot ${i===0 ? 'active' : ''}"></div>`).join('')}
             </div>
         `;
-        // Bei Bildern kein Mute-Button
         muteUIHtml = `<div class="mute-container" style="display:none;"></div>`;
     } else {
         mediaHTML = `
@@ -645,7 +637,6 @@ function createVideoElement(video) {
     return div;
 }
 
-// --- VIDEO DETAILS MODAL ---
 window.openVideoDetails = function(id) {
     const video = allVideosData.find(v => v.id === id);
     if (!video) return;
@@ -663,7 +654,6 @@ window.openVideoDetails = function(id) {
 document.getElementById('close-details').addEventListener('click', () => { document.getElementById('video-details-modal').classList.remove('show'); });
 
 
-// --- VIDEO BEARBEITEN ---
 window.openEditVideo = function(videoId) {
     const video = allVideosData.find(v => v.id === videoId);
     if (video) {
@@ -709,7 +699,6 @@ document.getElementById('tab-following').addEventListener('click', function() {
     renderFeed(true);
 });
 
-// --- SCROLL ---
 const videoContainer = document.getElementById('video-container');
 videoContainer.addEventListener('scroll', () => {
     if (videoContainer.scrollTop + videoContainer.clientHeight >= videoContainer.scrollHeight - 20) {
@@ -764,7 +753,6 @@ const videoObserver = new IntersectionObserver(entries => {
         const vidId = el.dataset.vid;
 
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
-            // Egal ob Video oder Bild - Views zählen
             if (vidId && !viewedVideos.has(vidId)) {
                 viewedVideos.add(vidId);
                 updateDoc(doc(db, "videos", vidId), { views: increment(1) }).catch(() => {});
@@ -801,7 +789,6 @@ function attachInteractionsToVideo(videoContainerEl) {
     const container = videoContainerEl.querySelector('.video-inner');
     let lastTap = 0;
 
-    // --- DOUBLE TAP LOGIK ---
     const handleDoubleTap = (e) => {
         const tapLength = new Date().getTime() - lastTap;
         if (tapLength < 300 && tapLength > 0) {
@@ -820,7 +807,6 @@ function attachInteractionsToVideo(videoContainerEl) {
 
 
     if (v) {
-        // --- VIDEO LOGIK ---
         videoObserver.observe(v);
 
         v.addEventListener('play', () => container.classList.remove('is-paused'));
@@ -876,15 +862,13 @@ function attachInteractionsToVideo(videoContainerEl) {
         }
 
     } else if (c) {
-        // --- BILDER CAROUSEL LOGIK ---
         videoObserver.observe(c);
-        container.classList.remove('is-paused'); // Immer "play" bei Bildern
+        container.classList.remove('is-paused');
 
         c.addEventListener('click', (e) => {
             handleDoubleTap(e);
         });
 
-        // Wisch-Indikatoren aktualisieren
         c.addEventListener('scroll', () => {
             const idx = Math.round(c.scrollLeft / c.clientWidth);
             const dots = videoContainerEl.querySelectorAll('.dot');
@@ -895,7 +879,6 @@ function attachInteractionsToVideo(videoContainerEl) {
         });
     }
 
-    // --- GLOBALE BUTTONS ---
     document.addEventListener('mouseup', () => { 
         document.querySelectorAll('.mute-container').forEach(mc => mc.classList.remove('active-slider')); 
     });
@@ -1000,9 +983,6 @@ window.deleteVideo = async function(videoId) {
         } catch (e) { showCustomAlert("Fehler", "Konnte nicht gelöscht werden."); }
     }
 };
-
-
-// --- THREADED REPLIES & KOMMENTAR LIKES ---
 
 window.toggleReplyBox = function(cId) {
     const box = document.getElementById(`reply-box-${cId}`);
@@ -1283,7 +1263,6 @@ window.renderProfileGrid = function(targetUid) {
         grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`;
     } else {
         userVideos.forEach(v => { 
-            // Vorschau Bild rendern wenn Bilder, sonst Video
             const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`;
             const mediaTag = v.mediaType === 'images' ? `<img src="${previewSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<video src="${previewSrc}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`;
             const icon = v.mediaType === 'images' ? 'fa-images' : 'fa-play';
@@ -1357,10 +1336,9 @@ window.openProfile = async function(targetUid) {
                 document.getElementById('settings-modal').classList.add('show');
             };
             
-            // NEU: Zahnrad Klick-Befehl
             settingsIcon.style.display = 'block';
             settingsIcon.onclick = () => {
-                updateNotifUI(); // Lade Notification Toggles Status
+                updateNotifUI(); 
                 document.getElementById('app-settings-modal').classList.add('show');
             };
             
@@ -1404,7 +1382,6 @@ window.toggleVerify = async function(targetUid, currentStatus) {
     } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); }
 };
 
-// --- PROFIL & KOMMENTAR SYNC LOGIK ---
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
 
     const newDisplayName = document.getElementById('edit-displayname-input').value.trim();
@@ -1563,7 +1540,6 @@ window.giveCoins = async function(targetUid) {
     } catch (e) {}
 };
 
-// --- SUCHFUNKTION ---
 document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     const resultsGrid = document.getElementById('search-results');
@@ -1872,14 +1848,190 @@ document.getElementById('dm-input').addEventListener('keypress', (e) => {
 });
 
 
-// --- UPLOAD LOGIK: VIDEO TRIMMEN & BILDER + TEXT ---
+// --- UPLOAD LOGIK: ADVANCED EDITOR & VIDEO TRIMMEN ---
 
-document.getElementById('up-file').addEventListener('change', function(e) {
+let editorState = {
+    images: [], // Beinhaltet Base64 Strings der geladenen Bilder
+    edits: [],  // Beinhaltet Arrays von Text-Objekten pro Bild
+    currentIndex: 0,
+    activeTextId: null
+};
+
+// Hilfsfunktion: Dragging Event Listener
+let activeDragId = null;
+let startX, startY, initialObjX, initialObjY;
+
+function startDrag(e, id) {
+    if(e.target.tagName.toLowerCase() === 'input') return; // Nicht draggen wenn man Text ändert
+    e.preventDefault();
+    activeDragId = id;
+    selectText(id);
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    startX = clientX;
+    startY = clientY;
+    const obj = editorState.edits[editorState.currentIndex].find(t => t.id === id);
+    initialObjX = obj.x;
+    initialObjY = obj.y;
+}
+
+function dragMove(e) {
+    if (!activeDragId) return;
+    e.preventDefault(); 
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const dx = clientX - startX;
+    const dy = clientY - startY;
+
+    const obj = editorState.edits[editorState.currentIndex].find(t => t.id === activeDragId);
+    if (obj) {
+        obj.x = initialObjX + dx;
+        obj.y = initialObjY + dy;
+        const el = document.getElementById('drag-txt-' + obj.id);
+        if(el) {
+            el.style.left = obj.x + 'px';
+            el.style.top = obj.y + 'px';
+        }
+    }
+}
+
+function endDrag() {
+    activeDragId = null;
+}
+
+document.addEventListener('mousemove', dragMove);
+document.addEventListener('touchmove', dragMove, {passive: false});
+document.addEventListener('mouseup', endDrag);
+document.addEventListener('touchend', endDrag);
+
+// Element rendern
+function renderEditorImage(index) {
+    if (editorState.images.length === 0) return;
+    document.getElementById('editor-bg').src = editorState.images[index];
+    document.getElementById('editor-img-counter').innerText = `${index + 1} / ${editorState.images.length}`;
+    
+    const layer = document.getElementById('editor-layer');
+    layer.innerHTML = '';
+    editorState.activeTextId = null;
+    document.getElementById('text-controls').style.display = 'none';
+
+    editorState.edits[index].forEach(obj => {
+        createDOMTextElement(obj);
+    });
+}
+
+function createDOMTextElement(obj) {
+    const layer = document.getElementById('editor-layer');
+    const el = document.createElement('div');
+    el.id = 'drag-txt-' + obj.id;
+    el.className = 'draggable-text';
+    el.innerText = obj.text;
+    el.style.left = obj.x + 'px';
+    el.style.top = obj.y + 'px';
+    el.style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`;
+    el.style.fontSize = obj.size + 'px';
+    el.style.color = obj.color;
+
+    el.addEventListener('mousedown', (e) => startDrag(e, obj.id));
+    el.addEventListener('touchstart', (e) => startDrag(e, obj.id), {passive: false});
+    
+    layer.appendChild(el);
+}
+
+function selectText(id) {
+    editorState.activeTextId = id;
+    document.querySelectorAll('.draggable-text').forEach(el => el.classList.remove('active'));
+    
+    const obj = editorState.edits[editorState.currentIndex].find(t => t.id === id);
+    if(!obj) return;
+    
+    document.getElementById('drag-txt-' + id).classList.add('active');
+    
+    // UI aktualisieren
+    document.getElementById('text-controls').style.display = 'block';
+    document.getElementById('text-ctrl-input').value = obj.text;
+    document.getElementById('text-ctrl-size').value = obj.size;
+    document.getElementById('text-ctrl-rot').value = obj.rotation;
+}
+
+// Controls Events
+document.getElementById('text-ctrl-input').addEventListener('input', (e) => {
+    if(!editorState.activeTextId) return;
+    const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId);
+    obj.text = e.target.value;
+    document.getElementById('drag-txt-' + obj.id).innerText = obj.text;
+});
+
+document.getElementById('text-ctrl-size').addEventListener('input', (e) => {
+    if(!editorState.activeTextId) return;
+    const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId);
+    obj.size = e.target.value;
+    document.getElementById('drag-txt-' + obj.id).style.fontSize = obj.size + 'px';
+});
+
+document.getElementById('text-ctrl-rot').addEventListener('input', (e) => {
+    if(!editorState.activeTextId) return;
+    const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId);
+    obj.rotation = e.target.value;
+    document.getElementById('drag-txt-' + obj.id).style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`;
+});
+
+document.querySelectorAll('.color-dot').forEach(dot => {
+    dot.addEventListener('click', (e) => {
+        if(!editorState.activeTextId) return;
+        const color = e.target.dataset.color;
+        const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId);
+        obj.color = color;
+        document.getElementById('drag-txt-' + obj.id).style.color = color;
+    });
+});
+
+document.getElementById('btn-delete-text').addEventListener('click', () => {
+    if(!editorState.activeTextId) return;
+    editorState.edits[editorState.currentIndex] = editorState.edits[editorState.currentIndex].filter(t => t.id !== editorState.activeTextId);
+    document.getElementById('drag-txt-' + editorState.activeTextId).remove();
+    editorState.activeTextId = null;
+    document.getElementById('text-controls').style.display = 'none';
+});
+
+document.getElementById('btn-add-text').addEventListener('click', () => {
+    const workspace = document.getElementById('editor-workspace');
+    const newObj = {
+        id: Date.now(),
+        text: "Neuer Text",
+        x: workspace.clientWidth / 2,
+        y: workspace.clientHeight / 2,
+        size: 24,
+        rotation: 0,
+        color: '#ffffff'
+    };
+    editorState.edits[editorState.currentIndex].push(newObj);
+    createDOMTextElement(newObj);
+    selectText(newObj.id);
+});
+
+document.getElementById('btn-prev-img').addEventListener('click', () => {
+    if (editorState.currentIndex > 0) {
+        editorState.currentIndex--;
+        renderEditorImage(editorState.currentIndex);
+    }
+});
+
+document.getElementById('btn-next-img').addEventListener('click', () => {
+    if (editorState.currentIndex < editorState.images.length - 1) {
+        editorState.currentIndex++;
+        renderEditorImage(editorState.currentIndex);
+    }
+});
+
+
+// File Input Event
+document.getElementById('up-file').addEventListener('change', async function(e) {
     const files = e.target.files;
-    const txt = document.querySelector('.file-upload-design p');
-    const icon = document.querySelector('.file-upload-design i');
+    const txt = document.querySelector('#up-file-btn p');
+    const icon = document.querySelector('#up-file-btn i');
     const trimmerUi = document.getElementById('trimmer-ui');
-    const imageEditUi = document.getElementById('image-edit-ui');
+    const advancedEditorUi = document.getElementById('image-advanced-editor');
     const trimPreview = document.getElementById('trim-preview');
     const trimStart = document.getElementById('trim-start');
     const trimEnd = document.getElementById('trim-end');
@@ -1889,7 +2041,7 @@ document.getElementById('up-file').addEventListener('change', function(e) {
         icon.className = "fas fa-cloud-upload-alt";
         icon.style.color = "#aaa";
         trimmerUi.style.display = 'none';
-        imageEditUi.style.display = 'none';
+        advancedEditorUi.style.display = 'none';
         return;
     }
 
@@ -1901,9 +2053,8 @@ document.getElementById('up-file').addEventListener('change', function(e) {
         icon.style.color = "#00f2fe";
         
         trimmerUi.style.display = 'block';
-        imageEditUi.style.display = 'none';
+        advancedEditorUi.style.display = 'none';
         
-        // Video Preview laden
         const url = URL.createObjectURL(files[0]);
         trimPreview.src = url;
         trimPreview.onloadedmetadata = () => {
@@ -1919,7 +2070,26 @@ document.getElementById('up-file').addEventListener('change', function(e) {
         icon.style.color = "#ffd700";
         
         trimmerUi.style.display = 'none';
-        imageEditUi.style.display = 'block';
+        advancedEditorUi.style.display = 'block';
+        
+        // Bilder in Speicher laden für Editor
+        editorState.images = [];
+        editorState.edits = [];
+        editorState.currentIndex = 0;
+        
+        for(let i = 0; i < files.length; i++) {
+            if(files[i].size > 15 * 1024 * 1024) continue;
+            const reader = new FileReader();
+            await new Promise(resolve => {
+                reader.onload = (event) => {
+                    editorState.images.push(event.target.result);
+                    editorState.edits.push([]);
+                    resolve();
+                };
+                reader.readAsDataURL(files[i]);
+            });
+        }
+        renderEditorImage(0);
     }
 });
 
@@ -1939,6 +2109,73 @@ document.getElementById('trim-end').addEventListener('input', (e) => {
     document.getElementById('trim-preview').currentTime = parseFloat(e.target.value);
 });
 
+// --- RENDER BILDER ZUR CANVAS & UPLOAD ---
+async function renderAndUploadImages() {
+    let uploadedUrls = [];
+    const ws = document.getElementById('editor-workspace');
+    const Cw = ws.clientWidth;
+    const Ch = ws.clientHeight;
+
+    for (let i = 0; i < editorState.images.length; i++) {
+        const img = new Image();
+        await new Promise(res => { img.onload = res; img.src = editorState.images[i]; });
+        
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const Nw = img.naturalWidth;
+        const Nh = img.naturalHeight;
+        canvas.width = Nw;
+        canvas.height = Nh;
+
+        // Bild malen
+        ctx.drawImage(img, 0, 0, Nw, Nh);
+
+        // Skalierung & Offset berechnen (object-fit: contain simulation)
+        const scale = Math.min(Cw / Nw, Ch / Nh);
+        const Dw = Nw * scale;
+        const Dh = Nh * scale;
+        const Ox = (Cw - Dw) / 2;
+        const Oy = (Ch - Dh) / 2;
+
+        // Texte draufmalen
+        editorState.edits[i].forEach(obj => {
+            let nativeX = (obj.x - Ox) / scale;
+            let nativeY = (obj.y - Oy) / scale;
+            let nativeSize = obj.size / scale;
+
+            ctx.save();
+            ctx.translate(nativeX, nativeY);
+            ctx.rotate((obj.rotation * Math.PI) / 180);
+            
+            ctx.font = `bold ${nativeSize}px Arial`;
+            ctx.fillStyle = obj.color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // Text Outline für Lesbarkeit
+            ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+            ctx.lineWidth = nativeSize * 0.1;
+            ctx.strokeText(obj.text, 0, 0);
+            
+            ctx.fillText(obj.text, 0, 0);
+            ctx.restore();
+        });
+
+        // Convert to Base64 (JPG um Platz zu sparen)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        
+        // Upload zu Cloudinary als Base64
+        const formData = new FormData();
+        formData.append('file', dataUrl);
+        formData.append('upload_preset', UPLOAD_PRESET);
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`, { method: 'POST', body: formData });
+        const data = await res.json();
+        
+        const finalUrl = data.secure_url.replace('/upload/', `/upload/q_auto,f_auto/`);
+        uploadedUrls.push(finalUrl);
+    }
+    return uploadedUrls;
+}
 
 document.getElementById('submit-upload').addEventListener('click', async() => {
     const files = document.getElementById('up-file').files;
@@ -1956,7 +2193,7 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
     const btn = document.getElementById('submit-upload');
     const status = document.getElementById('upload-status');
     btn.disabled = true;
-    status.innerText = "Wird verarbeitet und optimiert... Bitte warten!";
+    status.innerText = "Wird gerendert und verarbeitet... Bitte warten!";
     
     try {
         if (isVideo) {
@@ -1968,12 +2205,11 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
             const data = await res.json();
             if (!data.secure_url) throw new Error("Upload fehlgeschlagen.");
 
-            // Trimming Parameter anwenden & Auto-Optimierung
             const tStart = parseFloat(document.getElementById('trim-start').value);
             const tEnd = parseFloat(document.getElementById('trim-end').value);
             const dur = document.getElementById('trim-start').max;
             
-            let transform = 'q_auto,f_auto,vc_auto'; // IMMER optimieren für schnelles Laden
+            let transform = 'q_auto,f_auto,vc_auto'; 
             if (tStart > 0 || tEnd < dur) {
                 transform += `,so_${tStart},eo_${tEnd}`;
             }
@@ -1995,32 +2231,14 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
             });
 
         } else {
-            // --- MULTI BILDER UPLOAD (Mit Text Edit) ---
-            const textOverlay = document.getElementById('image-text-overlay').value.trim();
-            let uploadedUrls = [];
-
-            for (let i = 0; i < files.length; i++) {
-                if(files[i].size > 10 * 1024 * 1024) continue; // Bilder > 10MB skippen
-                const formData = new FormData();
-                formData.append('file', files[i]);
-                formData.append('upload_preset', UPLOAD_PRESET);
-                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`, { method: 'POST', body: formData });
-                const data = await res.json();
-                
-                let transform = 'q_auto,f_auto'; // IMMER optimieren für schnelles Laden
-                if (textOverlay) {
-                    // Cloudinary Text Overlay (Mittig)
-                    transform += `,l_text:Arial_60_bold:${encodeURIComponent(textOverlay)},co_white`;
-                }
-                const finalUrl = data.secure_url.replace('/upload/', `/upload/${transform}/`);
-                uploadedUrls.push(finalUrl);
-            }
+            // --- BILDER RENDERN & UPLOAD ---
+            const uploadedUrls = await renderAndUploadImages();
 
             if(uploadedUrls.length === 0) throw new Error("Keine Bilder hochgeladen.");
 
             await addDoc(collection(db, "videos"), {
                 mediaType: 'images',
-                urls: uploadedUrls, // Array von Bildern
+                urls: uploadedUrls, 
                 authorUid: currentUser.uid,
                 authorName: currentUser.displayName,
                 authorUsername: currentUser.username,
@@ -2038,12 +2256,12 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
         document.getElementById('up-file').value = '';
         document.getElementById('up-title').value = '';
         document.getElementById('up-desc').value = '';
-        document.getElementById('image-text-overlay').value = '';
-        document.querySelector('.file-upload-design p').innerText = "Video oder Bilder auswählen";
-        document.querySelector('.file-upload-design i').className = "fas fa-cloud-upload-alt";
-        document.querySelector('.file-upload-design i').style.color = "#aaa";
+        document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen";
+        document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt";
+        document.querySelector('#up-file-btn i').style.color = "#aaa";
         document.getElementById('trimmer-ui').style.display = 'none';
-        document.getElementById('image-edit-ui').style.display = 'none';
+        document.getElementById('image-advanced-editor').style.display = 'none';
+        editorState.images = [];
         
     } catch (e) { showCustomAlert("Upload Fehler", "Fehler! Evtl. falsches Format."); } finally {
         btn.disabled = false;

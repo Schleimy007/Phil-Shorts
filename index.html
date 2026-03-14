@@ -233,7 +233,7 @@
             <div class="modal-body upload-body">
                 <div class="file-upload-wrapper">
                     <input type="file" id="up-file" class="file-input-hidden" accept="video/*, image/*" multiple required>
-                    <div class="file-upload-design" onclick="document.getElementById('up-file').click()">
+                    <div class="file-upload-design" id="up-file-btn" onclick="document.getElementById('up-file').click()">
                         <i class="fas fa-cloud-upload-alt"></i>
                         <p style="word-break: break-all; padding: 0 10px;">Video oder Bilder auswählen</p>
                     </div>
@@ -250,9 +250,42 @@
                     <input type="range" id="trim-end" min="0" value="0" step="0.1" class="trim-slider slider-red" style="width:100%;">
                 </div>
 
-                <div id="image-edit-ui" style="display:none; background:#1a1a1a; padding:15px; border-radius:15px; border:1px solid #333;">
-                    <label style="color:#888; font-size:12px; display:block; margin-bottom:10px;">Text auf Bilder (wird zentriert eingefügt)</label>
-                    <input type="text" id="image-text-overlay" class="comment-input" placeholder="Dein Text..." style="border-radius:10px; width:100%;">
+                <div id="image-advanced-editor" style="display:none; background:#1a1a1a; padding:10px; border-radius:15px; border:1px solid #333;">
+
+                    <div id="editor-workspace" style="position: relative; width: 100%; height: 350px; background: #000; overflow: hidden; border-radius: 10px; touch-action: none;">
+                        <img id="editor-bg" style="width: 100%; height: 100%; object-fit: contain; pointer-events: none;">
+                        <div id="editor-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></div>
+                    </div>
+
+                    <div id="editor-nav" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+                        <button id="btn-prev-img" class="profile-action-btn edit-btn" style="min-height: 36px; padding: 0 15px;"><i class="fas fa-chevron-left"></i></button>
+                        <span id="editor-img-counter" style="font-size: 14px; font-weight: bold; color: #888;">1 / 1</span>
+                        <button id="btn-next-img" class="profile-action-btn edit-btn" style="min-height: 36px; padding: 0 15px;"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+
+                    <button id="btn-add-text" class="profile-action-btn" style="width: 100%; background: white; color: black; margin-top: 10px; min-height: 40px;"><i class="fas fa-font"></i> Text hinzufügen</button>
+
+                    <div id="text-controls" style="display: none; margin-top: 15px; background: #222; padding: 15px; border-radius: 10px; border: 1px solid #444;">
+                        <input type="text" id="text-ctrl-input" class="comment-input" style="width: 100%; margin-bottom: 15px; background: #111;" placeholder="Textinhalt">
+
+                        <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Farbe</label>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 15px; gap: 5px;">
+                            <div class="color-dot" style="background: white;" data-color="#ffffff"></div>
+                            <div class="color-dot" style="background: black;" data-color="#000000"></div>
+                            <div class="color-dot" style="background: #ff0050;" data-color="#ff0050"></div>
+                            <div class="color-dot" style="background: #00f2fe;" data-color="#00f2fe"></div>
+                            <div class="color-dot" style="background: #ffd700;" data-color="#ffd700"></div>
+                            <div class="color-dot" style="background: #39ff14;" data-color="#39ff14"></div>
+                        </div>
+
+                        <label style="font-size: 11px; color: #888;">Größe</label>
+                        <input type="range" id="text-ctrl-size" min="15" max="100" value="24" class="trim-slider slider-blue" style="width: 100%; margin-bottom: 15px;">
+
+                        <label style="font-size: 11px; color: #888;">Drehung</label>
+                        <input type="range" id="text-ctrl-rot" min="-180" max="180" value="0" class="trim-slider slider-red" style="width: 100%; margin-bottom: 15px;">
+
+                        <button id="btn-delete-text" class="profile-action-btn" style="width: 100%; background: transparent; color: #ff4444; border: 1px solid #ff4444; min-height: 36px; font-size: 14px;"><i class="fas fa-trash"></i> Text löschen</button>
+                    </div>
                 </div>
 
                 <label style="color:#888; font-size:12px; margin-left:5px; margin-top:10px;">Titel & Beschreibung</label>

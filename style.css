@@ -1173,9 +1173,6 @@ body {
     border: 1px solid #ffd700;
 }
 
-
-/* --- HIER IST DER BULLETPROOF FIX --- */
-
 .modal {
     position: absolute;
     bottom: -100%;
@@ -1186,20 +1183,17 @@ body {
     color: white;
     z-index: 200;
     border-radius: 20px 20px 0 0;
-    /* Transition für Sichtbarkeit hinzugefügt */
     transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), visibility 0.3s;
     display: flex;
     flex-direction: column;
     border-top: 1px solid #333;
     pointer-events: none;
-    /* Das Modal wird komplett "unsichtbar" und klickbar ignoriert */
     visibility: hidden;
 }
 
 .modal.show {
     bottom: 0;
     pointer-events: auto;
-    /* Das Modal wird wieder normal sichtbar */
     visibility: visible;
 }
 
@@ -1714,7 +1708,6 @@ body {
         width: 60px;
         height: 60px;
     }
-    /* AUCH FÜR PC: HIER DEN FIX EINTRAGEN */
     .modal {
         width: 500px;
         height: 70vh;
@@ -1839,4 +1832,40 @@ input:checked+.slider:before {
 
 .slider-red::-webkit-slider-thumb {
     background: #ff0050;
+}
+
+
+/* NEUER EDITOR STYLING */
+
+.color-dot {
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.1s;
+}
+
+.color-dot:active {
+    transform: scale(0.8);
+}
+
+.draggable-text {
+    position: absolute;
+    font-family: Arial, sans-serif;
+    font-weight: bold;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+    cursor: pointer;
+    user-select: none;
+    white-space: pre-wrap;
+    line-height: 1.2;
+    text-align: center;
+    border: 2px dashed transparent;
+    padding: 5px;
+    z-index: 10;
+}
+
+.draggable-text.active {
+    border-color: #00f2fe;
+    z-index: 20;
 }
