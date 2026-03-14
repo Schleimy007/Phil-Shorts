@@ -1320,14 +1320,16 @@ function initResponsiveLayout() {
     }
 
     function restructureVideoForPC(videoEl) {
-        let infoPanel = videoEl.querySelector('#pc-info-panel-container');
+        const inner = videoEl.querySelector('.video-inner');
+        if (!inner) return;
+        let infoPanel = inner.querySelector('.pc-info-panel-container');
         if (!infoPanel) {
             infoPanel = document.createElement('div');
-            infoPanel.id = 'pc-info-panel-container';
-            videoEl.appendChild(infoPanel);
+            infoPanel.className = 'pc-info-panel-container';
+            inner.appendChild(infoPanel);
 
-            const videoFooter = videoEl.querySelector('.video__footer');
-            const videoSidebar = videoEl.querySelector('.video__sidebar');
+            const videoFooter = inner.querySelector('.video__footer');
+            const videoSidebar = inner.querySelector('.video__sidebar');
 
             if (videoFooter) infoPanel.appendChild(videoFooter);
             if (videoSidebar) infoPanel.appendChild(videoSidebar);
@@ -1335,13 +1337,15 @@ function initResponsiveLayout() {
     }
 
     function rollBackVideoForHandy(videoEl) {
-        const infoPanel = videoEl.querySelector('#pc-info-panel-container');
+        const inner = videoEl.querySelector('.video-inner');
+        if (!inner) return;
+        const infoPanel = inner.querySelector('.pc-info-panel-container');
         if (infoPanel) {
             const videoFooter = infoPanel.querySelector('.video__footer');
             const videoSidebar = infoPanel.querySelector('.video__sidebar');
 
-            if (videoFooter) videoEl.appendChild(videoFooter);
-            if (videoSidebar) videoEl.appendChild(videoSidebar);
+            if (videoFooter) inner.appendChild(videoFooter);
+            if (videoSidebar) inner.appendChild(videoSidebar);
 
             infoPanel.remove();
         }
@@ -1375,7 +1379,7 @@ function initResponsiveLayout() {
     window.addEventListener('resize', checkResponsiveMode);
 
     if (isPCLayoutActive()) {
-        const videoObserver = new MutationObserver(function(mutations) {
+        const videoObserver2 = new MutationObserver(function(mutations) {
             if (currentMode === 'pc') {
                 mutations.forEach(function(mutation) {
                     mutation.addedNodes.forEach(function(node) {
@@ -1389,7 +1393,7 @@ function initResponsiveLayout() {
 
         const videoContainer = document.getElementById('video-container');
         if (videoContainer) {
-            videoObserver.observe(videoContainer, { childList: true });
+            videoObserver2.observe(videoContainer, { childList: true });
         }
     }
 
