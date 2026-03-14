@@ -19,12 +19,10 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let allVideosData = [];
-let allKnownUsers = []; // Speichert alle registrierten User für Echtzeit-Haken und Suche
-
-// --- SECURITY KILLSWITCH: Lade User, aber erzwinge verified=false bis die DB etwas anderes sagt! ---
+let allKnownUsers = [];
 let currentUser = JSON.parse(localStorage.getItem('phil_session'));
 if (currentUser) {
-    currentUser.verified = false; // Verhindert Fake-Haken durch Manipulation des LocalStorage!
+    currentUser.verified = false;
 }
 
 let currentFeedMode = 'foryou';
@@ -97,7 +95,6 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
-// --- GLOBALE ZENTRALE HAKEN-FUNKTION ---
 function getVerifiedBadge(uid, fallbackBool = false) {
     const user = allKnownUsers.find(u => u.uid === uid);
     const isVerif = user ? (user.verified === true) : fallbackBool;
@@ -138,7 +135,6 @@ function initSearchUsers() {
         allKnownUsers = [];
         snapshot.forEach(doc => allKnownUsers.push(doc.data()));
 
-        // Live-Update der Haken im gesamten DOM
         document.querySelectorAll('.creator-name').forEach(el => {
             const onclickAttr = el.getAttribute('onclick');
             if (onclickAttr) {
@@ -435,7 +431,7 @@ function createVideoElement(video) {
     div.innerHTML = `
         <div class="video-inner">
             <div class="video-wrapper">
-                <video class="video__player" loop playsinline src="${video.url}"></video>
+                <video class="video__player" preload="auto" loop playsinline src="${video.url}"></video>
                 <div class="play-indicator"><i class="fas fa-play"></i></div>
                 
                 <div class="mute-container">
@@ -578,24 +574,34 @@ videoContainer.addEventListener('wheel', (e) => {
     scrollTimeout = setTimeout(() => { scrollTimeout = null; }, 600);
 }, { passive: false });
 
+// --- NEU: SICHERER AUTO-PLAY OBSERVER (KEINE RACE-CONDITIONS MEHR!) ---
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         const container = e.target.closest('.video-inner');
 
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
-            document.querySelectorAll('.video__player').forEach(v => {
-                if (v !== e.target && !v.paused) {
-                    v.pause();
-                    v.currentTime = 0;
-                    const c = v.closest('.video-inner');
-                    if (c) c.classList.add('is-paused');
-                }
-            });
+            // Wir vertrauen darauf, dass out-of-view Videos durch den else-Block pausiert werden.
+            // Dadurch vermeiden wir Race-Conditions, die das aktive Video stoppen.
 
-            e.target.play().catch(() => {});
-            if (container) container.classList.remove('is-paused');
+            const playPromise = e.target.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    if (container) container.classList.remove('is-paused');
+                }).catch(error => {
+                    // AUTO-PLAY BLOCK FIX: Browser blockieren oft Videos mit Ton, wenn noch nicht geklickt wurde.
+                    // Wir erzwingen hier Mute, damit das Video GARANTIERT startet!
+                    window.globalMuted = true;
+                    e.target.muted = true;
+                    window.updateGlobalVolumeUI();
+
+                    e.target.play().then(() => {
+                        if (container) container.classList.remove('is-paused');
+                    }).catch(e => console.log("Autoplay komplett blockiert", e));
+                });
+            }
 
         } else {
+            // WENN ES AUS DEM BILD VERSCHWINDET -> SICHER STOPPEN
             e.target.pause();
             e.target.currentTime = 0;
             if (container) container.classList.add('is-paused');
@@ -621,6 +627,7 @@ function attachInteractionsToVideo(videoContainerEl) {
             e.preventDefault();
         } else {
             if (v.paused) {
+                // Beim manuellen Tippen andere Videos stoppen
                 document.querySelectorAll('.video__player').forEach(vid => {
                     if (vid !== v && !vid.paused) {
                         vid.pause();
@@ -1140,7 +1147,7 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
 
     // --- STRIKTER SICHERHEITS-CHECK FÜR DEN NAMEN ---
     const newNameRaw = document.getElementById('edit-name-input').value.trim();
-    const newName = newNameRaw.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase(); // Nur a-z, 0-9 und _
+    const newName = newNameRaw.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
 
     const newBio = document.getElementById('edit-bio-input').value.trim();
     const newPic = document.getElementById('edit-pic-input').value.trim() || currentUser.photoURL;
@@ -1159,7 +1166,7 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
 
         nameSnap.forEach(d => {
             if (d.id !== currentUser.uid) {
-                nameTaken = true; // Name gehört jemand anderem!
+                nameTaken = true;
             }
         });
 
@@ -1305,16 +1312,13 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     }
 
     trendingSection.style.display = 'none';
-    resultsGrid.style.display = 'block'; // Block-Layout, da wir Listen und Grids mixen
+    resultsGrid.style.display = 'block';
 
-    // Benutzer durchsuchen
     const matchedUsers = allKnownUsers.filter(u => (u.displayName || "").toLowerCase().includes(query));
-    // Videos durchsuchen
     const matchedVideos = allVideosData.filter(v => (v.description || "").toLowerCase().includes(query) || (v.authorName || "").toLowerCase().includes(query));
 
     let html = '';
 
-    // Abschnitt: Benutzer
     if (matchedUsers.length > 0) {
         html += '<h4 style="padding: 10px 15px; color:#888; font-size:14px; text-transform:uppercase;">Benutzer</h4>';
         html += '<div style="display:flex; flex-direction:column; gap:15px; padding: 0 15px 20px;">';
@@ -1332,7 +1336,6 @@ document.getElementById('search-input').addEventListener('input', (e) => {
         html += '</div>';
     }
 
-    // Abschnitt: Videos
     if (matchedVideos.length > 0) {
         html += '<h4 style="padding: 10px 15px; color:#888; font-size:14px; text-transform:uppercase;">Videos</h4>';
         html += '<div class="grid-container">';
