@@ -29,7 +29,7 @@ let currentFeedMode = 'foryou';
 let isInitialLoad = true;
 let sortedFeed = [];
 
-// --- WICHTIG: SOUND IST STANDARDMÄSSIG AN! ---
+// Sound ist standardmäßig AN
 window.globalVolume = 1;
 window.globalMuted = false;
 
@@ -49,8 +49,6 @@ window.switchView = function(viewId) {
         document.querySelectorAll('.video__player').forEach(v => {
             v.pause();
             v.currentTime = 0;
-            const c = v.closest('.video-inner');
-            if (c) c.classList.add('is-paused');
         });
     }
 };
@@ -65,15 +63,12 @@ window.jumpToVideo = function(videoId) {
             document.querySelectorAll('.video__player').forEach(v => {
                 v.pause();
                 v.currentTime = 0;
-                const c = v.closest('.video-inner');
-                if (c) c.classList.add('is-paused');
             });
 
             const player = targetVid.querySelector('.video__player');
             if (player) {
                 player.muted = window.globalMuted;
                 player.play().catch(() => {});
-                targetVid.querySelector('.video-inner').classList.remove('is-paused');
             }
         }
     }, 250);
@@ -437,8 +432,9 @@ function createVideoElement(video) {
 
     const editVideoBtn = isMe ? `<div class="videoSidebar__button" onclick="openEditVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-pen" style="font-size:24px;"></i></div>` : '';
 
+    // Wir setzen beim HTML rendern direkt is-paused auf den Container, damit der Button direkt da ist falls es nicht startet
     div.innerHTML = `
-        <div class="video-inner">
+        <div class="video-inner is-paused">
             <div class="video-wrapper">
                 <video class="video__player" preload="auto" loop playsinline src="${video.url}"></video>
                 <div class="play-indicator"><i class="fas fa-play"></i></div>
@@ -583,49 +579,37 @@ videoContainer.addEventListener('wheel', (e) => {
     scrollTimeout = setTimeout(() => { scrollTimeout = null; }, 600);
 }, { passive: false });
 
-// --- NEU: STRIKTER & FEHLERFREIER OBSERVER FÜR DAS SCROLLEN ---
+// --- NEUER SAUBERER OBSERVER ---
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         const v = e.target;
-        const container = v.closest('.video-inner');
 
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
-
-            // 1. Stoppe alle anderen Videos auf der Seite SOFORT!
+            // STOPPE SOFORT ALLE ANDEREN VIDEOS (Anti-Race-Condition)
             document.querySelectorAll('.video__player').forEach(otherVid => {
                 if (otherVid !== v && !otherVid.paused) {
                     otherVid.pause();
                     otherVid.currentTime = 0;
-                    const c = otherVid.closest('.video-inner');
-                    if (c) c.classList.add('is-paused');
                 }
             });
 
-            // 2. Setze die Lautstärke auf den aktuellen Status
+            // Start-Versuch
             v.muted = window.globalMuted;
-
-            // 3. Play() versuchen
             const playPromise = v.play();
             if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    // Erfolg: Video läuft! Play-Icon weg.
-                    if (container) container.classList.remove('is-paused');
-                }).catch(error => {
-                    // FEHLER: Browser blockiert, weil Nutzer noch nie geklickt hat (interaction required).
-                    // WICHTIG: Wir zwingen es NICHT stumm. Der Nutzer sieht den Play-Button und muss 1x tippen.
-                    console.log("Autoplay blockiert. Warte auf ersten Nutzerklick.");
-                    if (container) container.classList.add('is-paused');
+                playPromise.catch(error => {
+                    console.log("Autoplay blockiert oder abgebrochen:", error);
+                    // Wenn es geblockt wurde, feuert unten das "pause" Event ganz automatisch 
+                    // und blendet den Button ein. Wir müssen hier nichts mehr manipulieren!
                 });
             }
-
         } else {
-            // Video verschwindet aus dem Bildschirm -> Siche Pausieren
+            // AUS DEM BILD VERSCHWUNDEN -> PAUSE
             v.pause();
             v.currentTime = 0;
-            if (container) container.classList.add('is-paused');
         }
     });
-}, { threshold: 0.6 }); // Reagiert, wenn das Video zu 60% im Bild ist
+}, { threshold: 0.5 }); // Reagiert etwas früher beim Wischen!
 
 function attachInteractionsToVideo(videoContainerEl) {
     const v = videoContainerEl.querySelector('.video__player');
@@ -633,6 +617,16 @@ function attachInteractionsToVideo(videoContainerEl) {
     let lastTap = 0;
 
     videoObserver.observe(v);
+
+    // --- MAGIE: NATIVE EVENT LISTENER FÜR DIE UI ---
+    // Die UI richtet sich AB JETZT IMMER 100% nach dem echten Zustand des Videos!
+    v.addEventListener('play', () => {
+        container.classList.remove('is-paused');
+    });
+
+    v.addEventListener('pause', () => {
+        container.classList.add('is-paused');
+    });
 
     v.addEventListener('click', (e) => {
         const tapLength = new Date().getTime() - lastTap;
@@ -645,20 +639,16 @@ function attachInteractionsToVideo(videoContainerEl) {
             e.preventDefault();
         } else {
             if (v.paused) {
-                // Auch bei manuellem Play: Alle anderen stoppen
+                // Wenn Nutzer tippt, stoppe alle anderen
                 document.querySelectorAll('.video__player').forEach(vid => {
                     if (vid !== v && !vid.paused) {
                         vid.pause();
-                        const c = vid.closest('.video-inner');
-                        if (c) c.classList.add('is-paused');
                     }
                 });
-
-                v.play();
-                container.classList.remove('is-paused');
+                v.muted = window.globalMuted;
+                v.play().catch(err => console.log("Play error:", err));
             } else {
                 v.pause();
-                container.classList.add('is-paused');
             }
         }
         lastTap = new Date().getTime();
