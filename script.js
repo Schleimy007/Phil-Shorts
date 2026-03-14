@@ -22,12 +22,7 @@ let allVideosData = [];
 let currentUser = JSON.parse(localStorage.getItem('phil_session'));
 let currentFeedMode = 'foryou';
 let isInitialLoad = true;
-
-// ALGORITHMUS & BATCH-LOADING VARIABLEN
-let displayedCount = 0;
 let sortedFeed = [];
-const BATCH_SIZE = 3; // Lade 3 Videos auf einmal für den echten Effekt
-let isLoadingMore = false;
 
 // --- HELPER ---
 window.switchView = function(viewId) {
@@ -37,7 +32,7 @@ window.switchView = function(viewId) {
     document.querySelectorAll('.nav__item').forEach(n => n.classList.remove('active'));
     if (viewId === 'feed') document.querySelectorAll('.nav__item')[0].classList.add('active');
     if (viewId === 'search') document.querySelectorAll('.nav__item')[1].classList.add('active');
-    if (viewId === 'chat') document.querySelectorAll('.nav__item')[3].classList.add('active');
+    if (viewId === 'inbox') document.querySelectorAll('.nav__item')[3].classList.add('active');
     if (viewId === 'profile' && currentUser && document.getElementById('profile-name').innerText.includes(currentUser.displayName)) {
         document.querySelectorAll('.nav__item')[4].classList.add('active');
     }
@@ -50,13 +45,14 @@ window.jumpToVideo = function(videoId) {
     setTimeout(() => {
         const targetVid = document.querySelector(`.video[data-id="${videoId}"]`);
         if (targetVid) {
-            const container = document.getElementById('video-container');
-            container.scrollTo({
-                top: targetVid.offsetTop,
-                behavior: 'smooth'
-            });
+            targetVid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const player = targetVid.querySelector('.video__player');
+            if (player) {
+                player.play().catch(() => {});
+                targetVid.querySelector('.video-inner').classList.remove('is-paused');
+            }
         }
-    }, 50);
+    }, 250);
 };
 
 function showToast(msg) {
@@ -97,6 +93,7 @@ function initLiveUser() {
             currentUser = {...currentUser, ...docSnap.data() };
             if (currentUser.coins === undefined) currentUser.coins = 1000;
             if (!currentUser.followers) currentUser.followers = [];
+            if (!currentUser.following) currentUser.following = [];
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
             const coinEl = document.getElementById('my-coins');
@@ -142,6 +139,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
             currentUser = { uid, displayName: name, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0 };
         } else {
             currentUser = userSnap.data();
+            if (!currentUser.following) currentUser.following = [];
             if (currentUser.coins === undefined) await updateDoc(userRef, { coins: 1000, profileViews: 0, followers: [] });
         }
 
@@ -149,19 +147,21 @@ window.addEventListener('googleLoginSuccess', async(event) => {
         document.getElementById('login-screen').classList.remove('show');
         initLiveDatabase();
         initLiveUser();
-        initLiveChat();
+        initInbox();
     } catch (error) {
         showCustomAlert("Login Fehler", "Datenbank-Fehler beim Login.");
     }
 });
 
+// FIX FÜR AUTO-LOGIN: Nur einblenden, wenn WIRKLICH kein User da ist
 window.onload = async function() {
     if (!currentUser) {
         document.getElementById('login-screen').classList.add('show');
     } else {
+        document.getElementById('login-screen').classList.remove('show');
         initLiveDatabase();
         initLiveUser();
-        initLiveChat();
+        initInbox();
     }
 };
 
@@ -171,32 +171,37 @@ document.getElementById('logout-btn').addEventListener('click', () => {
 });
 
 
+// --- BENACHRICHTIGUNGEN LOGIK ---
+async function addNotification(targetUid, type, text, videoId = null) {
+    if (!currentUser || targetUid === currentUser.uid) return;
+    await addDoc(collection(db, "users", targetUid, "notifications"), {
+        fromUid: currentUser.uid,
+        fromName: currentUser.displayName,
+        fromPic: currentUser.photoURL,
+        type: type,
+        text: text,
+        videoId: videoId,
+        timestamp: Date.now()
+    });
+}
+
+
 // --- DER ECHTE ALGORITHMUS ---
 function applyAlgorithm(videos, mode) {
     if (mode === 'following') {
-        // "Folge ich" zeigt nur Videos von Leuten, denen du folgst. Sortiert nach Neuigkeit.
         return videos.filter(v => currentUser && currentUser.following.includes(v.authorUid));
     } else {
-        // "Für dich" ALGORITHMUS
         let scored = videos.map(v => {
             let likes = v.likedBy ? v.likedBy.length : 0;
             let comments = v.comments ? v.comments.length : 0;
             let gifts = v.gifts || 0;
 
-            // Score Berechnung: Wichtigkeit der Interaktionen
             let score = (likes * 2) + (comments * 3) + (gifts * 5);
-
-            // Zufallsfaktor für Entdeckung (0 bis 40 Extrapunkte). 
-            // So werden auch neue Videos mit 0 Likes mal nach oben gespült.
             let randomBoost = Math.floor(Math.random() * 40);
-
-            // Eigene Videos abwerten (wir wollen ja andere sehen!)
             if (currentUser && v.authorUid === currentUser.uid) score -= 200;
 
             return {...v, algoScore: score + randomBoost };
         });
-
-        // Nach Score sortieren (Höchste Punktzahl zuerst)
         return scored.sort((a, b) => b.algoScore - a.algoScore);
     }
 }
@@ -214,21 +219,20 @@ function initLiveDatabase() {
             renderFeed(true);
             isInitialLoad = false;
         } else {
-            // Live Updates im Hintergrund bearbeiten
             snapshot.docChanges().forEach((change) => {
                 const vData = { id: change.doc.id, ...change.doc.data() };
 
                 if (change.type === "added") {
-                    // Neues Video live ganz oben einfügen, wenn es in den aktuellen Filter passt
                     if (!document.querySelector(`.video[data-id="${vData.id}"]`)) {
                         const newVidEl = createVideoElement(vData);
                         if (currentFeedMode === 'foryou' || (currentFeedMode === 'following' && currentUser.following.includes(vData.authorUid))) {
                             const container = document.getElementById('video-container');
                             const loader = container.querySelector('.feed-end-loader');
-                            container.insertBefore(newVidEl, container.firstChild);
+                            if (loader) container.insertBefore(newVidEl, loader);
+                            else container.appendChild(newVidEl);
+
                             const emptyState = container.querySelector('.empty-state');
                             if (emptyState) emptyState.remove();
-                            displayedCount++;
                         }
                     }
                 }
@@ -263,13 +267,12 @@ function initLiveDatabase() {
     });
 }
 
-// --- RENDER FEED MIT BATCH-LOADING & LOADER ---
+// --- RENDER FEED: LÄDT ALLE VIDEOS KOMPLETT ---
 function renderFeed(reset = false) {
     const container = document.getElementById('video-container');
 
     if (reset) {
         container.innerHTML = '';
-        displayedCount = 0;
         sortedFeed = applyAlgorithm(allVideosData, currentFeedMode);
 
         if (sortedFeed.length === 0) {
@@ -278,23 +281,13 @@ function renderFeed(reset = false) {
             container.innerHTML = `<div class="empty-state"><i class="fas ${emptyIco}"></i><h3>${emptyTxt}</h3></div>`;
             return;
         }
+
+        sortedFeed.forEach(video => {
+            container.appendChild(createVideoElement(video));
+        });
+
+        appendLoader(container, true);
     }
-
-    const nextBatch = sortedFeed.slice(displayedCount, displayedCount + BATCH_SIZE);
-
-    // Alten Loader löschen bevor neue Videos kommen
-    const oldLoader = container.querySelector('.feed-end-loader');
-    if (oldLoader) oldLoader.remove();
-
-    nextBatch.forEach(video => {
-        container.appendChild(createVideoElement(video));
-    });
-
-    displayedCount += nextBatch.length;
-
-    // Lader unten wieder anhängen
-    appendLoader(container, displayedCount >= sortedFeed.length);
-    isLoadingMore = false;
 }
 
 function appendLoader(container, isEnd) {
@@ -309,19 +302,6 @@ function appendLoader(container, isEnd) {
     container.appendChild(loader);
 }
 
-function updateLoader(isEnd) {
-    const loader = document.querySelector('.feed-end-loader');
-    if (loader) {
-        if (isEnd) {
-            loader.innerHTML = '<i class="fas fa-check-circle"></i><span>Du bist auf dem neuesten Stand</span>';
-            loader.classList.add('no-more');
-        } else {
-            loader.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Prüfe Algorithmus...</span>';
-            loader.classList.remove('no-more');
-        }
-    }
-}
-
 // Erstellt ein einzelnes Video Element
 function createVideoElement(video) {
     const div = document.createElement('div');
@@ -329,8 +309,12 @@ function createVideoElement(video) {
     div.dataset.id = video.id;
 
     const commentCount = video.comments ? video.comments.length : 0;
-    const isFollowing = currentUser && currentUser.following && currentUser.following.includes(video.authorUid) || video.authorUid === currentUser.uid;
-    const plusButton = isFollowing ? '' : `<i class="fas fa-circle-plus follow-btn" onclick="toggleFollow('${video.authorUid}', this, event)"></i>`;
+
+    const isMe = currentUser && video.authorUid === currentUser.uid;
+    const isFollowing = currentUser && currentUser.following && currentUser.following.includes(video.authorUid);
+
+    const plusButton = (!isFollowing && !isMe) ? `<i class="fas fa-circle-plus follow-btn" data-target="${video.authorUid}" onclick="toggleFollow('${video.authorUid}', this, event)"></i>` : '';
+
     const verifiedBadge = video.authorVerified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
 
     const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : '';
@@ -403,33 +387,19 @@ document.getElementById('tab-following').addEventListener('click', function() {
     renderFeed(true);
 });
 
-// --- SCROLL / BATCH LADEN / TIKTOK RHYTHMUS ---
+// --- SCROLL / END-BOUNCE ---
 
 const videoContainer = document.getElementById('video-container');
 
-// Mobile / Scroll-Prüfung für Infinite Load
 videoContainer.addEventListener('scroll', () => {
-    if (isLoadingMore) return;
-
-    // Prüft, ob man kurz vor dem Ende (bzw. im Loader-Bereich) ist
     if (videoContainer.scrollTop + videoContainer.clientHeight >= videoContainer.scrollHeight - 20) {
-        if (displayedCount < sortedFeed.length) {
-            isLoadingMore = true;
-            // Fake-Verzögerung für cooleres "Lade..." Erlebnis
-            setTimeout(() => {
-                renderFeed(false);
-            }, 600);
-        } else {
-            // Keine Videos mehr da. Erlaube den Blick auf den roten Text, schnappe dann zurück
-            setTimeout(() => {
-                const vids = document.querySelectorAll('.video');
-                if (vids.length) vids[vids.length - 1].scrollIntoView({ behavior: 'smooth' });
-            }, 800);
-        }
+        setTimeout(() => {
+            const vids = document.querySelectorAll('.video');
+            if (vids.length) vids[vids.length - 1].scrollIntoView({ behavior: 'smooth' });
+        }, 800);
     }
 });
 
-// Tastatur
 window.addEventListener('keydown', (e) => {
     if (document.getElementById('view-feed').classList.contains('active')) {
         if (e.key === 'ArrowDown') {
@@ -442,16 +412,14 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
-// PC Mausrad Logik & Bounce-Auslöser
 let scrollTimeout = null;
-
 videoContainer.addEventListener('wheel', (e) => {
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
 
     e.preventDefault();
     if (scrollTimeout) return;
 
-    if (e.deltaY > 0) { // Nach unten scrollen
+    if (e.deltaY > 0) {
         const vids = document.querySelectorAll('.video');
         if (vids.length === 0) return;
 
@@ -459,21 +427,15 @@ videoContainer.addEventListener('wheel', (e) => {
         const rect = lastVid.getBoundingClientRect();
         const containerRect = videoContainer.getBoundingClientRect();
 
-        // Prüfen, ob wir exakt auf dem letzen Video sind
         if (rect.top <= containerRect.top + 10 && rect.bottom >= containerRect.bottom - 10) {
-            // Wir sind ganz unten! Wir scrollen nur 15% in den Lader rein
             videoContainer.scrollBy({ top: videoContainer.clientHeight * 0.15, behavior: 'smooth' });
-
-            // Wenn nichts mehr kommt, automatischen Bounce-Back auslösen
-            if (displayedCount >= sortedFeed.length) {
-                setTimeout(() => {
-                    lastVid.scrollIntoView({ behavior: 'smooth' });
-                }, 800);
-            }
+            setTimeout(() => {
+                lastVid.scrollIntoView({ behavior: 'smooth' });
+            }, 800);
         } else {
             videoContainer.scrollBy({ top: videoContainer.clientHeight, behavior: 'smooth' });
         }
-    } else if (e.deltaY < 0) { // Nach oben scrollen
+    } else if (e.deltaY < 0) {
         videoContainer.scrollBy({ top: -videoContainer.clientHeight, behavior: 'smooth' });
     }
 
@@ -521,7 +483,6 @@ function attachInteractionsToVideo(videoContainerEl) {
         lastTap = new Date().getTime();
     });
 
-    // Volume & Mute Logik (mit active-slider Trick)
     const muteContainer = container.querySelector('.mute-container');
     const muteBtn = container.querySelector('.mute-btn');
     const volumeSlider = container.querySelector('.volume-slider');
@@ -537,7 +498,6 @@ function attachInteractionsToVideo(videoContainerEl) {
         } else {
             muteBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
         }
-
         volumeSlider.style.background = `linear-gradient(to right, #fff ${vol * 100}%, rgba(255, 255, 255, 0.3) ${vol * 100}%)`;
     }
 
@@ -571,12 +531,8 @@ function attachInteractionsToVideo(videoContainerEl) {
         muteContainer.classList.add('active-slider');
     }, { passive: false });
 
-    document.addEventListener('mouseup', () => {
-        muteContainer.classList.remove('active-slider');
-    });
-    document.addEventListener('touchend', () => {
-        muteContainer.classList.remove('active-slider');
-    });
+    document.addEventListener('mouseup', () => { muteContainer.classList.remove('active-slider'); });
+    document.addEventListener('touchend', () => { muteContainer.classList.remove('active-slider'); });
 
     muteContainer.addEventListener('click', (e) => e.stopPropagation());
 
@@ -586,10 +542,14 @@ function attachInteractionsToVideo(videoContainerEl) {
         const btn = e.currentTarget;
         const id = btn.dataset.id;
         const isLiked = btn.classList.contains('liked');
+
+        const targetVidData = allVideosData.find(vd => vd.id === id);
+
         if (isLiked) {
             await updateDoc(doc(db, "videos", id), { likedBy: arrayRemove(currentUser.uid) });
         } else {
             await updateDoc(doc(db, "videos", id), { likedBy: arrayUnion(currentUser.uid) });
+            if (targetVidData) addNotification(targetVidData.authorUid, "like", "hat dein Video geliket.", id);
         }
     });
 
@@ -651,15 +611,23 @@ window.deleteComment = async function(videoId, commentIndex) {
 
 window.toggleFollow = async function(targetUid, element, event) {
     if (event) event.stopPropagation();
+    if (!currentUser) return;
+
     const userRef = doc(db, "users", currentUser.uid);
     const targetRef = doc(db, "users", targetUid);
 
     if (!currentUser.following.includes(targetUid)) {
+        currentUser.following.push(targetUid);
         showToast("Gefolgt!");
-        if (element) element.style.display = 'none';
+
+        document.querySelectorAll(`.follow-btn[data-target="${targetUid}"]`).forEach(btn => btn.style.display = 'none');
+
         await updateDoc(userRef, { following: arrayUnion(targetUid) });
         await updateDoc(targetRef, { followers: arrayUnion(currentUser.uid) });
+
+        addNotification(targetUid, "follow", "folgt dir jetzt.");
     } else {
+        currentUser.following = currentUser.following.filter(uid => uid !== targetUid);
         showToast("Entfolgt.");
         await updateDoc(userRef, { following: arrayRemove(targetUid) });
         await updateDoc(targetRef, { followers: arrayRemove(currentUser.uid) });
@@ -849,28 +817,48 @@ window.giveCoins = async function(targetUid) {
     } catch (e) {}
 };
 
-function initLiveChat() {
-    const chatBox = document.getElementById('chat-box');
-    onSnapshot(query(collection(db, "global_chat"), orderBy("timestamp", "asc")), (snapshot) => {
-        chatBox.innerHTML = '';
-        if (snapshot.empty) { chatBox.innerHTML = '<div class="empty-state" style="height: 100%;"><p>Sag Hallo!</p></div>'; return; }
+// --- ECHTER POSTEINGANG (INBOX) STATT GLOBAL CHAT ---
+function initInbox() {
+    const inboxBox = document.getElementById('inbox-box');
+    if (!currentUser) return;
+
+    onSnapshot(query(collection(db, "users", currentUser.uid, "notifications"), orderBy("timestamp", "desc")), (snapshot) => {
+        inboxBox.innerHTML = '';
+        if (snapshot.empty) { inboxBox.innerHTML = '<div class="empty-state" style="height: 100%;"><p>Keine neuen Benachrichtigungen</p></div>'; return; }
+
         snapshot.forEach((doc) => {
-            const msg = doc.data();
-            const isMe = msg.userUid === currentUser.uid ? 'me' : '';
-            const badge = msg.userVerified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
-            chatBox.innerHTML += `<div class="chat-msg ${isMe}"><img src="${msg.userPic}" class="chat-avatar" onclick="openProfile('${msg.userUid}')"><div><span class="chat-username">@${msg.userName}${badge}</span><div class="chat-bubble">${msg.text}</div></div></div>`;
+            const n = doc.data();
+            let icon = 'fa-bell';
+            let color = '#aaa';
+            if (n.type === 'like') {
+                icon = 'fa-heart';
+                color = '#ff0050';
+            }
+            if (n.type === 'follow') {
+                icon = 'fa-user-plus';
+                color = '#00f2fe';
+            }
+            if (n.type === 'comment') {
+                icon = 'fa-comment-dots';
+                color = '#fff';
+            }
+
+            const clickAction = n.videoId ? `jumpToVideo('${n.videoId}')` : `openProfile('${n.fromUid}')`;
+
+            inboxBox.innerHTML += `
+                <div class="inbox-msg" onclick="${clickAction}">
+                    <img src="${n.fromPic}" class="chat-avatar">
+                    <div style="flex:1;">
+                        <span class="chat-username">@${n.fromName}</span>
+                        <div class="chat-bubble" style="background: transparent; padding: 0;">
+                            <i class="fas ${icon}" style="color:${color}; margin-right:5px;"></i> ${n.text}
+                        </div>
+                    </div>
+                </div>`;
         });
-        chatBox.scrollTop = chatBox.scrollHeight;
     });
 }
-document.getElementById('send-chat-btn').addEventListener('click', async() => {
-    const input = document.getElementById('chat-input');
-    const text = input.value.trim();
-    if (!text || !currentUser) return;
-    input.value = '';
-    await addDoc(collection(db, "global_chat"), { userUid: currentUser.uid, userName: currentUser.displayName, userPic: currentUser.photoURL, userVerified: currentUser.verified || false, text: text, timestamp: Date.now() });
-});
-document.getElementById('chat-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-chat-btn').click(); });
+
 
 document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
@@ -887,6 +875,35 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
 });
 
+// --- KOMMENTARE (LIKEN & ANTWORTEN) ---
+window.likeComment = async function(videoId, cId) {
+    if (!currentUser) return;
+    const videoRef = doc(db, "videos", videoId);
+    const snap = await getDoc(videoRef);
+    if (snap.exists()) {
+        const vData = snap.data();
+        const comments = vData.comments || [];
+        const cIndex = comments.findIndex(c => c.cId === cId);
+
+        if (cIndex > -1) {
+            if (!comments[cIndex].likes) comments[cIndex].likes = [];
+            const userIdx = comments[cIndex].likes.indexOf(currentUser.uid);
+
+            if (userIdx > -1) comments[cIndex].likes.splice(userIdx, 1);
+            else comments[cIndex].likes.push(currentUser.uid);
+
+            await updateDoc(videoRef, { comments: comments });
+            renderComments(videoId);
+        }
+    }
+};
+
+window.replyToComment = function(cName) {
+    const input = document.getElementById('new-comment-input');
+    input.value = `@${cName} `;
+    input.focus();
+};
+
 function renderComments(id) {
     const list = document.getElementById('comment-list');
     const video = allVideosData.find(v => v.id === id);
@@ -896,17 +913,42 @@ function renderComments(id) {
             const canDelete = currentUser && (currentUser.uid === c.uid || currentUser.email === "schleimyverteilung@gmail.com");
             const deleteBtn = canDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteComment('${id}', ${index})"></i>` : '';
 
-            return `<div class="comment" style="display:flex; align-items:flex-start; width:100%;"><img src="${c.pic}" alt="User"><div style="flex:1;"><strong>@${c.name}${badge}</strong><p>${c.text}</p></div>${deleteBtn}</div>`;
+            const commentId = c.cId || index.toString();
+            const likeCount = c.likes ? c.likes.length : 0;
+            const hasLiked = c.likes && currentUser && c.likes.includes(currentUser.uid) ? 'liked-heart' : '';
+
+            return `
+                <div class="comment" style="display:flex; align-items:flex-start; width:100%;">
+                    <img src="${c.pic}" alt="User" onclick="openProfile('${c.uid}')" style="cursor:pointer;">
+                    <div style="flex:1;">
+                        <strong onclick="openProfile('${c.uid}')" style="cursor:pointer;">@${c.name}${badge}</strong>
+                        <p>${c.text}</p>
+                        <div class="comment-actions">
+                            <span onclick="replyToComment('${c.name}')">Antworten</span>
+                            <span class="${hasLiked}" onclick="likeComment('${id}', '${commentId}')"><i class="fas fa-heart"></i> ${likeCount}</span>
+                        </div>
+                    </div>
+                    ${deleteBtn}
+                </div>`;
         }).join('');
     } else {
         list.innerHTML = '<div class="no-comments">Sei der Erste, der kommentiert!</div>';
     }
 }
+
 document.getElementById('submit-comment').addEventListener('click', async() => {
     const input = document.getElementById('new-comment-input');
-    if (!input.value.trim() || !window.currentCommentVideoId || !currentUser) return;
-    const comment = { uid: currentUser.uid, name: currentUser.displayName, pic: currentUser.photoURL, verified: currentUser.verified || false, text: input.value.trim() };
+    const text = input.value.trim();
+    if (!text || !window.currentCommentVideoId || !currentUser) return;
+
+    const commentId = Date.now().toString();
+    const comment = { cId: commentId, uid: currentUser.uid, name: currentUser.displayName, pic: currentUser.photoURL, verified: currentUser.verified || false, text: text, likes: [] };
+
     await updateDoc(doc(db, "videos", window.currentCommentVideoId), { comments: arrayUnion(comment) });
+
+    const targetVidData = allVideosData.find(vd => vd.id === window.currentCommentVideoId);
+    if (targetVidData) addNotification(targetVidData.authorUid, "comment", `hat kommentiert: "${text}"`, window.currentCommentVideoId);
+
     input.value = '';
 });
 

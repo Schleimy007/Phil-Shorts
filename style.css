@@ -715,7 +715,7 @@ body {
     gap: 5px;
 }
 
-#view-chat {
+#view-inbox {
     display: flex;
     flex-direction: column;
     height: calc(100% - 60px);
@@ -732,66 +732,41 @@ body {
     padding-bottom: 80px;
 }
 
-.chat-msg {
+.inbox-msg {
     display: flex;
-    gap: 10px;
-    max-width: 85%;
-    animation: fadeIn 0.3s ease;
+    gap: 15px;
+    align-items: center;
+    background: #111;
+    padding: 15px;
+    border-radius: 15px;
+    cursor: pointer;
+    transition: background 0.2s;
+    border: 1px solid #222;
 }
 
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.chat-msg.me {
-    align-self: flex-end;
-    flex-direction: row-reverse;
+.inbox-msg:active {
+    background: #222;
 }
 
 .chat-avatar {
-    width: 36px;
-    height: 36px;
+    width: 45px;
+    height: 45px;
     border-radius: 50%;
     object-fit: cover;
-    cursor: pointer;
 }
 
 .chat-bubble {
-    background: #222;
-    padding: 12px 16px;
-    border-radius: 20px;
-    border-top-left-radius: 4px;
-    font-size: 15px;
+    font-size: 14px;
     line-height: 1.4;
-    color: white;
-    word-break: break-word;
-}
-
-.chat-msg.me .chat-bubble {
-    background: #ff0050;
-    border-top-left-radius: 20px;
-    border-top-right-radius: 4px;
+    color: #ddd;
 }
 
 .chat-username {
-    font-size: 12px;
-    color: #888;
+    font-size: 14px;
+    color: white;
     margin-bottom: 5px;
-    margin-left: 2px;
     display: block;
-    font-weight: 600;
-    cursor: pointer;
-}
-
-.chat-msg.me .chat-username {
-    display: none;
+    font-weight: bold;
 }
 
 .chat-input-wrapper {
@@ -1087,6 +1062,26 @@ body {
     color: white;
 }
 
+
+/* Comment Interaktion (Liken & Antworten) */
+
+.comment-actions {
+    display: flex;
+    gap: 15px;
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: bold;
+    color: #888;
+}
+
+.comment-actions span {
+    cursor: pointer;
+}
+
+.comment-actions span.liked-heart {
+    color: #ff0050;
+}
+
 .no-comments {
     text-align: center;
     color: #888;
@@ -1253,7 +1248,6 @@ body {
 .feed-end-loader {
     position: relative;
     height: 15%;
-    /* Erzeugt genau die 15% Scroll-Tiefe nach unten */
     width: 100%;
     display: flex;
     flex-direction: column;
@@ -1264,7 +1258,6 @@ body {
     font-size: 13px;
     gap: 8px;
     scroll-snap-align: none;
-    /* Verhindert das Einrasten hier -> Bounce Back! */
 }
 
 .feed-end-loader i {
