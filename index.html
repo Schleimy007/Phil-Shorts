@@ -101,13 +101,15 @@
         <div id="view-profile" class="view">
             <div class="top-bar glass-nav">
                 <i class="fas fa-chevron-left back-btn" onclick="switchView('feed')"></i>
-                <h3 id="profile-title" style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">@username</h3>
-                <i class="fas fa-bars back-btn" id="open-settings" style="display:none;"></i>
+                <h3 id="profile-title" style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%;">@username</h3>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <i class="fas fa-cog back-btn" id="open-notif-settings" style="display:none; font-size: 20px;"></i>
+                    <i class="fas fa-bars back-btn" id="open-settings" style="display:none;"></i>
+                </div>
             </div>
             <div class="profile-header">
                 <img src="" id="profile-pic" class="profile-image">
-                <h2 id="profile-name" style="word-break: break-word; text-align: center;">Anzeigename</h2>
-                <p id="profile-username" style="color: #aaa; font-weight: bold; font-size: 15px; margin-bottom: 10px;">@username</p>
+                <h2 id="profile-name" style="word-break: break-word; text-align: center;">Benutzername</h2>
                 <div id="profile-level" class="creator-level">Level 1 Creator 🌟</div>
                 <p id="profile-bio" class="profile-bio">Hier könnte deine coole Bio stehen.</p>
 
@@ -200,6 +202,37 @@
                     <span id="detail-date"><i class="fas fa-calendar" style="color: #ffd700;"></i> Datum</span>
                 </div>
                 <p id="detail-desc" style="line-height:1.6; font-size:15px; white-space: pre-wrap; color: #ddd;"></p>
+            </div>
+        </div>
+
+        <div id="notif-settings-modal" class="modal">
+            <div class="modal-header">
+                <h4>Benachrichtigungen</h4><i class="fas fa-times close-modal" id="close-notif-settings"></i>
+            </div>
+            <div class="modal-body upload-body">
+                <p style="font-size: 13px; color: #888; margin-bottom: 10px;">Erhalte Desktop/Push-Benachrichtigungen, auch wenn du die Seite gerade nur im Hintergrund offen hast.</p>
+                <div class="toggle-row">
+                    <strong>Desktop Benachrichtigungen</strong>
+                    <label class="switch"><input type="checkbox" id="toggle-master"><span class="slider round"></span></label>
+                </div>
+                <div id="sub-toggles" class="disabled-toggles">
+                    <div class="toggle-row">
+                        <span>Nachrichten (DMs)</span>
+                        <label class="switch"><input type="checkbox" id="toggle-dms"><span class="slider round"></span></label>
+                    </div>
+                    <div class="toggle-row">
+                        <span>Neue Follower</span>
+                        <label class="switch"><input type="checkbox" id="toggle-followers"><span class="slider round"></span></label>
+                    </div>
+                    <div class="toggle-row">
+                        <span>Kommentare</span>
+                        <label class="switch"><input type="checkbox" id="toggle-comments"><span class="slider round"></span></label>
+                    </div>
+                    <div class="toggle-row">
+                        <span>Neue Likes</span>
+                        <label class="switch"><input type="checkbox" id="toggle-likes"><span class="slider round"></span></label>
+                    </div>
+                </div>
             </div>
         </div>
 

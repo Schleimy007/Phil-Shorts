@@ -25,6 +25,15 @@ if (currentUser) {
     currentUser.verified = false;
 }
 
+// --- DESKTOP BENACHRICHTIGUNGEN EINSTELLUNGEN ---
+let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || {
+    master: false,
+    likes: true,
+    comments: true,
+    followers: true,
+    dms: true
+};
+
 let currentFeedMode = 'foryou';
 let isInitialLoad = true;
 let sortedFeed = [];
@@ -99,7 +108,6 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
-// Dynamischer Daten-Abruf (Damit Namen, Bilder und Haken IMMER aktuell sind)
 function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackVerified) {
     const user = allKnownUsers.find(u => u.uid === uid);
     return {
@@ -129,6 +137,24 @@ function timeAgo(timestamp) {
     return date.toLocaleDateString('de-DE');
 }
 
+// --- DESKTOP NOTIFICATION LOGIK ---
+function sendDesktopNotification(title, body, type, iconUrl) {
+    // Schickt nur eine native Meldung, wenn der User gerade woanders ist (anderer Tab oder Hintergrund)
+    if (!document.hidden) return;
+
+    // Prüfe die Nutzer-Einstellungen
+    if (!notifSettings.master) return;
+    if (type === 'like' && !notifSettings.likes) return;
+    if (type === 'gift' && !notifSettings.likes) return;
+    if (type === 'comment' && !notifSettings.comments) return;
+    if (type === 'follow' && !notifSettings.followers) return;
+    if (type === 'message' && !notifSettings.dms) return;
+
+    if ("Notification" in window && Notification.permission === "granted") {
+        new Notification(title, { body: body, icon: iconUrl });
+    }
+}
+
 let userUnsubscribe = null;
 
 function initLiveUser() {
@@ -141,7 +167,6 @@ function initLiveUser() {
             if (currentUser.coins === undefined) currentUser.coins = 1000;
             if (!currentUser.followers) currentUser.followers = [];
             if (!currentUser.following) currentUser.following = [];
-            // Sicherstellen dass currentUser auch einen username hat
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
@@ -160,20 +185,23 @@ function initLiveUser() {
     });
 }
 
-// --- SOFORTIGE ÜBERALL-AKTUALISIERUNG ---
 function initSearchUsers() {
     onSnapshot(collection(db, "users"), (snapshot) => {
         allKnownUsers = [];
         snapshot.forEach(doc => allKnownUsers.push(doc.data()));
 
-        // Patcht das komplette HTML live durch!
-        allKnownUsers.forEach(u => {
-            const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
-            const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
-
-            document.querySelectorAll(`.live-name-${u.uid}`).forEach(el => el.innerHTML = u.displayName + isVerif);
-            document.querySelectorAll(`.live-username-${u.uid}`).forEach(el => el.innerText = '@' + cleanUsername);
-            document.querySelectorAll(`.live-pic-${u.uid}`).forEach(el => el.src = u.photoURL);
+        document.querySelectorAll('.creator-name').forEach(el => {
+            const onclickAttr = el.getAttribute('onclick');
+            if (onclickAttr) {
+                const match = onclickAttr.match(/'([^']+)'/);
+                if (match && match[1]) {
+                    const uid = match[1];
+                    const user = allKnownUsers.find(u => u.uid === uid);
+                    if (user) {
+                        el.innerHTML = '@' + user.displayName + (user.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '');
+                    }
+                }
+            }
         });
     });
 }
@@ -535,7 +563,6 @@ function createVideoElement(video) {
     return div;
 }
 
-// --- VIDEO DETAILS MODAL ---
 window.openVideoDetails = function(id) {
     const video = allVideosData.find(v => v.id === id);
     if (!video) return;
@@ -552,8 +579,6 @@ window.openVideoDetails = function(id) {
 }
 document.getElementById('close-details').addEventListener('click', () => { document.getElementById('video-details-modal').classList.remove('show'); });
 
-
-// --- VIDEO BEARBEITEN ---
 window.openEditVideo = function(videoId) {
     const video = allVideosData.find(v => v.id === videoId);
     if (video) {
@@ -599,7 +624,6 @@ document.getElementById('tab-following').addEventListener('click', function() {
     renderFeed(true);
 });
 
-// --- SCROLL ---
 const videoContainer = document.getElementById('video-container');
 videoContainer.addEventListener('scroll', () => {
     if (videoContainer.scrollTop + videoContainer.clientHeight >= videoContainer.scrollHeight - 20) {
@@ -849,9 +873,6 @@ window.deleteVideo = async function(videoId) {
         } catch (e) { showCustomAlert("Fehler", "Video konnte nicht gelöscht werden."); }
     }
 };
-
-
-// --- THREADED REPLIES & KOMMENTAR LIKES ---
 
 window.toggleReplyBox = function(cId) {
     const box = document.getElementById(`reply-box-${cId}`);
@@ -1177,6 +1198,7 @@ window.openProfile = async function(targetUid) {
 
         actionBtn.dataset.uid = targetUid;
         const settingsIcon = document.getElementById('open-settings');
+        const notifSettingsIcon = document.getElementById('open-notif-settings');
         const adminDashboardBtn = document.getElementById('open-admin-dashboard');
         const privateStats = document.getElementById('private-stats');
         const adminControls = document.getElementById('admin-controls');
@@ -1199,6 +1221,7 @@ window.openProfile = async function(targetUid) {
                 document.getElementById('settings-modal').classList.add('show');
             };
             settingsIcon.style.display = 'block';
+            notifSettingsIcon.style.display = 'block';
             adminDashboardBtn.style.display = currentUser.email === "schleimyverteilung@gmail.com" ? 'block' : 'none';
             privateStats.style.display = 'block';
             document.getElementById('my-coins').innerText = targetUser.coins || 0;
@@ -1222,6 +1245,7 @@ window.openProfile = async function(targetUid) {
             }
             actionBtn.onclick = () => toggleFollow(targetUid);
             settingsIcon.style.display = 'none';
+            notifSettingsIcon.style.display = 'none';
         }
 
         window.renderProfileGrid(targetUid);
@@ -1232,6 +1256,67 @@ window.openProfile = async function(targetUid) {
     }
 };
 
+// --- BENACHRICHTIGUNGS EINSTELLUNGEN UI ---
+function loadNotifSettingsUI() {
+    document.getElementById('toggle-master').checked = notifSettings.master;
+    document.getElementById('toggle-likes').checked = notifSettings.likes;
+    document.getElementById('toggle-comments').checked = notifSettings.comments;
+    document.getElementById('toggle-followers').checked = notifSettings.followers;
+    document.getElementById('toggle-dms').checked = notifSettings.dms;
+
+    if (notifSettings.master) {
+        document.getElementById('sub-toggles').classList.remove('disabled-toggles');
+    } else {
+        document.getElementById('sub-toggles').classList.add('disabled-toggles');
+    }
+}
+
+function saveNotifSettings() {
+    notifSettings.master = document.getElementById('toggle-master').checked;
+    notifSettings.likes = document.getElementById('toggle-likes').checked;
+    notifSettings.comments = document.getElementById('toggle-comments').checked;
+    notifSettings.followers = document.getElementById('toggle-followers').checked;
+    notifSettings.dms = document.getElementById('toggle-dms').checked;
+    localStorage.setItem('phil_notif_settings', JSON.stringify(notifSettings));
+}
+
+document.getElementById('toggle-master').addEventListener('change', (e) => {
+    if (e.target.checked) {
+        if (!("Notification" in window)) {
+            showCustomAlert("Fehler", "Dein Browser unterstützt leider keine Desktop-Benachrichtigungen.");
+            e.target.checked = false;
+            return;
+        }
+        Notification.requestPermission().then(permission => {
+            if (permission === "granted") {
+                document.getElementById('sub-toggles').classList.remove('disabled-toggles');
+                saveNotifSettings();
+                showToast("Desktop-Benachrichtigungen aktiviert! 🚀");
+            } else {
+                e.target.checked = false;
+                showCustomAlert("Blockiert", "Du musst Benachrichtigungen in deinem Browser erlauben, um dieses Feature zu nutzen.");
+                saveNotifSettings();
+            }
+        });
+    } else {
+        document.getElementById('sub-toggles').classList.add('disabled-toggles');
+        saveNotifSettings();
+    }
+});
+
+['toggle-likes', 'toggle-comments', 'toggle-followers', 'toggle-dms'].forEach(id => {
+    document.getElementById(id).addEventListener('change', saveNotifSettings);
+});
+
+document.getElementById('open-notif-settings').addEventListener('click', () => {
+    loadNotifSettingsUI();
+    document.getElementById('notif-settings-modal').classList.add('show');
+});
+document.getElementById('close-notif-settings').addEventListener('click', () => {
+    document.getElementById('notif-settings-modal').classList.remove('show');
+});
+
+
 window.toggleVerify = async function(targetUid, currentStatus) {
     try {
         await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus });
@@ -1239,9 +1324,7 @@ window.toggleVerify = async function(targetUid, currentStatus) {
     } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); }
 };
 
-// --- PROFIL & KOMMENTAR SYNC LOGIK ---
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
-
     const newDisplayName = document.getElementById('edit-displayname-input').value.trim();
     const newUsernameRaw = document.getElementById('edit-username-input').value.trim();
     const newUsername = newUsernameRaw.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
@@ -1499,6 +1582,7 @@ function initInbox() {
                         else if (n.type === 'comment') toastMsg = `💬 @${nUser.username} hat kommentiert`;
 
                         showToast(toastMsg);
+                        sendDesktopNotification(toastMsg, n.text, n.type, nUser.pic); // NATIVE PUSH NOTIFICATION
                     }
                 }
             });
