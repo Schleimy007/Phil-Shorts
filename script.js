@@ -432,7 +432,6 @@ function createVideoElement(video) {
 
     const editVideoBtn = isMe ? `<div class="videoSidebar__button" onclick="openEditVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-pen" style="font-size:24px;"></i></div>` : '';
 
-    // Wir setzen beim HTML rendern direkt is-paused auf den Container, damit der Button direkt da ist falls es nicht startet
     div.innerHTML = `
         <div class="video-inner is-paused">
             <div class="video-wrapper">
@@ -579,13 +578,11 @@ videoContainer.addEventListener('wheel', (e) => {
     scrollTimeout = setTimeout(() => { scrollTimeout = null; }, 600);
 }, { passive: false });
 
-// --- NEUER SAUBERER OBSERVER ---
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         const v = e.target;
 
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
-            // STOPPE SOFORT ALLE ANDEREN VIDEOS (Anti-Race-Condition)
             document.querySelectorAll('.video__player').forEach(otherVid => {
                 if (otherVid !== v && !otherVid.paused) {
                     otherVid.pause();
@@ -593,23 +590,19 @@ const videoObserver = new IntersectionObserver(entries => {
                 }
             });
 
-            // Start-Versuch
             v.muted = window.globalMuted;
             const playPromise = v.play();
             if (playPromise !== undefined) {
                 playPromise.catch(error => {
                     console.log("Autoplay blockiert oder abgebrochen:", error);
-                    // Wenn es geblockt wurde, feuert unten das "pause" Event ganz automatisch 
-                    // und blendet den Button ein. Wir müssen hier nichts mehr manipulieren!
                 });
             }
         } else {
-            // AUS DEM BILD VERSCHWUNDEN -> PAUSE
             v.pause();
             v.currentTime = 0;
         }
     });
-}, { threshold: 0.5 }); // Reagiert etwas früher beim Wischen!
+}, { threshold: 0.5 });
 
 function attachInteractionsToVideo(videoContainerEl) {
     const v = videoContainerEl.querySelector('.video__player');
@@ -618,8 +611,6 @@ function attachInteractionsToVideo(videoContainerEl) {
 
     videoObserver.observe(v);
 
-    // --- MAGIE: NATIVE EVENT LISTENER FÜR DIE UI ---
-    // Die UI richtet sich AB JETZT IMMER 100% nach dem echten Zustand des Videos!
     v.addEventListener('play', () => {
         container.classList.remove('is-paused');
     });
@@ -639,7 +630,6 @@ function attachInteractionsToVideo(videoContainerEl) {
             e.preventDefault();
         } else {
             if (v.paused) {
-                // Wenn Nutzer tippt, stoppe alle anderen
                 document.querySelectorAll('.video__player').forEach(vid => {
                     if (vid !== v && !vid.paused) {
                         vid.pause();
@@ -1376,12 +1366,43 @@ document.getElementById('tab-messages').addEventListener('click', function() {
     document.getElementById('inbox-messages-box').style.display = 'flex';
 });
 
-// --- INBOX NOTIFICATIONS (Aktivitäten) ---
+// --- INBOX NOTIFICATIONS (Aktivitäten) & TOAST SYSTEM ---
+let inboxUnsubscribe = null;
+let isInitialNotifLoad = true;
+
 function initInbox() {
     const inboxBox = document.getElementById('inbox-notifications-box');
     if (!currentUser) return;
 
-    onSnapshot(query(collection(db, "users", currentUser.uid, "notifications"), orderBy("timestamp", "desc")), (snapshot) => {
+    if (inboxUnsubscribe) inboxUnsubscribe();
+    isInitialNotifLoad = true;
+
+    inboxUnsubscribe = onSnapshot(query(collection(db, "users", currentUser.uid, "notifications"), orderBy("timestamp", "desc")), (snapshot) => {
+
+        // --- NEU: LIVE TOAST BENACHRICHTIGUNG ---
+        if (!isInitialNotifLoad) {
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === "added") {
+                    const n = change.doc.data();
+
+                    // Prüfen ob wir gerade mit dieser Person im Chat sind, dann keinen Toast zeigen
+                    const isCurrentlyChatting = document.getElementById('view-dm').classList.contains('active') && window.currentChatPartner && window.currentChatPartner.uid === n.fromUid;
+
+                    if (!isCurrentlyChatting) {
+                        let toastMsg = `🔔 Aktivität von @${n.fromName}`;
+                        if (n.type === 'message') toastMsg = `💬 Nachricht von @${n.fromName}`;
+                        else if (n.type === 'like') toastMsg = `❤️ @${n.fromName} mag dein Video`;
+                        else if (n.type === 'follow') toastMsg = `👤 @${n.fromName} folgt dir`;
+                        else if (n.type === 'gift') toastMsg = `🎁 @${n.fromName} hat gespendet!`;
+                        else if (n.type === 'comment') toastMsg = `💬 @${n.fromName} hat kommentiert`;
+
+                        showToast(toastMsg);
+                    }
+                }
+            });
+        }
+        isInitialNotifLoad = false;
+
         inboxBox.innerHTML = '';
         if (snapshot.empty) { inboxBox.innerHTML = '<div class="empty-state" style="height: 100%;"><p>Keine neuen Benachrichtigungen</p></div>'; return; }
 
@@ -1405,8 +1426,17 @@ function initInbox() {
                 icon = 'fa-gift';
                 color = '#ffd700';
             }
+            if (n.type === 'message') {
+                icon = 'fa-envelope';
+                color = '#00f2fe';
+            }
 
-            const clickAction = n.videoId ? `jumpToVideo('${n.videoId}')` : `openProfile('${n.fromUid}')`;
+            let clickAction = `openProfile('${n.fromUid}')`;
+            if (n.type === 'message') {
+                clickAction = `openDM('${n.fromUid}', '${n.fromName.replace(/'/g, "\\'")}', '${n.fromPic}')`;
+            } else if (n.videoId) {
+                clickAction = `jumpToVideo('${n.videoId}')`;
+            }
 
             const isVerif = getVerifiedBadge(n.fromUid);
 
@@ -1548,6 +1578,9 @@ document.getElementById('send-dm-btn').addEventListener('click', async() => {
             [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic }
         }
     });
+
+    // --- NEU: BENACHRICHTIGUNG FÜR DIE ANDERE PERSON AUSLÖSEN ---
+    addNotification(window.currentChatPartner.uid, "message", `hat geschrieben: "${text}"`);
 });
 
 document.getElementById('dm-input').addEventListener('keypress', (e) => {
