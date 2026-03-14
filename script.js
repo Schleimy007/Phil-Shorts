@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 // !!! DEINE FIREBASE KEYS !!!
 const firebaseConfig = {
@@ -19,7 +19,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let allVideosData = [];
-let allKnownUsers = []; // Speichert alle registrierten User für die Suche
+let allKnownUsers = []; // Speichert alle registrierten User für Echtzeit-Haken und Suche
 let currentUser = JSON.parse(localStorage.getItem('phil_session'));
 let currentFeedMode = 'foryou';
 let isInitialLoad = true;
@@ -83,6 +83,13 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
+// Hilfsfunktion: Gibt den blauen Haken überall dynamisch aus
+function getVerifiedBadge(uid, fallbackBool = false) {
+    const user = allKnownUsers.find(u => u.uid === uid);
+    const isVerif = user ? user.verified : fallbackBool;
+    return isVerif ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
+}
+
 let userUnsubscribe = null;
 
 function initLiveUser() {
@@ -124,7 +131,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
         const response = event.detail;
         const data = parseJwt(response.credential);
         const uid = data.sub;
-        const name = data.name.replace(/\s+/g, '').toLowerCase();
+        const baseName = data.name.replace(/\s+/g, '').toLowerCase();
         const pic = data.picture;
         const email = data.email;
 
@@ -132,9 +139,20 @@ window.addEventListener('googleLoginSuccess', async(event) => {
         const userSnap = await getDoc(userRef);
 
         if (!userSnap.exists()) {
+            // Checke ob der Google-Name schon vergeben ist. Wenn ja, hänge eine Zahl an.
+            let finalName = baseName;
+            let nameQuery = query(collection(db, "users"), where("displayName", "==", finalName));
+            let nameSnap = await getDocs(nameQuery);
+
+            while (!nameSnap.empty) {
+                finalName = baseName + Math.floor(1000 + Math.random() * 9000);
+                nameQuery = query(collection(db, "users"), where("displayName", "==", finalName));
+                nameSnap = await getDocs(nameQuery);
+            }
+
             await setDoc(userRef, {
                 uid: uid,
-                displayName: name,
+                displayName: finalName,
                 email: email,
                 photoURL: pic,
                 bio: "Neu in der Community! 👋",
@@ -144,7 +162,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
                 coins: 1000,
                 profileViews: 0
             });
-            currentUser = { uid, displayName: name, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0 };
+            currentUser = { uid, displayName: finalName, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0 };
         } else {
             currentUser = userSnap.data();
             if (!currentUser.following) currentUser.following = [];
@@ -373,7 +391,8 @@ function createVideoElement(video) {
 
     const plusButton = (!isMe) ? `<i class="fas fa-circle-plus follow-btn" data-target="${video.authorUid}" onclick="toggleFollow('${video.authorUid}', this, event)" style="${isFollowing ? 'display: none;' : ''}"></i>` : '';
 
-    const verifiedBadge = video.authorVerified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
+    // Dynamischer Badge über die Hilfsfunktion (damit er immer live aktualisiert ist)
+    const verifiedBadge = getVerifiedBadge(video.authorUid, video.authorVerified);
 
     const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : '';
     const realLikes = video.likedBy ? video.likedBy.length : 0;
@@ -815,7 +834,7 @@ function renderComments(id) {
     const video = allVideosData.find(v => v.id === id);
     if (video && video.comments && video.comments.length > 0) {
         list.innerHTML = video.comments.map((c, index) => {
-            const badge = c.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
+            const badge = getVerifiedBadge(c.uid, c.verified);
             const canDelete = currentUser && (currentUser.uid === c.uid || currentUser.email === "schleimyverteilung@gmail.com");
             const commentId = c.cId || index.toString();
             const deleteBtn = canDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteComment('${id}', '${commentId}')"></i>` : '';
@@ -827,7 +846,7 @@ function renderComments(id) {
             let repliesHtml = '';
             if (c.replies && c.replies.length > 0) {
                 repliesHtml = `<div class="reply-container">` + c.replies.map(r => {
-                    const rBadge = r.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
+                    const rBadge = getVerifiedBadge(r.uid, r.verified);
                     const rCanDelete = currentUser && (currentUser.uid === r.uid || currentUser.email === "schleimyverteilung@gmail.com");
                     const rDeleteBtn = rCanDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteReply('${id}', '${commentId}', '${r.rId}')"></i>` : '';
                     const rLikeCount = r.likes ? r.likes.length : 0;
@@ -1066,17 +1085,38 @@ window.toggleVerify = async function(targetUid, currentStatus) {
 
 // --- PROFIL & KOMMENTAR SYNC LOGIK ---
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
-    const newName = document.getElementById('edit-name-input').value.trim();
+    // Erzwinge kleingeschriebene Namen ohne Leerzeichen für Einzigartigkeit
+    const newNameRaw = document.getElementById('edit-name-input').value.trim();
+    const newName = newNameRaw.replace(/\s+/g, '').toLowerCase();
     const newBio = document.getElementById('edit-bio-input').value.trim();
     const newPic = document.getElementById('edit-pic-input').value.trim() || currentUser.photoURL;
 
-    if (newName.length < 3) return showCustomAlert("Hinweis", "Dein Name muss mindestens 3 Zeichen lang sein.");
+    if (newName.length < 3) return showCustomAlert("Hinweis", "Dein Name muss mindestens 3 Zeichen lang sein (ohne Leerzeichen).");
 
     const btn = document.getElementById('save-settings-btn');
-    btn.innerText = "Speichere...";
+    btn.innerText = "Prüfe Namen...";
     btn.disabled = true;
 
     try {
+        // --- NEU: EINZIGARTIGER NAMENS-CHECK ---
+        const nameQuery = query(collection(db, "users"), where("displayName", "==", newName));
+        const nameSnap = await getDocs(nameQuery);
+        let nameTaken = false;
+
+        nameSnap.forEach(d => {
+            if (d.id !== currentUser.uid) {
+                nameTaken = true;
+            }
+        });
+
+        if (nameTaken) {
+            btn.innerText = "Profil Speichern";
+            btn.disabled = false;
+            return showCustomAlert("Name vergeben", "Dieser Name ist bereits vergeben! Bitte wähle einen anderen.");
+        }
+
+        btn.innerText = "Speichere...";
+
         // 1. Profil updaten
         await updateDoc(doc(db, "users", currentUser.uid), { displayName: newName, bio: newBio, photoURL: newPic });
 
@@ -1242,7 +1282,10 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     if (matchedVideos.length > 0) {
         html += '<h4 style="padding: 10px 15px; color:#888; font-size:14px; text-transform:uppercase;">Videos</h4>';
         html += '<div class="grid-container">';
-        html += matchedVideos.map(v => `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views" style="word-break: break-all; font-size: 11px;"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`).join('');
+        html += matchedVideos.map(v => {
+            const vBadge = getVerifiedBadge(v.authorUid, v.authorVerified);
+            return `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views" style="word-break: break-all; font-size: 11px;"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0} @${v.authorName}${vBadge}</div></div>`;
+        }).join('');
         html += '</div>';
     }
 
@@ -1300,11 +1343,13 @@ function initInbox() {
 
             const clickAction = n.videoId ? `jumpToVideo('${n.videoId}')` : `openProfile('${n.fromUid}')`;
 
+            const isVerif = getVerifiedBadge(n.fromUid);
+
             inboxBox.innerHTML += `
                 <div class="inbox-msg" onclick="${clickAction}">
                     <img src="${n.fromPic}" class="chat-avatar" style="flex-shrink:0;">
                     <div style="flex:1; min-width:0;">
-                        <span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${n.fromName}</span>
+                        <span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${n.fromName} ${isVerif}</span>
                         <div class="chat-bubble" style="background: transparent; padding: 0; word-break: break-word;">
                             <i class="fas ${icon}" style="color:${color}; margin-right:5px;"></i> ${n.text}
                         </div>
@@ -1346,12 +1391,13 @@ function initInboxChats() {
             if (!partner) return;
 
             const safeName = partner.name.replace(/'/g, "\\'");
+            const isVerif = getVerifiedBadge(partnerUid);
 
             msgBox.innerHTML += `
                 <div class="inbox-msg" onclick="openDM('${partnerUid}', '${safeName}', '${partner.pic}')">
                     <img src="${partner.pic}" class="chat-avatar" style="flex-shrink:0;">
                     <div style="flex:1; min-width:0;">
-                        <span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${partner.name}</span>
+                        <span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${partner.name} ${isVerif}</span>
                         <div class="chat-bubble" style="background: transparent; padding: 0; color: #888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                             ${chat.lastMessage || 'Neuer Chat...'}
                         </div>
@@ -1372,7 +1418,8 @@ window.openDM = async function(targetUid, targetName, targetPic) {
     const uids = [currentUser.uid, targetUid].sort();
     window.currentChatId = `${uids[0]}_${uids[1]}`;
 
-    document.getElementById('dm-title').innerText = '@' + targetName;
+    const isVerif = getVerifiedBadge(targetUid);
+    document.getElementById('dm-title').innerHTML = '@' + targetName + ' ' + isVerif;
     switchView('dm');
 
     if (currentDMSnapshot) currentDMSnapshot();
