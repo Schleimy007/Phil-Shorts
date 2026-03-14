@@ -375,19 +375,21 @@ function createVideoElement(video) {
 
     div.innerHTML = `
         <div class="video-inner">
-            <video class="video__player" loop playsinline src="${video.url}"></video>
-            <div class="play-indicator"><i class="fas fa-play"></i></div>
-            
-            <div class="mute-container">
-                <div class="mute-btn"><i class="fas fa-volume-up"></i></div>
-                <div class="volume-slider-wrapper">
-                    <input type="range" class="volume-slider" min="0" max="1" step="0.05" value="1">
+            <div class="video-wrapper">
+                <video class="video__player" loop playsinline src="${video.url}"></video>
+                <div class="play-indicator"><i class="fas fa-play"></i></div>
+                
+                <div class="mute-container">
+                    <div class="mute-btn"><i class="fas fa-volume-up"></i></div>
+                    <div class="volume-slider-wrapper">
+                        <input type="range" class="volume-slider" min="0" max="1" step="0.05" value="1">
+                    </div>
                 </div>
-            </div>
 
-            <div class="like-animation"><i class="fas fa-heart"></i></div>
-            <div class="gift-animation"><i class="fas fa-coins"></i></div>
-            <div class="player-progress-bar"><div class="player-progress-filled"></div></div>
+                <div class="like-animation"><i class="fas fa-heart"></i></div>
+                <div class="gift-animation"><i class="fas fa-coins"></i></div>
+                <div class="player-progress-bar"><div class="player-progress-filled"></div></div>
+            </div>
             
             <div class="video__footer">
                 <h3 class="creator-name" onclick="openProfile('${video.authorUid}')">@${video.authorName}${verifiedBadge}</h3>
