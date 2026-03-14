@@ -7,27 +7,53 @@
 
 html,
 body {
-    background-color: #000;
+    background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+    /* Cooler Hintergrund für PC */
     color: white;
-    height: 100dvh;
-    /* dvh verhindert Bug durch Handy-Adressleiste */
+    height: 100vh;
     width: 100vw;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
     overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
+
+/* --- RESPONSIVE APP CONTAINER --- */
+
 .app {
-    height: 100dvh;
-    width: 100vw;
+    height: 90vh;
+    /* Auf PC nicht den ganzen Bildschirm füllen */
+    max-height: 900px;
+    width: 100%;
+    max-width: 400px;
+    /* Handy-Breite auf PC */
     position: relative;
     background-color: #000;
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+    border-radius: 30px;
+    /* Abgerundete Ecken für PC */
+    border: 6px solid #222;
+    /* Smartphone-Rahmen-Look */
 }
 
 
-/* GEMEINSAME ELEMENTE */
+/* Auf mobilen Geräten den kompletten Bildschirm füllen */
+
+@media (max-width: 768px) {
+    .app {
+        height: 100vh;
+        max-height: 100vh;
+        max-width: 100vw;
+        border-radius: 0;
+        border: none;
+    }
+}
+
+
+/* --- RESTLICHES CSS --- */
 
 .verified-badge {
     color: #00f2fe;
@@ -72,7 +98,6 @@ body {
     font-weight: bold;
     text-transform: uppercase;
     margin-top: 5px;
-    display: inline-block;
 }
 
 .glass-nav {
@@ -87,15 +112,13 @@ body {
     border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-
-/* VIEWS */
-
 .view {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    height: calc(100dvh - 60px);
+    height: calc(100% - 60px);
+    /* Geändert von 100vh auf 100% */
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
@@ -111,15 +134,13 @@ body {
     z-index: 5;
 }
 
-
-/* FULL SCREENS & MODALS */
-
 .full-screen-overlay {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+    /* Geändert von 100vh auf 100% */
     background: #000;
     z-index: 1000;
     display: flex;
@@ -176,6 +197,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
+    /* Geändert von 100vh auf 100% */
     background: rgba(0, 0, 0, 0.8);
     z-index: 3000;
     display: flex;
@@ -249,9 +271,6 @@ body {
     transform: translateX(-50%) translateY(0);
 }
 
-
-/* HEADER */
-
 .app__header {
     position: absolute;
     top: 0;
@@ -262,7 +281,6 @@ body {
     padding: 20px;
     z-index: 100;
     background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0) 100%);
-    pointer-events: none;
 }
 
 .header__link {
@@ -272,7 +290,6 @@ body {
     cursor: pointer;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
     transition: color 0.2s;
-    pointer-events: auto;
 }
 
 .header__link.active {
@@ -296,7 +313,6 @@ body {
     cursor: pointer;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
     transition: transform 0.2s;
-    pointer-events: auto;
 }
 
 .search-icon:active {
@@ -319,9 +335,6 @@ body {
     padding: 5px;
 }
 
-
-/* VIDEOS & FEED */
-
 .app__videos {
     height: 100%;
     width: 100%;
@@ -343,7 +356,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    background: #000;
+    background: #111;
 }
 
 .video__player {
@@ -432,12 +445,9 @@ body {
     border-radius: 0 2px 2px 0;
 }
 
-
-/* FIX: BOTTOM OFFSET FÜR HANDYS (85px) */
-
 .video__footer {
     position: absolute;
-    bottom: 85px;
+    bottom: 25px;
     left: 15px;
     width: 70%;
     text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
@@ -460,12 +470,9 @@ body {
     line-height: 1.3;
 }
 
-
-/* FIX: BOTTOM OFFSET FÜR HANDYS (85px) */
-
 .video__sidebar {
     position: absolute;
-    bottom: 85px;
+    bottom: 25px;
     right: 10px;
     display: flex;
     flex-direction: column;
@@ -539,9 +546,6 @@ body {
 .videoSidebar__button.gift-btn i {
     color: #ffd700;
 }
-
-
-/* RESTLICHE VIEWS (Profil, Admin, Modal, Chat...) */
 
 .profile-header {
     display: flex;
@@ -660,6 +664,7 @@ body {
     display: flex;
     flex-direction: column;
     height: calc(100% - 60px);
+    /* Geändert von 100vh auf 100% */
     background: #000;
 }
 
@@ -769,6 +774,11 @@ body {
     align-items: center;
     font-size: 18px;
     cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.chat-send-btn:active {
+    transform: scale(0.9);
 }
 
 .search-input-box {
@@ -805,6 +815,11 @@ body {
     padding: 12px 20px;
     align-items: center;
     cursor: pointer;
+    transition: background 0.2s;
+}
+
+.trend-item:active {
+    background: #111;
 }
 
 .trend-icon {
@@ -819,8 +834,19 @@ body {
     font-size: 18px;
 }
 
+.trend-info strong {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 4px;
+}
 
-/* Admin */
+.trend-info p {
+    font-size: 13px;
+    color: #888;
+}
+
+
+/* ADMIN DASHBOARD CSS */
 
 .admin-stats {
     display: flex;
@@ -891,6 +917,11 @@ body {
     font-weight: bold;
     cursor: pointer;
     font-size: 12px;
+    transition: transform 0.1s;
+}
+
+.admin-btn:active {
+    transform: scale(0.95);
 }
 
 .btn-blue {
@@ -905,15 +936,13 @@ body {
     border: 1px solid #ffd700;
 }
 
-
-/* Modals */
-
 .modal {
     position: absolute;
     bottom: -100%;
     left: 0;
     width: 100%;
-    height: 75vh;
+    height: 75%;
+    /* Geändert von 75vh auf 75% */
     background: #111;
     color: white;
     z-index: 200;
@@ -973,6 +1002,10 @@ body {
     opacity: 0.7;
     transition: opacity 0.2s;
     margin-left: auto;
+}
+
+.delete-comment-icon:hover {
+    opacity: 1;
 }
 
 .comment {
@@ -1074,9 +1107,6 @@ body {
     font-weight: 600;
 }
 
-
-/* BOTTOM NAV */
-
 .app__bottom-nav {
     position: absolute;
     bottom: 0;
@@ -1107,10 +1137,6 @@ body {
     font-size: 22px;
 }
 
-.nav-text-pc {
-    display: none;
-}
-
 .add-btn {
     color: black;
 }
@@ -1131,9 +1157,6 @@ body {
 .plus-box i {
     font-size: 16px;
 }
-
-
-/* LOADING/EMPTY STATES */
 
 .loading-screen,
 .empty-state {
@@ -1169,88 +1192,4 @@ body {
 .empty-state p {
     font-size: 14px;
     color: #888;
-}
-
-
-/* ========================================================================= */
-
-
-/* --- PC / DESKTOP DESIGN (ab 769px) - REINES CSS --- */
-
-
-/* ========================================================================= */
-
-@media (min-width: 769px) {
-    .app {
-        flex-direction: row;
-        /* Ändert das Layout in "Links-Rechts" */
-    }
-    /* 1. Aus der unteren Nav wird eine linke Sidebar */
-    .app__bottom-nav {
-        position: relative;
-        width: 280px;
-        min-width: 280px;
-        height: 100dvh;
-        flex-direction: column;
-        justify-content: flex-start;
-        align-items: flex-start;
-        padding: 20px;
-        background: #000;
-        border-top: none;
-        border-right: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    .nav__item {
-        flex-direction: row;
-        /* Icon und Text nebeneinander */
-        width: 100%;
-        padding: 15px 20px;
-        border-radius: 12px;
-        font-size: 20px;
-        gap: 15px;
-        margin-bottom: 10px;
-    }
-    .nav__item:hover {
-        background: rgba(255, 255, 255, 0.1);
-    }
-    .nav__item span {
-        font-size: 16px;
-        /* Text größer machen */
-        font-weight: 600;
-    }
-    .add-btn .plus-box {
-        margin-top: 20px;
-        width: 100%;
-        display: flex;
-        justify-content: center;
-        padding: 12px;
-    }
-    /* 2. Die Fenster rücken nach rechts, neben die Nav */
-    .view {
-        position: absolute;
-        top: 0;
-        left: 280px;
-        width: calc(100vw - 280px);
-        height: 100dvh;
-    }
-    .app__header {
-        width: calc(100vw - 280px);
-        /* Header schmaler machen */
-        left: 280px;
-    }
-    /* 3. Das Video bekommt das volle PC Format ohne abgeschnitten zu werden */
-    .video__player {
-        object-fit: contain;
-        /* Erlaubt das 16:9 Format mit schwarzen Rändern, falls nötig */
-    }
-    /* 4. Position der Buttons & Texte an PC anpassen */
-    .video__sidebar {
-        bottom: 40px;
-        right: 40px;
-    }
-    .video__footer {
-        bottom: 40px;
-        left: 40px;
-        max-width: 600px;
-        /* Text nicht über den ganzen Bildschirm ziehen */
-    }
 }
