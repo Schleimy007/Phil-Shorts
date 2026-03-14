@@ -23,6 +23,12 @@ let currentUser = JSON.parse(localStorage.getItem('phil_session'));
 let currentFeedMode = 'foryou';
 let isInitialLoad = true;
 
+// ALGORITHMUS & BATCH-LOADING VARIABLEN
+let displayedCount = 0;
+let sortedFeed = [];
+const BATCH_SIZE = 3; // Lade 3 Videos auf einmal für den echten Effekt
+let isLoadingMore = false;
+
 // --- HELPER ---
 window.switchView = function(viewId) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -39,7 +45,6 @@ window.switchView = function(viewId) {
     if (viewId !== 'feed') document.querySelectorAll('.video__player').forEach(v => v.pause());
 };
 
-// --- NEUE FUNKTION: Direkt zum Video springen ---
 window.jumpToVideo = function(videoId) {
     switchView('feed');
     setTimeout(() => {
@@ -51,7 +56,7 @@ window.jumpToVideo = function(videoId) {
                 behavior: 'smooth'
             });
         }
-    }, 50); // Kurze Pause, damit die View erst richtig aktiv wird
+    }, 50);
 };
 
 function showToast(msg) {
@@ -166,6 +171,36 @@ document.getElementById('logout-btn').addEventListener('click', () => {
 });
 
 
+// --- DER ECHTE ALGORITHMUS ---
+function applyAlgorithm(videos, mode) {
+    if (mode === 'following') {
+        // "Folge ich" zeigt nur Videos von Leuten, denen du folgst. Sortiert nach Neuigkeit.
+        return videos.filter(v => currentUser && currentUser.following.includes(v.authorUid));
+    } else {
+        // "Für dich" ALGORITHMUS
+        let scored = videos.map(v => {
+            let likes = v.likedBy ? v.likedBy.length : 0;
+            let comments = v.comments ? v.comments.length : 0;
+            let gifts = v.gifts || 0;
+
+            // Score Berechnung: Wichtigkeit der Interaktionen
+            let score = (likes * 2) + (comments * 3) + (gifts * 5);
+
+            // Zufallsfaktor für Entdeckung (0 bis 40 Extrapunkte). 
+            // So werden auch neue Videos mit 0 Likes mal nach oben gespült.
+            let randomBoost = Math.floor(Math.random() * 40);
+
+            // Eigene Videos abwerten (wir wollen ja andere sehen!)
+            if (currentUser && v.authorUid === currentUser.uid) score -= 200;
+
+            return {...v, algoScore: score + randomBoost };
+        });
+
+        // Nach Score sortieren (Höchste Punktzahl zuerst)
+        return scored.sort((a, b) => b.algoScore - a.algoScore);
+    }
+}
+
 // --- DIE MAGISCHE LIVE DATENBANK FÜR VIDEOS ---
 function initLiveDatabase() {
     document.getElementById('video-container').innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i><p>Lade Algorithmus...</p></div>';
@@ -176,20 +211,24 @@ function initLiveDatabase() {
         allVideosData.reverse();
 
         if (isInitialLoad) {
-            renderFeed();
+            renderFeed(true);
             isInitialLoad = false;
         } else {
+            // Live Updates im Hintergrund bearbeiten
             snapshot.docChanges().forEach((change) => {
                 const vData = { id: change.doc.id, ...change.doc.data() };
 
                 if (change.type === "added") {
+                    // Neues Video live ganz oben einfügen, wenn es in den aktuellen Filter passt
                     if (!document.querySelector(`.video[data-id="${vData.id}"]`)) {
                         const newVidEl = createVideoElement(vData);
                         if (currentFeedMode === 'foryou' || (currentFeedMode === 'following' && currentUser.following.includes(vData.authorUid))) {
                             const container = document.getElementById('video-container');
+                            const loader = container.querySelector('.feed-end-loader');
                             container.insertBefore(newVidEl, container.firstChild);
                             const emptyState = container.querySelector('.empty-state');
                             if (emptyState) emptyState.remove();
+                            displayedCount++;
                         }
                     }
                 }
@@ -224,7 +263,66 @@ function initLiveDatabase() {
     });
 }
 
-// Erstellt ein einzelnes Video Element (für Render und Live-Updates)
+// --- RENDER FEED MIT BATCH-LOADING & LOADER ---
+function renderFeed(reset = false) {
+    const container = document.getElementById('video-container');
+
+    if (reset) {
+        container.innerHTML = '';
+        displayedCount = 0;
+        sortedFeed = applyAlgorithm(allVideosData, currentFeedMode);
+
+        if (sortedFeed.length === 0) {
+            const emptyTxt = currentFeedMode === 'following' ? 'Folge Creatorn' : 'Feed ist leer';
+            const emptyIco = currentFeedMode === 'following' ? 'fa-user-plus' : 'fa-video-slash';
+            container.innerHTML = `<div class="empty-state"><i class="fas ${emptyIco}"></i><h3>${emptyTxt}</h3></div>`;
+            return;
+        }
+    }
+
+    const nextBatch = sortedFeed.slice(displayedCount, displayedCount + BATCH_SIZE);
+
+    // Alten Loader löschen bevor neue Videos kommen
+    const oldLoader = container.querySelector('.feed-end-loader');
+    if (oldLoader) oldLoader.remove();
+
+    nextBatch.forEach(video => {
+        container.appendChild(createVideoElement(video));
+    });
+
+    displayedCount += nextBatch.length;
+
+    // Lader unten wieder anhängen
+    appendLoader(container, displayedCount >= sortedFeed.length);
+    isLoadingMore = false;
+}
+
+function appendLoader(container, isEnd) {
+    const loader = document.createElement('div');
+    loader.className = 'feed-end-loader';
+    if (isEnd) {
+        loader.innerHTML = '<i class="fas fa-check-circle"></i><span>Du bist auf dem neuesten Stand</span>';
+        loader.classList.add('no-more');
+    } else {
+        loader.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Prüfe Algorithmus...</span>';
+    }
+    container.appendChild(loader);
+}
+
+function updateLoader(isEnd) {
+    const loader = document.querySelector('.feed-end-loader');
+    if (loader) {
+        if (isEnd) {
+            loader.innerHTML = '<i class="fas fa-check-circle"></i><span>Du bist auf dem neuesten Stand</span>';
+            loader.classList.add('no-more');
+        } else {
+            loader.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Prüfe Algorithmus...</span>';
+            loader.classList.remove('no-more');
+        }
+    }
+}
+
+// Erstellt ein einzelnes Video Element
 function createVideoElement(video) {
     const div = document.createElement('div');
     div.className = "video";
@@ -291,72 +389,91 @@ function createVideoElement(video) {
     return div;
 }
 
-function renderFeed() {
-    const container = document.getElementById('video-container');
-    container.innerHTML = '';
-    let displayVideos = allVideosData;
-
-    if (currentFeedMode === 'following') {
-        const myFollowing = currentUser ? (currentUser.following || []) : [];
-        displayVideos = allVideosData.filter(v => myFollowing.includes(v.authorUid));
-        if (displayVideos.length === 0) {
-            container.innerHTML = `<div class="empty-state"><i class="fas fa-user-plus"></i><h3>Folge Creatorn</h3></div>`;
-            return;
-        }
-    } else {
-        if (displayVideos.length === 0) {
-            container.innerHTML = `<div class="empty-state"><i class="fas fa-video-slash"></i><h3>Feed ist leer</h3></div>`;
-            return;
-        }
-    }
-
-    displayVideos.forEach(video => {
-        container.appendChild(createVideoElement(video));
-    });
-}
-
 document.getElementById('tab-foryou').addEventListener('click', function() {
     document.getElementById('tab-following').classList.remove('active');
     this.classList.add('active');
     currentFeedMode = 'foryou';
-    renderFeed();
+    renderFeed(true);
 });
 
 document.getElementById('tab-following').addEventListener('click', function() {
     document.getElementById('tab-foryou').classList.remove('active');
     this.classList.add('active');
     currentFeedMode = 'following';
-    renderFeed();
+    renderFeed(true);
 });
 
-// --- INTERAKTIONEN & PC STEUERUNG (TIKTOK RHYTHMUS) ---
+// --- SCROLL / BATCH LADEN / TIKTOK RHYTHMUS ---
 
-window.addEventListener('keydown', (e) => {
-    if (document.getElementById('view-feed').classList.contains('active')) {
-        const container = document.getElementById('video-container');
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            container.scrollBy({ top: container.clientHeight, behavior: 'smooth' });
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            container.scrollBy({ top: -container.clientHeight, behavior: 'smooth' });
+const videoContainer = document.getElementById('video-container');
+
+// Mobile / Scroll-Prüfung für Infinite Load
+videoContainer.addEventListener('scroll', () => {
+    if (isLoadingMore) return;
+
+    // Prüft, ob man kurz vor dem Ende (bzw. im Loader-Bereich) ist
+    if (videoContainer.scrollTop + videoContainer.clientHeight >= videoContainer.scrollHeight - 20) {
+        if (displayedCount < sortedFeed.length) {
+            isLoadingMore = true;
+            // Fake-Verzögerung für cooleres "Lade..." Erlebnis
+            setTimeout(() => {
+                renderFeed(false);
+            }, 600);
+        } else {
+            // Keine Videos mehr da. Erlaube den Blick auf den roten Text, schnappe dann zurück
+            setTimeout(() => {
+                const vids = document.querySelectorAll('.video');
+                if (vids.length) vids[vids.length - 1].scrollIntoView({ behavior: 'smooth' });
+            }, 800);
         }
     }
 });
 
-const videoContainer = document.getElementById('video-container');
+// Tastatur
+window.addEventListener('keydown', (e) => {
+    if (document.getElementById('view-feed').classList.contains('active')) {
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            videoContainer.scrollBy({ top: videoContainer.clientHeight, behavior: 'smooth' });
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            videoContainer.scrollBy({ top: -videoContainer.clientHeight, behavior: 'smooth' });
+        }
+    }
+});
+
+// PC Mausrad Logik & Bounce-Auslöser
 let scrollTimeout = null;
 
 videoContainer.addEventListener('wheel', (e) => {
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
 
     e.preventDefault();
-
     if (scrollTimeout) return;
 
-    if (e.deltaY > 0) {
-        videoContainer.scrollBy({ top: videoContainer.clientHeight, behavior: 'smooth' });
-    } else if (e.deltaY < 0) {
+    if (e.deltaY > 0) { // Nach unten scrollen
+        const vids = document.querySelectorAll('.video');
+        if (vids.length === 0) return;
+
+        const lastVid = vids[vids.length - 1];
+        const rect = lastVid.getBoundingClientRect();
+        const containerRect = videoContainer.getBoundingClientRect();
+
+        // Prüfen, ob wir exakt auf dem letzen Video sind
+        if (rect.top <= containerRect.top + 10 && rect.bottom >= containerRect.bottom - 10) {
+            // Wir sind ganz unten! Wir scrollen nur 15% in den Lader rein
+            videoContainer.scrollBy({ top: videoContainer.clientHeight * 0.15, behavior: 'smooth' });
+
+            // Wenn nichts mehr kommt, automatischen Bounce-Back auslösen
+            if (displayedCount >= sortedFeed.length) {
+                setTimeout(() => {
+                    lastVid.scrollIntoView({ behavior: 'smooth' });
+                }, 800);
+            }
+        } else {
+            videoContainer.scrollBy({ top: videoContainer.clientHeight, behavior: 'smooth' });
+        }
+    } else if (e.deltaY < 0) { // Nach oben scrollen
         videoContainer.scrollBy({ top: -videoContainer.clientHeight, behavior: 'smooth' });
     }
 
@@ -409,7 +526,6 @@ function attachInteractionsToVideo(videoContainerEl) {
     const muteBtn = container.querySelector('.mute-btn');
     const volumeSlider = container.querySelector('.volume-slider');
 
-    // Initiale Hintergrundfüllung des Sliders (auf 100%)
     volumeSlider.style.background = `linear-gradient(to right, #fff 100%, rgba(255, 255, 255, 0.3) 100%)`;
 
     function updateVolumeIcon(vol) {
@@ -422,7 +538,6 @@ function attachInteractionsToVideo(videoContainerEl) {
             muteBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
         }
 
-        // Füllt den linken Teil des Sliders dynamisch weiß auf
         volumeSlider.style.background = `linear-gradient(to right, #fff ${vol * 100}%, rgba(255, 255, 255, 0.3) ${vol * 100}%)`;
     }
 
@@ -447,7 +562,6 @@ function attachInteractionsToVideo(videoContainerEl) {
         updateVolumeIcon(v.volume);
     });
 
-    // Halte Slider beim Ziehen durchgehend offen (egal wo die Maus hinrutscht)
     volumeSlider.addEventListener('mousedown', (e) => {
         e.stopPropagation();
         muteContainer.classList.add('active-slider');
@@ -633,7 +747,6 @@ window.openProfile = async function(targetUid) {
         if (userVideos.length === 0) {
             grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`;
         } else {
-            // Profil-Grid verwendet jetzt auch jumpToVideo!
             userVideos.forEach(v => { grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`; });
         }
     } catch (e) { showCustomAlert("Fehler", "Profil konnte nicht geladen werden."); }
@@ -771,7 +884,6 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     trendingSection.style.display = 'none';
     resultsGrid.style.display = 'grid';
     const results = allVideosData.filter(v => (v.authorName || "").toLowerCase().includes(query) || (v.description || "").toLowerCase().includes(query));
-    // Suche verwendet jetzt auch jumpToVideo!
     resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
 });
 

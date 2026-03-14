@@ -414,12 +414,10 @@ body {
     right: 20px;
     display: flex;
     flex-direction: row-reverse;
-    /* Icon rechts, Slider links davon */
     align-items: center;
     z-index: 20;
     background: rgba(0, 0, 0, 0.4);
     border-radius: 30px;
-    /* Pillenform */
     backdrop-filter: blur(5px);
     transition: all 0.3s ease;
 }
@@ -437,7 +435,6 @@ body {
 .volume-slider-wrapper {
     width: 0;
     height: 40px;
-    /* Gleiche Höhe wie der Button für sauberes Flexing */
     opacity: 0;
     overflow: hidden;
     transition: width 0.3s ease, opacity 0.3s ease;
@@ -446,20 +443,15 @@ body {
     pointer-events: none;
 }
 
-
-/* Hält den Slider horizontal offen beim Hovern ODER wenn .active-slider getriggert wird */
-
 @media (min-width: 769px) {
     .mute-container:hover,
     .mute-container.active-slider {
         background: rgba(0, 0, 0, 0.6);
         padding-left: 15px;
-        /* Platz links schaffen für den einfliegenden Slider */
     }
     .mute-container:hover .volume-slider-wrapper,
     .mute-container.active-slider .volume-slider-wrapper {
         width: 80px;
-        /* So breit klappt er nach links auf */
         opacity: 1;
         pointer-events: auto;
         margin-right: 5px;
@@ -1253,4 +1245,33 @@ body {
 .empty-state p {
     font-size: 14px;
     color: #888;
+}
+
+
+/* --- INFINITE SCROLL / END LOADER --- */
+
+.feed-end-loader {
+    position: relative;
+    height: 15%;
+    /* Erzeugt genau die 15% Scroll-Tiefe nach unten */
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: #000;
+    color: #888;
+    font-size: 13px;
+    gap: 8px;
+    scroll-snap-align: none;
+    /* Verhindert das Einrasten hier -> Bounce Back! */
+}
+
+.feed-end-loader i {
+    font-size: 24px;
+    color: #555;
+}
+
+.feed-end-loader.no-more i {
+    color: #ff0050;
 }
