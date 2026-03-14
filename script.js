@@ -268,7 +268,6 @@ function initLiveDatabase() {
                         el.innerText = vData.gifts || 0;
                     });
 
-                    // Live Update der Beschreibung
                     document.querySelectorAll(`.video[data-id="${vData.id}"] .video__footer p`).forEach(el => {
                         el.innerText = vData.description || "";
                     });
@@ -373,7 +372,6 @@ function createVideoElement(video) {
     const canDeleteVideo = currentUser && (video.authorUid === currentUser.uid || currentUser.email === "schleimyverteilung@gmail.com");
     const deleteVideoBtn = canDeleteVideo ? `<div class="videoSidebar__button" onclick="deleteVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-trash" style="color: #ff4444; font-size:24px;"></i></div>` : '';
 
-    // NEU: VIDEO BEARBEITEN BUTTON FÜR ERSTELLER
     const editVideoBtn = isMe ? `<div class="videoSidebar__button" onclick="openEditVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-pen" style="font-size:24px;"></i></div>` : '';
 
     div.innerHTML = `
@@ -442,7 +440,6 @@ document.getElementById('save-video-edit-btn').addEventListener('click', async()
     if (!window.currentEditVideoId || !newDesc) return;
 
     try {
-        // Optimistic DOM Update
         document.querySelectorAll(`.video[data-id="${window.currentEditVideoId}"] .video__footer p`).forEach(el => {
             el.innerText = newDesc;
         });
@@ -683,31 +680,220 @@ window.deleteVideo = async function(videoId) {
     }
 };
 
-window.deleteComment = async function(videoId, commentIndex) {
+
+// --- THREADED REPLIES & KOMMENTAR LIKES ---
+
+window.toggleReplyBox = function(cId) {
+    const box = document.getElementById(`reply-box-${cId}`);
+    if (box) box.style.display = box.style.display === 'none' ? 'flex' : 'none';
+};
+
+window.submitReply = async function(videoId, cId) {
+    if (!currentUser) return;
+    const input = document.getElementById(`reply-input-${cId}`);
+    const text = input.value.trim();
+    if (!text) return;
+
+    const replyId = Date.now().toString();
+    const reply = { rId: replyId, uid: currentUser.uid, name: currentUser.displayName, pic: currentUser.photoURL, verified: currentUser.verified || false, text: text, likes: [] };
+
+    const videoIndex = allVideosData.findIndex(v => v.id === videoId);
+    if (videoIndex > -1) {
+        const comments = allVideosData[videoIndex].comments || [];
+        const cIndex = comments.findIndex((c, idx) => c.cId === cId || idx.toString() === cId);
+        if (cIndex > -1) {
+            if (!comments[cIndex].replies) comments[cIndex].replies = [];
+            comments[cIndex].replies.push(reply);
+
+            renderComments(videoId);
+            await updateDoc(doc(db, "videos", videoId), { comments: comments });
+
+            if (comments[cIndex].uid !== currentUser.uid) {
+                addNotification(comments[cIndex].uid, "comment", `hat auf deinen Kommentar geantwortet: "${text}"`, videoId);
+            }
+        }
+    }
+};
+
+window.likeComment = async function(videoId, cId) {
+    if (!currentUser) return;
+    const videoIndex = allVideosData.findIndex(v => v.id === videoId);
+    if (videoIndex > -1) {
+        const comments = allVideosData[videoIndex].comments || [];
+        const cIndex = comments.findIndex((c, idx) => c.cId === cId || idx.toString() === cId);
+        if (cIndex > -1) {
+            if (!comments[cIndex].likes) comments[cIndex].likes = [];
+            const userIdx = comments[cIndex].likes.indexOf(currentUser.uid);
+
+            if (userIdx > -1) comments[cIndex].likes.splice(userIdx, 1);
+            else comments[cIndex].likes.push(currentUser.uid);
+
+            renderComments(videoId);
+            await updateDoc(doc(db, "videos", videoId), { comments: comments });
+        }
+    }
+};
+
+window.likeReply = async function(videoId, cId, rId) {
+    if (!currentUser) return;
+    const videoIndex = allVideosData.findIndex(v => v.id === videoId);
+    if (videoIndex > -1) {
+        const comments = allVideosData[videoIndex].comments || [];
+        const cIndex = comments.findIndex((c, idx) => c.cId === cId || idx.toString() === cId);
+        if (cIndex > -1 && comments[cIndex].replies) {
+            const rIndex = comments[cIndex].replies.findIndex(r => r.rId === rId);
+            if (rIndex > -1) {
+                if (!comments[cIndex].replies[rIndex].likes) comments[cIndex].replies[rIndex].likes = [];
+                const userIdx = comments[cIndex].replies[rIndex].likes.indexOf(currentUser.uid);
+
+                if (userIdx > -1) comments[cIndex].replies[rIndex].likes.splice(userIdx, 1);
+                else comments[cIndex].replies[rIndex].likes.push(currentUser.uid);
+
+                renderComments(videoId);
+                await updateDoc(doc(db, "videos", videoId), { comments: comments });
+            }
+        }
+    }
+};
+
+window.deleteComment = async function(videoId, cId) {
     if (confirm("Möchtest du diesen Kommentar löschen?")) {
         try {
             const videoRef = doc(db, "videos", videoId);
-            const snap = await getDoc(videoRef);
-            if (snap.exists()) {
-                const videoData = snap.data();
-                videoData.comments.splice(commentIndex, 1);
-
-                const videoIndex = allVideosData.findIndex(v => v.id === videoId);
-                if (videoIndex > -1) {
-                    allVideosData[videoIndex].comments = videoData.comments;
+            const videoIndex = allVideosData.findIndex(v => v.id === videoId);
+            if (videoIndex > -1) {
+                let comments = allVideosData[videoIndex].comments || [];
+                const cIndex = comments.findIndex((c, idx) => c.cId === cId || idx.toString() === cId);
+                if (cIndex > -1) {
+                    comments.splice(cIndex, 1);
+                    allVideosData[videoIndex].comments = comments;
                     renderComments(videoId);
-
-                    document.querySelectorAll(`.comment-btn[data-id="${videoId}"] .comment-count-txt`).forEach(el => {
-                        el.innerText = videoData.comments.length;
-                    });
+                    document.querySelectorAll(`.comment-btn[data-id="${videoId}"] .comment-count-txt`).forEach(el => el.innerText = comments.length);
+                    await updateDoc(videoRef, { comments: comments });
+                    showToast("Kommentar gelöscht!");
                 }
-
-                await updateDoc(videoRef, { comments: videoData.comments });
-                showToast("Kommentar gelöscht!");
             }
         } catch (e) { showCustomAlert("Fehler", "Kommentar konnte nicht gelöscht werden."); }
     }
 };
+
+window.deleteReply = async function(videoId, cId, rId) {
+    if (confirm("Möchtest du diese Antwort löschen?")) {
+        try {
+            const videoRef = doc(db, "videos", videoId);
+            const videoIndex = allVideosData.findIndex(v => v.id === videoId);
+            if (videoIndex > -1) {
+                let comments = allVideosData[videoIndex].comments || [];
+                const cIndex = comments.findIndex((c, idx) => c.cId === cId || idx.toString() === cId);
+                if (cIndex > -1 && comments[cIndex].replies) {
+                    const rIndex = comments[cIndex].replies.findIndex(r => r.rId === rId);
+                    if (rIndex > -1) {
+                        comments[cIndex].replies.splice(rIndex, 1);
+                        renderComments(videoId);
+                        await updateDoc(videoRef, { comments: comments });
+                        showToast("Antwort gelöscht!");
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+};
+
+
+function renderComments(id) {
+    const list = document.getElementById('comment-list');
+    const video = allVideosData.find(v => v.id === id);
+    if (video && video.comments && video.comments.length > 0) {
+        list.innerHTML = video.comments.map((c, index) => {
+            const badge = c.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
+            const canDelete = currentUser && (currentUser.uid === c.uid || currentUser.email === "schleimyverteilung@gmail.com");
+            const commentId = c.cId || index.toString();
+            const deleteBtn = canDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteComment('${id}', '${commentId}')"></i>` : '';
+
+            const likeCount = c.likes ? c.likes.length : 0;
+            const hasLiked = c.likes && currentUser && c.likes.includes(currentUser.uid) ? 'liked-heart' : '';
+
+            // Render Threaded Replies
+            let repliesHtml = '';
+            if (c.replies && c.replies.length > 0) {
+                repliesHtml = `<div class="reply-container">` + c.replies.map(r => {
+                    const rBadge = r.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
+                    const rCanDelete = currentUser && (currentUser.uid === r.uid || currentUser.email === "schleimyverteilung@gmail.com");
+                    const rDeleteBtn = rCanDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteReply('${id}', '${commentId}', '${r.rId}')"></i>` : '';
+                    const rLikeCount = r.likes ? r.likes.length : 0;
+                    const rHasLiked = r.likes && currentUser && r.likes.includes(currentUser.uid) ? 'liked-heart' : '';
+
+                    return `
+                    <div class="reply-item">
+                        <img src="${r.pic}" alt="User" onclick="openProfile('${r.uid}')" style="cursor:pointer;">
+                        <div style="flex:1;">
+                            <strong onclick="openProfile('${r.uid}')" style="cursor:pointer;">@${r.name}${rBadge}</strong>
+                            <p>${r.text}</p>
+                            <div class="comment-actions">
+                                <span onclick="toggleReplyBox('${commentId}')">Antworten</span>
+                                <span class="${rHasLiked}" onclick="likeReply('${id}', '${commentId}', '${r.rId}')"><i class="fas fa-heart"></i> ${rLikeCount}</span>
+                            </div>
+                        </div>
+                        ${rDeleteBtn}
+                    </div>`;
+                }).join('') + `</div>`;
+            }
+
+            const replyBoxHtml = `
+                <div class="reply-box" id="reply-box-${commentId}" style="display:none;">
+                    <input type="text" placeholder="Antworten..." id="reply-input-${commentId}" class="comment-input" style="font-size:13px; padding:8px 15px;">
+                    <button onclick="submitReply('${id}', '${commentId}')" class="chat-send-btn" style="width:32px; height:32px; font-size:12px;"><i class="fas fa-paper-plane"></i></button>
+                </div>`;
+
+            return `
+                <div class="comment-wrapper">
+                    <div class="comment" style="display:flex; align-items:flex-start; width:100%;">
+                        <img src="${c.pic}" alt="User" onclick="openProfile('${c.uid}')" style="cursor:pointer;">
+                        <div style="flex:1;">
+                            <strong onclick="openProfile('${c.uid}')" style="cursor:pointer;">@${c.name}${badge}</strong>
+                            <p>${c.text}</p>
+                            <div class="comment-actions">
+                                <span onclick="toggleReplyBox('${commentId}')">Antworten</span>
+                                <span class="${hasLiked}" onclick="likeComment('${id}', '${commentId}')"><i class="fas fa-heart"></i> ${likeCount}</span>
+                            </div>
+                        </div>
+                        ${deleteBtn}
+                    </div>
+                    ${repliesHtml}
+                    ${replyBoxHtml}
+                </div>`;
+        }).join('');
+    } else {
+        list.innerHTML = '<div class="no-comments">Sei der Erste, der kommentiert!</div>';
+    }
+}
+
+document.getElementById('submit-comment').addEventListener('click', async() => {
+    const input = document.getElementById('new-comment-input');
+    const text = input.value.trim();
+    if (!text || !window.currentCommentVideoId || !currentUser) return;
+
+    const commentId = Date.now().toString();
+    const comment = { cId: commentId, uid: currentUser.uid, name: currentUser.displayName, pic: currentUser.photoURL, verified: currentUser.verified || false, text: text, likes: [], replies: [] };
+
+    const videoIndex = allVideosData.findIndex(v => v.id === window.currentCommentVideoId);
+    if (videoIndex > -1) {
+        if (!allVideosData[videoIndex].comments) allVideosData[videoIndex].comments = [];
+        allVideosData[videoIndex].comments.push(comment);
+        renderComments(window.currentCommentVideoId);
+
+        document.querySelectorAll(`.comment-btn[data-id="${window.currentCommentVideoId}"] .comment-count-txt`).forEach(el => {
+            el.innerText = allVideosData[videoIndex].comments.length;
+        });
+    }
+
+    input.value = '';
+
+    await updateDoc(doc(db, "videos", window.currentCommentVideoId), { comments: arrayUnion(comment) });
+
+    const targetVidData = allVideosData.find(vd => vd.id === window.currentCommentVideoId);
+    if (targetVidData) addNotification(targetVidData.authorUid, "comment", `hat kommentiert: "${text}"`, window.currentCommentVideoId);
+});
 
 window.toggleFollow = async function(targetUid, element, event) {
     if (event) event.stopPropagation();
@@ -818,7 +1004,7 @@ window.openProfile = async function(targetUid) {
         }
 
         if (currentUser && targetUid === currentUser.uid) {
-            msgBtn.style.display = 'none'; // Nachricht an sich selbst ausblenden
+            msgBtn.style.display = 'none';
             actionBtn.innerText = "Profil bearbeiten";
             actionBtn.classList.add('edit-btn');
             actionBtn.onclick = () => {
@@ -837,7 +1023,6 @@ window.openProfile = async function(targetUid) {
             adminDashboardBtn.style.display = 'none';
             privateStats.style.display = 'none';
 
-            // Profil-Nachrichten Button Logik
             if (currentUser) {
                 msgBtn.style.display = 'block';
                 msgBtn.onclick = () => { window.openDM(targetUid, targetUser.displayName, targetUser.photoURL); };
@@ -869,8 +1054,7 @@ window.toggleVerify = async function(targetUid, currentStatus) {
     } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); }
 };
 
-document.getElementById('nav-profile').addEventListener('click', () => { if (currentUser) openProfile(currentUser.uid); });
-
+// --- PROFIL & KOMMENTAR SYNC LOGIK ---
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
     const newName = document.getElementById('edit-name-input').value.trim();
     const newBio = document.getElementById('edit-bio-input').value.trim();
@@ -883,12 +1067,54 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
     btn.disabled = true;
 
     try {
+        // 1. Profil updaten
         await updateDoc(doc(db, "users", currentUser.uid), { displayName: newName, bio: newBio, photoURL: newPic });
 
+        // 2. Videos & Kommentare auf der ganzen Plattform synchronisieren
         const q = query(collection(db, "videos"));
         const snapshot = await getDocs(q);
+
         snapshot.forEach(async(vDoc) => {
-            if (vDoc.data().authorUid === currentUser.uid) { await updateDoc(doc(db, "videos", vDoc.id), { authorName: newName, authorPic: newPic }); }
+            let vData = vDoc.data();
+            let updates = {};
+            let changed = false;
+
+            if (vData.authorUid === currentUser.uid) {
+                updates.authorName = newName;
+                updates.authorPic = newPic;
+                changed = true;
+            }
+
+            if (vData.comments && vData.comments.length > 0) {
+                let commentsChanged = false;
+                let newComments = vData.comments.map(c => {
+                    if (c.uid === currentUser.uid) {
+                        c.name = newName;
+                        c.pic = newPic;
+                        commentsChanged = true;
+                    }
+                    if (c.replies) {
+                        c.replies = c.replies.map(r => {
+                            if (r.uid === currentUser.uid) {
+                                r.name = newName;
+                                r.pic = newPic;
+                                commentsChanged = true;
+                            }
+                            return r;
+                        });
+                    }
+                    return c;
+                });
+
+                if (commentsChanged) {
+                    updates.comments = newComments;
+                    changed = true;
+                }
+            }
+
+            if (changed) {
+                await updateDoc(doc(db, "videos", vDoc.id), updates);
+            }
         });
 
         document.getElementById('profile-name').innerHTML = newName + (currentUser.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '');
@@ -897,11 +1123,15 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
         document.getElementById('profile-pic').src = newPic;
         showToast("Profil erfolgreich aktualisiert!");
         document.getElementById('settings-modal').classList.remove('show');
-    } catch (e) { showCustomAlert("Fehler", "Fehler beim Speichern der Profildaten."); } finally {
+    } catch (e) {
+        showCustomAlert("Fehler", "Fehler beim Speichern der Profildaten.");
+    } finally {
         btn.innerText = "Profil Speichern";
         btn.disabled = false;
     }
 });
+
+document.getElementById('nav-profile').addEventListener('click', () => { if (currentUser) openProfile(currentUser.uid); });
 
 document.getElementById('open-admin-dashboard').addEventListener('click', () => {
     switchView('admin');
@@ -957,304 +1187,6 @@ window.giveCoins = async function(targetUid) {
         loadAdminDashboard();
     } catch (e) {}
 };
-
-
-// --- INBOX TAB LOGIC ---
-document.getElementById('tab-notifications').addEventListener('click', function() {
-    this.classList.add('active');
-    document.getElementById('tab-messages').classList.remove('active');
-    document.getElementById('inbox-notifications-box').style.display = 'flex';
-    document.getElementById('inbox-messages-box').style.display = 'none';
-});
-
-document.getElementById('tab-messages').addEventListener('click', function() {
-    this.classList.add('active');
-    document.getElementById('tab-notifications').classList.remove('active');
-    document.getElementById('inbox-notifications-box').style.display = 'none';
-    document.getElementById('inbox-messages-box').style.display = 'flex';
-});
-
-// --- INBOX NOTIFICATIONS (Aktivitäten) ---
-function initInbox() {
-    const inboxBox = document.getElementById('inbox-notifications-box');
-    if (!currentUser) return;
-
-    onSnapshot(query(collection(db, "users", currentUser.uid, "notifications"), orderBy("timestamp", "desc")), (snapshot) => {
-        inboxBox.innerHTML = '';
-        if (snapshot.empty) { inboxBox.innerHTML = '<div class="empty-state" style="height: 100%;"><p>Keine neuen Benachrichtigungen</p></div>'; return; }
-
-        snapshot.forEach((doc) => {
-            const n = doc.data();
-            let icon = 'fa-bell';
-            let color = '#aaa';
-            if (n.type === 'like') {
-                icon = 'fa-heart';
-                color = '#ff0050';
-            }
-            if (n.type === 'follow') {
-                icon = 'fa-user-plus';
-                color = '#00f2fe';
-            }
-            if (n.type === 'comment') {
-                icon = 'fa-comment-dots';
-                color = '#fff';
-            }
-            if (n.type === 'gift') {
-                icon = 'fa-gift';
-                color = '#ffd700';
-            }
-
-            const clickAction = n.videoId ? `jumpToVideo('${n.videoId}')` : `openProfile('${n.fromUid}')`;
-
-            inboxBox.innerHTML += `
-                <div class="inbox-msg" onclick="${clickAction}">
-                    <img src="${n.fromPic}" class="chat-avatar">
-                    <div style="flex:1;">
-                        <span class="chat-username">@${n.fromName}</span>
-                        <div class="chat-bubble" style="background: transparent; padding: 0;">
-                            <i class="fas ${icon}" style="color:${color}; margin-right:5px;"></i> ${n.text}
-                        </div>
-                    </div>
-                </div>`;
-        });
-    });
-}
-
-// --- DM CHATS (Nachrichten) ---
-let inboxChatsUnsubscribe = null;
-
-function initInboxChats() {
-    if (!currentUser) return;
-    const msgBox = document.getElementById('inbox-messages-box');
-
-    if (inboxChatsUnsubscribe) inboxChatsUnsubscribe();
-
-    // Wir laden alle Chats bei denen der Nutzer im Array ist
-    inboxChatsUnsubscribe = onSnapshot(collection(db, "chats"), (snapshot) => {
-        let chats = [];
-        snapshot.forEach(doc => {
-            const chat = doc.data();
-            if (chat.participants && chat.participants.includes(currentUser.uid)) {
-                chats.push({ id: doc.id, ...chat });
-            }
-        });
-
-        chats.sort((a, b) => b.lastMessageTime - a.lastMessageTime); // Lokal sortieren
-
-        msgBox.innerHTML = '';
-        if (chats.length === 0) {
-            msgBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Keine Nachrichten vorhanden</p></div>';
-            return;
-        }
-
-        chats.forEach(chat => {
-            const partnerUid = chat.participants.find(uid => uid !== currentUser.uid);
-            const partner = chat.users[partnerUid];
-            if (!partner) return;
-
-            // Escapen der Parameter, falls der Name Hochkommas enthält
-            const safeName = partner.name.replace(/'/g, "\\'");
-
-            msgBox.innerHTML += `
-                <div class="inbox-msg" onclick="openDM('${partnerUid}', '${safeName}', '${partner.pic}')">
-                    <img src="${partner.pic}" class="chat-avatar">
-                    <div style="flex:1;">
-                        <span class="chat-username">@${partner.name}</span>
-                        <div class="chat-bubble" style="background: transparent; padding: 0; color: #888;">
-                            ${chat.lastMessage || 'Neuer Chat...'}
-                        </div>
-                    </div>
-                </div>`;
-        });
-    });
-}
-
-let currentDMSnapshot = null;
-window.currentChatId = null;
-window.currentChatPartner = null;
-
-window.openDM = async function(targetUid, targetName, targetPic) {
-    if (!currentUser) return;
-    window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic };
-
-    // Erzeugt eine eindeutige ChatID aus beiden UIDs (immer alphabetisch sortiert)
-    const uids = [currentUser.uid, targetUid].sort();
-    window.currentChatId = `${uids[0]}_${uids[1]}`;
-
-    document.getElementById('dm-title').innerText = '@' + targetName;
-    switchView('dm');
-
-    if (currentDMSnapshot) currentDMSnapshot();
-
-    const dmBox = document.getElementById('dm-box');
-    dmBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
-
-    // Wenn der Chat noch nicht existiert, erstellen wir das Basis-Dokument
-    const chatRef = doc(db, "chats", window.currentChatId);
-    const chatSnap = await getDoc(chatRef);
-    if (!chatSnap.exists()) {
-        await setDoc(chatRef, {
-            participants: [currentUser.uid, targetUid],
-            users: {
-                [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL },
-                [targetUid]: { name: targetName, pic: targetPic }
-            },
-            lastMessage: "",
-            lastMessageTime: Date.now()
-        });
-    }
-
-    currentDMSnapshot = onSnapshot(query(collection(db, `chats/${window.currentChatId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
-        dmBox.innerHTML = '';
-        if (snapshot.empty) {
-            dmBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Schreib die erste Nachricht!</p></div>';
-        } else {
-            snapshot.forEach(doc => {
-                const msg = doc.data();
-                const isMe = msg.senderUid === currentUser.uid ? 'me' : '';
-                const pic = isMe ? currentUser.photoURL : targetPic;
-                dmBox.innerHTML += `
-                    <div class="chat-msg ${isMe}">
-                        <img src="${pic}" class="chat-avatar">
-                        <div>
-                            <div class="chat-bubble">${msg.text}</div>
-                        </div>
-                    </div>`;
-            });
-        }
-        dmBox.scrollTop = dmBox.scrollHeight;
-    });
-};
-
-document.getElementById('send-dm-btn').addEventListener('click', async() => {
-    const input = document.getElementById('dm-input');
-    const text = input.value.trim();
-    if (!text || !window.currentChatId || !currentUser) return;
-    input.value = '';
-
-    await addDoc(collection(db, `chats/${window.currentChatId}/messages`), {
-        senderUid: currentUser.uid,
-        text: text,
-        timestamp: Date.now()
-    });
-
-    await updateDoc(doc(db, "chats", window.currentChatId), {
-        lastMessage: text,
-        lastMessageTime: Date.now(),
-        users: {
-            [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL },
-            [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic }
-        }
-    });
-});
-
-document.getElementById('dm-input').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') document.getElementById('send-dm-btn').click();
-});
-
-
-document.getElementById('search-input').addEventListener('input', (e) => {
-    const query = e.target.value.toLowerCase();
-    const resultsGrid = document.getElementById('search-results');
-    const trendingSection = document.getElementById('trending-tags');
-    if (query.length < 2) {
-        resultsGrid.style.display = 'none';
-        trendingSection.style.display = 'block';
-        return;
-    }
-    trendingSection.style.display = 'none';
-    resultsGrid.style.display = 'grid';
-    const results = allVideosData.filter(v => (v.authorName || "").toLowerCase().includes(query) || (v.description || "").toLowerCase().includes(query));
-    resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
-});
-
-window.likeComment = async function(videoId, cId) {
-    if (!currentUser) return;
-
-    const videoIndex = allVideosData.findIndex(v => v.id === videoId);
-    if (videoIndex > -1) {
-        const comments = allVideosData[videoIndex].comments || [];
-        const cIndex = comments.findIndex(c => c.cId === cId);
-
-        if (cIndex > -1) {
-            if (!comments[cIndex].likes) comments[cIndex].likes = [];
-            const userIdx = comments[cIndex].likes.indexOf(currentUser.uid);
-
-            if (userIdx > -1) comments[cIndex].likes.splice(userIdx, 1);
-            else comments[cIndex].likes.push(currentUser.uid);
-
-            renderComments(videoId);
-
-            const videoRef = doc(db, "videos", videoId);
-            await updateDoc(videoRef, { comments: comments });
-        }
-    }
-};
-
-window.replyToComment = function(cName) {
-    const input = document.getElementById('new-comment-input');
-    input.value = `@${cName} `;
-    input.focus();
-};
-
-function renderComments(id) {
-    const list = document.getElementById('comment-list');
-    const video = allVideosData.find(v => v.id === id);
-    if (video && video.comments && video.comments.length > 0) {
-        list.innerHTML = video.comments.map((c, index) => {
-            const badge = c.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
-            const canDelete = currentUser && (currentUser.uid === c.uid || currentUser.email === "schleimyverteilung@gmail.com");
-            const deleteBtn = canDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteComment('${id}', ${index})"></i>` : '';
-
-            const commentId = c.cId || index.toString();
-            const likeCount = c.likes ? c.likes.length : 0;
-            const hasLiked = c.likes && currentUser && c.likes.includes(currentUser.uid) ? 'liked-heart' : '';
-
-            return `
-                <div class="comment" style="display:flex; align-items:flex-start; width:100%;">
-                    <img src="${c.pic}" alt="User" onclick="openProfile('${c.uid}')" style="cursor:pointer;">
-                    <div style="flex:1;">
-                        <strong onclick="openProfile('${c.uid}')" style="cursor:pointer;">@${c.name}${badge}</strong>
-                        <p>${c.text}</p>
-                        <div class="comment-actions">
-                            <span onclick="replyToComment('${c.name}')">Antworten</span>
-                            <span class="${hasLiked}" onclick="likeComment('${id}', '${commentId}')"><i class="fas fa-heart"></i> ${likeCount}</span>
-                        </div>
-                    </div>
-                    ${deleteBtn}
-                </div>`;
-        }).join('');
-    } else {
-        list.innerHTML = '<div class="no-comments">Sei der Erste, der kommentiert!</div>';
-    }
-}
-
-document.getElementById('submit-comment').addEventListener('click', async() => {
-    const input = document.getElementById('new-comment-input');
-    const text = input.value.trim();
-    if (!text || !window.currentCommentVideoId || !currentUser) return;
-
-    const commentId = Date.now().toString();
-    const comment = { cId: commentId, uid: currentUser.uid, name: currentUser.displayName, pic: currentUser.photoURL, verified: currentUser.verified || false, text: text, likes: [] };
-
-    const videoIndex = allVideosData.findIndex(v => v.id === window.currentCommentVideoId);
-    if (videoIndex > -1) {
-        if (!allVideosData[videoIndex].comments) allVideosData[videoIndex].comments = [];
-        allVideosData[videoIndex].comments.push(comment);
-        renderComments(window.currentCommentVideoId);
-
-        document.querySelectorAll(`.comment-btn[data-id="${window.currentCommentVideoId}"] .comment-count-txt`).forEach(el => {
-            el.innerText = allVideosData[videoIndex].comments.length;
-        });
-    }
-
-    input.value = '';
-
-    await updateDoc(doc(db, "videos", window.currentCommentVideoId), { comments: arrayUnion(comment) });
-
-    const targetVidData = allVideosData.find(vd => vd.id === window.currentCommentVideoId);
-    if (targetVidData) addNotification(targetVidData.authorUid, "comment", `hat kommentiert: "${text}"`, window.currentCommentVideoId);
-});
 
 document.getElementById('up-file').addEventListener('change', function() {
     document.querySelector('.file-upload-design p').innerText = this.files[0] ? this.files[0].name : "Video auswählen";
