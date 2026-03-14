@@ -4,10 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Phil Shorts</title>
+    <title>Phil - Deine Community</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
     <script>
         function handleGoogleLogin(response) {
             document.getElementById('login-text').innerText = "Wird authentifiziert...";
@@ -16,6 +16,7 @@
             }));
         }
     </script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body>
@@ -25,7 +26,7 @@
         <div id="login-screen" class="full-screen-overlay show">
             <div class="login-box">
                 <div class="logo-pulse"><i class="fas fa-play"></i></div>
-                <h2>Willkommen bei Phil Shorts</h2>
+                <h2>Willkommen bei Phil</h2>
                 <p id="login-text" style="color: #aaa; margin-bottom: 30px; font-size: 14px;">Logge dich mit deinem offiziellen Google Account ein.</p>
                 <div id="g_id_onload" data-client_id="825368838802-830ev6a720t4hb5qrb7jo5de7orb4pr0.apps.googleusercontent.com" data-context="signin" data-ux_mode="popup" data-callback="handleGoogleLogin" data-auto_prompt="false">
                 </div>
@@ -35,30 +36,11 @@
             </div>
         </div>
 
-        <div class="app__bottom-nav glass-nav-bottom">
-            <div class="desktop-logo"><i class="fas fa-play"></i> Phil</div>
-            <div class="nav__item active" onclick="switchView('feed')">
-                <i class="fas fa-home"></i><span>Home</span>
-            </div>
-            <div class="nav__item" onclick="switchView('search')">
-                <i class="fas fa-compass"></i><span>Entdecken</span>
-            </div>
-            <div class="nav__item add-btn" id="open-upload">
-                <div class="plus-box"><i class="fas fa-plus"></i><span class="desktop-only-text">Hochladen</span></div>
-            </div>
-            <div class="nav__item" onclick="switchView('chat')">
-                <i class="fas fa-comment-dots"></i><span>Chat</span>
-            </div>
-            <div class="nav__item" id="nav-profile">
-                <i class="fas fa-user"></i><span>Profil</span>
-            </div>
-        </div>
-
         <div id="view-feed" class="view active">
             <div class="app__header">
                 <span class="header__link" id="tab-following">Folge ich</span>
                 <span class="header__link active" id="tab-foryou">Für dich</span>
-                <i class="fas fa-search search-icon mobile-only" onclick="switchView('search')"></i>
+                <i class="fas fa-search search-icon" onclick="switchView('search')"></i>
             </div>
             <div class="app__videos" id="video-container">
                 <div class="loading-screen"><i class="fas fa-spinner fa-spin"></i>
@@ -120,11 +102,11 @@
                 </div>
 
                 <button id="profile-action-btn" class="profile-action-btn">Folgen</button>
-                <div id="admin-controls" style="width: 100%; max-width: 400px;"></div>
+                <div id="admin-controls" style="width: 100%;"></div>
 
-                <button id="open-admin-dashboard" class="profile-action-btn" style="display:none; background:#ffd700; color:black; margin-top:10px; width:100%; max-width: 400px;">👑 Admin Dashboard</button>
+                <button id="open-admin-dashboard" class="profile-action-btn" style="display:none; background:#ffd700; color:black; margin-top:10px; width:100%;">👑 Admin Dashboard</button>
 
-                <div id="private-stats" style="display: none; width: 100%; max-width: 400px; margin-top: 20px; background: #111; border-radius: 15px; padding: 15px; border: 1px solid #333;">
+                <div id="private-stats" style="display: none; width: 100%; margin-top: 20px; background: #111; border-radius: 15px; padding: 15px; border: 1px solid #333;">
                     <div style="display: flex; justify-content: space-around; text-align: center;">
                         <div>
                             <i class="fas fa-coins" style="color: #ffd700; font-size: 20px; margin-bottom: 5px;"></i>
@@ -165,6 +147,24 @@
             <h4 style="padding: 10px 15px; color:#888; font-size:14px; text-transform:uppercase;">Alle Benutzer</h4>
             <div class="admin-user-list" id="admin-user-list">
                 <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>
+            </div>
+        </div>
+
+        <div class="app__bottom-nav glass-nav-bottom">
+            <div class="nav__item active" onclick="switchView('feed')">
+                <i class="fas fa-home"></i><span>Home</span>
+            </div>
+            <div class="nav__item" onclick="switchView('search')">
+                <i class="fas fa-compass"></i><span>Entdecken</span>
+            </div>
+            <div class="nav__item add-btn" id="open-upload">
+                <div class="plus-box"><i class="fas fa-plus"></i></div>
+            </div>
+            <div class="nav__item" onclick="switchView('chat')">
+                <i class="fas fa-comment-dots"></i><span>Chat</span>
+            </div>
+            <div class="nav__item" id="nav-profile">
+                <i class="fas fa-user"></i><span>Profil</span>
             </div>
         </div>
 
