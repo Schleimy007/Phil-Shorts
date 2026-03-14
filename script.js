@@ -43,7 +43,13 @@ window.sendDesktopNotification = function(title, body, type) {
     if (type === 'message' && !notifSettings.dms) return;
     if (type === 'follow' && !notifSettings.follows) return;
 
-    new Notification(title, { body: body });
+    try {
+        const notif = new Notification(title, { body: body });
+        notif.onclick = function() {
+            window.focus();
+            this.close();
+        };
+    } catch (e) { console.error(e); }
 };
 
 // UI Aktualisierung der Toggles
@@ -68,12 +74,33 @@ function updateNotifUI() {
 }
 
 document.getElementById('notif-master').addEventListener('change', async(e) => {
-    notifSettings.master = e.target.checked;
-    if (notifSettings.master && "Notification" in window) {
-        if (Notification.permission !== "granted" && Notification.permission !== "denied") {
-            await Notification.requestPermission();
+    if (e.target.checked) {
+        if (!("Notification" in window)) {
+            showCustomAlert("Nicht unterstützt", "Dein Browser unterstützt keine Desktop-Benachrichtigungen.");
+            e.target.checked = false;
+            return;
+        }
+
+        if (Notification.permission === "denied") {
+            showCustomAlert("Blockiert!", "Du hast Benachrichtigungen in Firefox/im Browser blockiert. Klicke auf das Schloss-Symbol in deiner Adressleiste, setze die Berechtigung zurück oder erlaube sie, und versuche es erneut.");
+            e.target.checked = false;
+            notifSettings.master = false;
+            updateNotifUI();
+            return;
+        }
+
+        if (Notification.permission !== "granted") {
+            const permission = await Notification.requestPermission();
+            if (permission !== "granted") {
+                e.target.checked = false;
+                notifSettings.master = false;
+                updateNotifUI();
+                return;
+            }
         }
     }
+
+    notifSettings.master = e.target.checked;
     localStorage.setItem('phil_notif_settings', JSON.stringify(notifSettings));
     updateNotifUI();
 });
@@ -1246,10 +1273,16 @@ window.openProfile = async function(targetUid) {
                 document.getElementById('edit-username-input').value = currentUser.username || cleanUsername;
                 document.getElementById('edit-pic-input').value = currentUser.photoURL;
                 document.getElementById('edit-bio-input').value = currentUser.bio;
-                updateNotifUI(); // Lade Notification Toggles Status
                 document.getElementById('settings-modal').classList.add('show');
             };
+
+            // NEU: Zahnrad Klick-Befehl
             settingsIcon.style.display = 'block';
+            settingsIcon.onclick = () => {
+                updateNotifUI(); // Lade Notification Toggles Status
+                document.getElementById('app-settings-modal').classList.add('show');
+            };
+
             adminDashboardBtn.style.display = currentUser.email === "schleimyverteilung@gmail.com" ? 'block' : 'none';
             privateStats.style.display = 'block';
             document.getElementById('my-coins').innerText = targetUser.coins || 0;
@@ -1808,10 +1841,8 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
 document.getElementById('open-upload').addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
 document.getElementById('close-upload').addEventListener('click', () => document.getElementById('upload-modal').classList.remove('show'));
 document.getElementById('close-comments').addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
-document.getElementById('close-settings').addEventListener('click', () => {
-    document.getElementById('settings-modal').classList.remove('show');
-    updateNotifUI(); // Fallback UI Reset
-});
+document.getElementById('close-settings').addEventListener('click', () => document.getElementById('settings-modal').classList.remove('show'));
+document.getElementById('close-app-settings').addEventListener('click', () => document.getElementById('app-settings-modal').classList.remove('show'));
 
 function initResponsiveLayout() {
     const appContainer = document.querySelector('.app');

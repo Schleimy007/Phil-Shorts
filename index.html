@@ -248,7 +248,7 @@
 
         <div id="settings-modal" class="modal">
             <div class="modal-header">
-                <h4>Einstellungen</h4><i class="fas fa-times close-modal" id="close-settings"></i>
+                <h4>Profil bearbeiten</h4><i class="fas fa-times close-modal" id="close-settings"></i>
             </div>
             <div class="modal-body upload-body">
                 <label style="color:#888; font-size:12px; margin-left:5px;">Anzeigename (Leerzeichen & Großschrift erlaubt)</label>
@@ -264,9 +264,18 @@
                 <textarea id="edit-bio-input" class="comment-input" placeholder="Wer bist du?" rows="3" style="resize:none; border-radius:10px;"></textarea>
 
                 <button id="save-settings-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; min-height: 56px; font-size: 17px;">Profil Speichern</button>
+            </div>
+        </div>
 
-                <hr style="border:0; border-top:1px solid #222; margin: 25px 0;">
-                <h4 style="margin-bottom: 15px; font-size: 15px;">Desktop Benachrichtigungen</h4>
+        <div id="app-settings-modal" class="modal">
+            <div class="modal-header">
+                <h4>Einstellungen</h4><i class="fas fa-times close-modal" id="close-app-settings"></i>
+            </div>
+            <div class="modal-body upload-body">
+
+                <h4 style="margin-bottom: 5px; font-size: 15px;">Desktop Benachrichtigungen</h4>
+                <p style="font-size: 12px; color: #888; margin-bottom: 15px;">Erhalte Push-Meldungen auf dem PC.</p>
+
                 <div class="setting-toggle-row">
                     <span>Alle Desktop Benachrichtigungen</span>
                     <label class="switch"><input type="checkbox" id="notif-master"><span class="slider round"></span></label>
