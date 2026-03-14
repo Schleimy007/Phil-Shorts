@@ -1,5 +1,4 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-// NEU: deleteDoc hinzugefügt, um Videos aus der Datenbank zu vernichten!
 import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 // !!! DEINE FIREBASE KEYS !!!
@@ -56,7 +55,7 @@ document.getElementById('close-alert-btn').addEventListener('click', () => {
 });
 
 
-// --- AUTHENTIFIZIERUNG & GOOGLE BRÜCKE ---
+// --- AUTHENTIFIZIERUNG ---
 function parseJwt(token) {
     var base64Url = token.split('.')[1];
     var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -142,9 +141,7 @@ window.deleteVideo = async function(videoId) {
         try {
             await deleteDoc(doc(db, "videos", videoId));
             showToast("Video erfolgreich gelöscht! 🗑️");
-            loadDatabase(); // Lädt den Feed neu (ohne das Video)
-
-            // Falls das Profilfenster offen ist, das Profil auch neu laden
+            loadDatabase();
             if (document.getElementById('view-profile').classList.contains('active')) {
                 openProfile(document.getElementById('profile-action-btn').dataset.uid);
             }
@@ -161,18 +158,15 @@ window.deleteComment = async function(videoId, commentIndex) {
             const snap = await getDoc(videoRef);
             if (snap.exists()) {
                 const videoData = snap.data();
-                videoData.comments.splice(commentIndex, 1); // Entfernt den Kommentar per Position im Array
+                videoData.comments.splice(commentIndex, 1);
                 await updateDoc(videoRef, { comments: videoData.comments });
 
-                // Update Lokale Variable, damit man nicht sofort neu laden muss
                 const localVid = allVideosData.find(v => v.id === videoId);
                 if (localVid) localVid.comments = videoData.comments;
 
-                renderComments(videoId); // Fenster sofort updaten
-
+                renderComments(videoId);
                 const countDisplay = document.querySelector(`.comment-btn[data-id="${videoId}"] p`);
                 if (countDisplay) countDisplay.innerText = videoData.comments.length;
-
                 showToast("Kommentar gelöscht!");
             }
         } catch (e) { showCustomAlert("Fehler", "Kommentar konnte nicht gelöscht werden."); }
@@ -222,7 +216,6 @@ function renderFeed() {
         const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : '';
         const realLikes = video.likedBy ? video.likedBy.length : 0;
 
-        // PRÜFE RECHTE FÜR VIDEO-LÖSCHEN (Entweder du bist der Creator, oder du bist der Admin)
         const canDeleteVideo = currentUser && (video.authorUid === currentUser.uid || currentUser.email === "schleimyverteilung@gmail.com");
         const deleteVideoBtn = canDeleteVideo ? `
             <div class="videoSidebar__button" onclick="deleteVideo('${video.id}')" style="margin-top:15px;">
@@ -265,7 +258,8 @@ function renderFeed() {
                         <i class="fas fa-share"></i>
                         <p>Teilen</p>
                     </div>
-                    ${deleteVideoBtn} </div>
+                    ${deleteVideoBtn}
+                </div>
             </div>`;
     });
     attachFeedInteractions();
@@ -332,7 +326,6 @@ function attachFeedInteractions() {
     }, { threshold: 0.6 });
     videos.forEach(v => observer.observe(v));
 
-    // SECURE LIKES
     document.querySelectorAll('.like-btn').forEach(btn => {
         btn.addEventListener('click', async() => {
             const id = btn.dataset.id;
@@ -355,7 +348,6 @@ function attachFeedInteractions() {
         });
     });
 
-    // GIFTING
     document.querySelectorAll('.gift-btn').forEach(btn => {
         btn.addEventListener('click', async() => {
             if (currentUser.coins < 10) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins zum Spenden.");
@@ -404,17 +396,14 @@ function attachFeedInteractions() {
 window.toggleFollow = async function(targetUid, element, event) {
     if (event) event.stopPropagation();
     const userRef = doc(db, "users", currentUser.uid);
-
     if (!currentUser.following) currentUser.following = [];
 
     if (!currentUser.following.includes(targetUid)) {
         currentUser.following.push(targetUid);
         showToast("Gefolgt!");
         if (element) element.style.display = 'none';
-
         await updateDoc(userRef, { following: arrayUnion(targetUid) });
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
-
         const btn = document.getElementById('profile-action-btn');
         if (btn && btn.dataset.uid === targetUid) {
             btn.innerText = "Entfolgen";
@@ -423,10 +412,8 @@ window.toggleFollow = async function(targetUid, element, event) {
     } else {
         currentUser.following = currentUser.following.filter(u => u !== targetUid);
         showToast("Entfolgt.");
-
         await updateDoc(userRef, { following: arrayRemove(targetUid) });
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
-
         const btn = document.getElementById('profile-action-btn');
         if (btn && btn.dataset.uid === targetUid) {
             btn.innerText = "Folgen";
@@ -471,14 +458,8 @@ window.openProfile = async function(targetUid) {
         const actionBtn = document.getElementById('profile-action-btn');
         actionBtn.dataset.uid = targetUid;
         const settingsIcon = document.getElementById('open-settings');
-        const adminControls = document.getElementById('admin-controls');
+        const adminDashboardBtn = document.getElementById('open-admin-dashboard');
         const privateStats = document.getElementById('private-stats');
-        adminControls.innerHTML = '';
-
-        if (currentUser && currentUser.email === "schleimyverteilung@gmail.com" && targetUid !== currentUser.uid) {
-            const isVerif = targetUser.verified || false;
-            adminControls.innerHTML = `<button onclick="toggleVerify('${targetUid}', ${isVerif})" class="profile-action-btn" style="background: transparent; color: #00f2fe; border: 1px solid #00f2fe; margin-top: 15px; width: 100%;">👑 Admin: ${isVerif ? 'Blauen Haken entfernen' : 'Blauen Haken geben'}</button>`;
-        }
 
         if (targetUid === currentUser.uid) {
             actionBtn.innerText = "Profil bearbeiten";
@@ -491,13 +472,20 @@ window.openProfile = async function(targetUid) {
             };
             settingsIcon.style.display = 'block';
 
+            // ADMIN CHECK: Zeige Dashboard Button, wenn es der Admin Account ist
+            if (currentUser.email === "schleimyverteilung@gmail.com") {
+                adminDashboardBtn.style.display = 'block';
+            } else {
+                adminDashboardBtn.style.display = 'none';
+            }
+
             privateStats.style.display = 'block';
             document.getElementById('my-coins').innerText = currentUser.coins || 0;
             document.getElementById('my-views').innerText = targetUser.profileViews || 0;
 
         } else {
+            adminDashboardBtn.style.display = 'none';
             await updateDoc(doc(db, "users", targetUid), { profileViews: increment(1) });
-
             privateStats.style.display = 'none';
             if (currentUser.following && currentUser.following.includes(targetUid)) {
                 actionBtn.innerText = "Entfolgen";
@@ -516,14 +504,6 @@ window.openProfile = async function(targetUid) {
     } catch (e) { showCustomAlert("Fehler", "Profil konnte nicht geladen werden."); }
 };
 
-window.toggleVerify = async function(targetUid, currentStatus) {
-    try {
-        await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus });
-        showToast(!currentStatus ? "Blauer Haken vergeben! 🔵" : "Blauer Haken entfernt.");
-        openProfile(targetUid);
-    } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); }
-};
-
 document.getElementById('nav-profile').addEventListener('click', () => { if (currentUser) openProfile(currentUser.uid); });
 
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
@@ -538,12 +518,7 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
     btn.disabled = true;
 
     try {
-        await updateDoc(doc(db, "users", currentUser.uid), {
-            displayName: newName,
-            bio: newBio,
-            photoURL: newPic
-        });
-
+        await updateDoc(doc(db, "users", currentUser.uid), { displayName: newName, bio: newBio, photoURL: newPic });
         currentUser.displayName = newName;
         currentUser.bio = newBio;
         currentUser.photoURL = newPic;
@@ -552,26 +527,82 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
         const q = query(collection(db, "videos"));
         const snapshot = await getDocs(q);
         snapshot.forEach(async(vDoc) => {
-            if (vDoc.data().authorUid === currentUser.uid) {
-                await updateDoc(doc(db, "videos", vDoc.id), { authorName: newName, authorPic: newPic });
-            }
+            if (vDoc.data().authorUid === currentUser.uid) { await updateDoc(doc(db, "videos", vDoc.id), { authorName: newName, authorPic: newPic }); }
         });
 
         document.getElementById('profile-name').innerHTML = newName + (currentUser.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '');
         document.getElementById('profile-title').innerText = '@' + newName;
         document.getElementById('profile-bio').innerText = newBio;
         document.getElementById('profile-pic').src = newPic;
-
         showToast("Profil erfolgreich aktualisiert!");
         document.getElementById('settings-modal').classList.remove('show');
         loadDatabase();
-    } catch (e) {
-        showCustomAlert("Fehler", "Fehler beim Speichern der Profildaten.");
-    } finally {
+    } catch (e) { showCustomAlert("Fehler", "Fehler beim Speichern der Profildaten."); } finally {
         btn.innerText = "Profil Speichern";
         btn.disabled = false;
     }
 });
+
+
+// --- ADMIN DASHBOARD FUNKTIONEN ---
+document.getElementById('open-admin-dashboard').addEventListener('click', () => {
+    switchView('admin');
+    loadAdminDashboard();
+});
+
+window.loadAdminDashboard = async function() {
+    if (currentUser.email !== "schleimyverteilung@gmail.com") return;
+
+    const userList = document.getElementById('admin-user-list');
+    userList.innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i></div>';
+
+    try {
+        const usersSnap = await getDocs(collection(db, "users"));
+        document.getElementById('admin-total-users').innerText = usersSnap.size;
+        document.getElementById('admin-total-videos').innerText = allVideosData.length;
+
+        userList.innerHTML = '';
+        usersSnap.forEach(docSnap => {
+            const u = docSnap.data();
+            const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
+            userList.innerHTML += `
+                <div class="admin-user-card">
+                    <div class="admin-user-header" onclick="openProfile('${u.uid}')" style="cursor:pointer;">
+                        <img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}">
+                        <div>
+                            <strong>@${u.displayName} ${isVerif}</strong>
+                            <div style="font-size:11px; color:#888;">${u.email} | Coins: ${u.coins || 0}</div>
+                        </div>
+                    </div>
+                    <div class="admin-actions">
+                        <button class="admin-btn btn-blue" onclick="toggleVerifyAdmin('${u.uid}', ${u.verified || false})">${u.verified ? 'Haken entfernen' : 'Haken geben'}</button>
+                        <button class="admin-btn btn-gold" onclick="giveCoins('${u.uid}')">+1000 Coins</button>
+                    </div>
+                </div>
+            `;
+        });
+    } catch (e) {
+        userList.innerHTML = '<p style="text-align:center; color:#ff4444;">Fehler beim Laden der User-Daten.</p>';
+    }
+}
+
+window.toggleVerifyAdmin = async function(targetUid, currentStatus) {
+    try {
+        await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus });
+        showToast(!currentStatus ? "Blauer Haken vergeben!" : "Blauer Haken entfernt.");
+        loadAdminDashboard(); // Liste neu laden
+    } catch (e) { showCustomAlert("Fehler", "Berechtigung verweigert."); }
+};
+
+window.giveCoins = async function(targetUid) {
+    try {
+        await updateDoc(doc(db, "users", targetUid), { coins: increment(1000) });
+        showToast("1000 Coins gutgeschrieben! 💰");
+        loadAdminDashboard(); // Liste neu laden
+    } catch (e) {
+        showCustomAlert("Fehler", "Coins konnten nicht gesendet werden.");
+    }
+};
 
 
 // --- LIVE CHAT ---
@@ -584,7 +615,6 @@ function initLiveChat() {
             const msg = doc.data();
             const isMe = msg.userUid === currentUser.uid ? 'me' : '';
             const badge = msg.userVerified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
-
             chatBox.innerHTML += `<div class="chat-msg ${isMe}"><img src="${msg.userPic}" class="chat-avatar" onclick="openProfile('${msg.userUid}')"><div><span class="chat-username">@${msg.userName}${badge}</span><div class="chat-bubble">${msg.text}</div></div></div>`;
         });
         chatBox.scrollTop = chatBox.scrollHeight;
@@ -595,14 +625,7 @@ document.getElementById('send-chat-btn').addEventListener('click', async() => {
     const text = input.value.trim();
     if (!text || !currentUser) return;
     input.value = '';
-    await addDoc(collection(db, "global_chat"), {
-        userUid: currentUser.uid,
-        userName: currentUser.displayName,
-        userPic: currentUser.photoURL,
-        userVerified: currentUser.verified || false,
-        text: text,
-        timestamp: Date.now()
-    });
+    await addDoc(collection(db, "global_chat"), { userUid: currentUser.uid, userName: currentUser.displayName, userPic: currentUser.photoURL, userVerified: currentUser.verified || false, text: text, timestamp: Date.now() });
 });
 document.getElementById('chat-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-chat-btn').click(); });
 
@@ -622,30 +645,22 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="switchView('feed')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
 });
 
-// --- KOMMENTARE (Mit LÖSCH-FUNKTION) ---
+// --- KOMMENTARE ---
 function renderComments(id) {
     const list = document.getElementById('comment-list');
     const video = allVideosData.find(v => v.id === id);
     if (video.comments && video.comments.length > 0) {
         list.innerHTML = video.comments.map((c, index) => {
             const badge = c.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
-
-            // PRÜFE RECHTE FÜR KOMMENTAR LÖSCHEN (Eigentümer oder Admin)
             const canDelete = currentUser && (currentUser.uid === c.uid || currentUser.email === "schleimyverteilung@gmail.com");
             const deleteBtn = canDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteComment('${id}', ${index})"></i>` : '';
 
-            return `
-            <div class="comment" style="display:flex; align-items:flex-start; width:100%;">
-                <img src="${c.pic}" alt="User">
-                <div style="flex:1;"><strong>@${c.name}${badge}</strong><p>${c.text}</p></div>
-                ${deleteBtn}
-            </div>`;
+            return `<div class="comment" style="display:flex; align-items:flex-start; width:100%;"><img src="${c.pic}" alt="User"><div style="flex:1;"><strong>@${c.name}${badge}</strong><p>${c.text}</p></div>${deleteBtn}</div>`;
         }).join('');
     } else {
         list.innerHTML = '<div class="no-comments">Sei der Erste, der kommentiert!</div>';
     }
 }
-
 document.getElementById('submit-comment').addEventListener('click', async() => {
     const input = document.getElementById('new-comment-input');
     if (!input.value.trim() || !window.currentCommentVideoId || !currentUser) return;
@@ -681,19 +696,7 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
         const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: formData });
         const data = await res.json();
         if (!data.secure_url) throw new Error("Upload fehlgeschlagen.");
-
-        await addDoc(collection(db, "videos"), {
-            url: data.secure_url,
-            authorUid: currentUser.uid,
-            authorName: currentUser.displayName,
-            authorPic: currentUser.photoURL,
-            authorVerified: currentUser.verified || false,
-            description: desc,
-            likedBy: [],
-            gifts: 0,
-            comments: []
-        });
-
+        await addDoc(collection(db, "videos"), { url: data.secure_url, authorUid: currentUser.uid, authorName: currentUser.displayName, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, description: desc, likedBy: [], gifts: 0, comments: [] });
         showToast("Video veröffentlicht! 🎉");
         document.getElementById('upload-modal').classList.remove('show');
         document.getElementById('up-file').value = '';

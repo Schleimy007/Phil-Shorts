@@ -103,6 +103,8 @@
                 <button id="profile-action-btn" class="profile-action-btn">Folgen</button>
                 <div id="admin-controls" style="width: 100%;"></div>
 
+                <button id="open-admin-dashboard" class="profile-action-btn" style="display:none; background:#ffd700; color:black; margin-top:10px; width:100%;">👑 Admin Dashboard</button>
+
                 <div id="private-stats" style="display: none; width: 100%; margin-top: 20px; background: #111; border-radius: 15px; padding: 15px; border: 1px solid #333;">
                     <div style="display: flex; justify-content: space-around; text-align: center;">
                         <div>
@@ -123,6 +125,28 @@
                 <div class="profile-tab"><i class="fas fa-heart"></i></div>
             </div>
             <div class="grid-container" id="profile-grid"></div>
+        </div>
+
+        <div id="view-admin" class="view">
+            <div class="top-bar glass-nav">
+                <i class="fas fa-chevron-left back-btn" onclick="switchView('profile')"></i>
+                <h3 style="font-weight: 600;">👑 Admin Dashboard</h3>
+                <i class="fas fa-sync-alt back-btn" onclick="loadAdminDashboard()"></i>
+            </div>
+            <div class="admin-stats">
+                <div class="stat-card">
+                    <h5>Community</h5>
+                    <p id="admin-total-users">0</p>
+                </div>
+                <div class="stat-card">
+                    <h5>Videos</h5>
+                    <p id="admin-total-videos">0</p>
+                </div>
+            </div>
+            <h4 style="padding: 10px 15px; color:#888; font-size:14px; text-transform:uppercase;">Alle Benutzer</h4>
+            <div class="admin-user-list" id="admin-user-list">
+                <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>
+            </div>
         </div>
 
         <div class="app__bottom-nav glass-nav-bottom">
