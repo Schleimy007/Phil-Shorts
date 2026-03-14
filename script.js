@@ -29,6 +29,7 @@ let currentFeedMode = 'foryou';
 let isInitialLoad = true;
 let sortedFeed = [];
 
+// --- WICHTIG: SOUND IST STANDARDMÄSSIG AN! ---
 window.globalVolume = 1;
 window.globalMuted = false;
 
@@ -44,7 +45,14 @@ window.switchView = function(viewId) {
         document.querySelectorAll('.nav__item')[4].classList.add('active');
     }
 
-    if (viewId !== 'feed') document.querySelectorAll('.video__player').forEach(v => v.pause());
+    if (viewId !== 'feed') {
+        document.querySelectorAll('.video__player').forEach(v => {
+            v.pause();
+            v.currentTime = 0;
+            const c = v.closest('.video-inner');
+            if (c) c.classList.add('is-paused');
+        });
+    }
 };
 
 window.jumpToVideo = function(videoId) {
@@ -63,6 +71,7 @@ window.jumpToVideo = function(videoId) {
 
             const player = targetVid.querySelector('.video__player');
             if (player) {
+                player.muted = window.globalMuted;
                 player.play().catch(() => {});
                 targetVid.querySelector('.video-inner').classList.remove('is-paused');
             }
@@ -574,40 +583,49 @@ videoContainer.addEventListener('wheel', (e) => {
     scrollTimeout = setTimeout(() => { scrollTimeout = null; }, 600);
 }, { passive: false });
 
-// --- NEU: SICHERER AUTO-PLAY OBSERVER (KEINE RACE-CONDITIONS MEHR!) ---
+// --- NEU: STRIKTER & FEHLERFREIER OBSERVER FÜR DAS SCROLLEN ---
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
-        const container = e.target.closest('.video-inner');
+        const v = e.target;
+        const container = v.closest('.video-inner');
 
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
-            // Wir vertrauen darauf, dass out-of-view Videos durch den else-Block pausiert werden.
-            // Dadurch vermeiden wir Race-Conditions, die das aktive Video stoppen.
 
-            const playPromise = e.target.play();
+            // 1. Stoppe alle anderen Videos auf der Seite SOFORT!
+            document.querySelectorAll('.video__player').forEach(otherVid => {
+                if (otherVid !== v && !otherVid.paused) {
+                    otherVid.pause();
+                    otherVid.currentTime = 0;
+                    const c = otherVid.closest('.video-inner');
+                    if (c) c.classList.add('is-paused');
+                }
+            });
+
+            // 2. Setze die Lautstärke auf den aktuellen Status
+            v.muted = window.globalMuted;
+
+            // 3. Play() versuchen
+            const playPromise = v.play();
             if (playPromise !== undefined) {
                 playPromise.then(() => {
+                    // Erfolg: Video läuft! Play-Icon weg.
                     if (container) container.classList.remove('is-paused');
                 }).catch(error => {
-                    // AUTO-PLAY BLOCK FIX: Browser blockieren oft Videos mit Ton, wenn noch nicht geklickt wurde.
-                    // Wir erzwingen hier Mute, damit das Video GARANTIERT startet!
-                    window.globalMuted = true;
-                    e.target.muted = true;
-                    window.updateGlobalVolumeUI();
-
-                    e.target.play().then(() => {
-                        if (container) container.classList.remove('is-paused');
-                    }).catch(e => console.log("Autoplay komplett blockiert", e));
+                    // FEHLER: Browser blockiert, weil Nutzer noch nie geklickt hat (interaction required).
+                    // WICHTIG: Wir zwingen es NICHT stumm. Der Nutzer sieht den Play-Button und muss 1x tippen.
+                    console.log("Autoplay blockiert. Warte auf ersten Nutzerklick.");
+                    if (container) container.classList.add('is-paused');
                 });
             }
 
         } else {
-            // WENN ES AUS DEM BILD VERSCHWINDET -> SICHER STOPPEN
-            e.target.pause();
-            e.target.currentTime = 0;
+            // Video verschwindet aus dem Bildschirm -> Siche Pausieren
+            v.pause();
+            v.currentTime = 0;
             if (container) container.classList.add('is-paused');
         }
     });
-}, { threshold: 0.6 });
+}, { threshold: 0.6 }); // Reagiert, wenn das Video zu 60% im Bild ist
 
 function attachInteractionsToVideo(videoContainerEl) {
     const v = videoContainerEl.querySelector('.video__player');
@@ -627,7 +645,7 @@ function attachInteractionsToVideo(videoContainerEl) {
             e.preventDefault();
         } else {
             if (v.paused) {
-                // Beim manuellen Tippen andere Videos stoppen
+                // Auch bei manuellem Play: Alle anderen stoppen
                 document.querySelectorAll('.video__player').forEach(vid => {
                     if (vid !== v && !vid.paused) {
                         vid.pause();
