@@ -28,7 +28,7 @@ if (currentUser) {
 let currentFeedMode = 'foryou';
 let isInitialLoad = true;
 let sortedFeed = [];
-const viewedVideos = new Set(); // Speichert, welche Videos in dieser Session schon als "View" gezählt wurden
+const viewedVideos = new Set();
 
 window.globalVolume = 1;
 window.globalMuted = false;
@@ -105,7 +105,6 @@ function getVerifiedBadge(uid, fallbackBool = false) {
     return isVerif ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
 }
 
-// Zeit-Umrechnung für Kommentare und DMs
 function timeAgo(timestamp) {
     const now = Date.now();
     const diff = now - Number(timestamp);
@@ -301,6 +300,14 @@ function initLiveDatabase() {
         if (isInitialLoad) {
             renderFeed(true);
             isInitialLoad = false;
+
+            // URL PARAMETER PRÜFEN (TEILEN FUNKTION)
+            const urlParams = new URLSearchParams(window.location.search);
+            const sharedVideoId = urlParams.get('video');
+            if (sharedVideoId) {
+                window.history.replaceState({}, document.title, window.location.pathname);
+                setTimeout(() => jumpToVideo(sharedVideoId), 800);
+            }
         } else {
             snapshot.docChanges().forEach((change) => {
                 const vData = { id: change.doc.id, ...change.doc.data() };
@@ -342,8 +349,19 @@ function initLiveDatabase() {
                         el.innerText = vData.gifts || 0;
                     });
 
+                    document.querySelectorAll(`.video[data-id="${vData.id}"] .video__footer .video-desc-preview`).forEach(el => {
+                        el.innerHTML = `${(vData.description || "").substring(0, 50)}${(vData.description && vData.description.length > 50) ? '... <strong>mehr anzeigen</strong>' : ''}`;
+                    });
+                    document.querySelectorAll(`.video[data-id="${vData.id}"] .video__footer .video-title`).forEach(el => {
+                        el.innerText = vData.title || 'Ohne Titel';
+                    });
+
                     if (window.currentCommentVideoId === vData.id && document.getElementById('comment-modal').classList.contains('show')) {
                         renderComments(vData.id);
+                    }
+                    if (document.getElementById('video-details-modal').classList.contains('show') && document.getElementById('detail-title').innerText === (vData.title || 'Ohne Titel')) {
+                        document.getElementById('detail-likes').innerHTML = `<i class="fas fa-heart" style="color: #ff0050;"></i> ${vData.likedBy ? vData.likedBy.length : 0}`;
+                        document.getElementById('detail-views').innerHTML = `<i class="fas fa-play" style="color: #00f2fe;"></i> ${vData.views || 0}`;
                     }
                 }
 
@@ -485,7 +503,7 @@ function createVideoElement(video) {
                     <i class="fas fa-gift" style="color: #ffd700;"></i>
                     <p class="gift-count">${video.gifts || 0}</p>
                 </div>
-                <div class="videoSidebar__button share-btn" data-url="${video.url}">
+                <div class="videoSidebar__button share-btn" data-id="${video.id}">
                     <i class="fas fa-share"></i>
                     <p>Teilen</p>
                 </div>
@@ -498,7 +516,7 @@ function createVideoElement(video) {
     return div;
 }
 
-// --- VIDEO DETAILS MODAL (Description, Views, Date) ---
+// --- VIDEO DETAILS MODAL ---
 window.openVideoDetails = function(id) {
     const video = allVideosData.find(v => v.id === id);
     if (!video) return;
@@ -611,15 +629,12 @@ videoContainer.addEventListener('wheel', (e) => {
     scrollTimeout = setTimeout(() => { scrollTimeout = null; }, 600);
 }, { passive: false });
 
-// --- NEUER SAUBERER OBSERVER ---
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         const v = e.target;
-        const container = v.closest('.video-inner');
         const vidId = v.dataset.vid;
 
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
-            // STOPPE SOFORT ALLE ANDEREN VIDEOS (Anti-Race-Condition)
             document.querySelectorAll('.video__player').forEach(otherVid => {
                 if (otherVid !== v && !otherVid.paused) {
                     otherVid.pause();
@@ -627,13 +642,11 @@ const videoObserver = new IntersectionObserver(entries => {
                 }
             });
 
-            // Start-Versuch
             v.muted = window.globalMuted;
             const playPromise = v.play();
 
             if (playPromise !== undefined) {
                 playPromise.then(() => {
-                    // View Tracker: Increment Views in Background
                     if (vidId && !viewedVideos.has(vidId)) {
                         viewedVideos.add(vidId);
                         updateDoc(doc(db, "videos", vidId), { views: increment(1) }).catch(() => {});
@@ -643,7 +656,6 @@ const videoObserver = new IntersectionObserver(entries => {
                 });
             }
         } else {
-            // AUS DEM BILD VERSCHWUNDEN -> PAUSE
             v.pause();
             v.currentTime = 0;
         }
@@ -657,7 +669,6 @@ function attachInteractionsToVideo(videoContainerEl) {
 
     videoObserver.observe(v);
 
-    // --- MAGIE: NATIVE EVENT LISTENER FÜR DIE UI ---
     v.addEventListener('play', () => {
         container.classList.remove('is-paused');
     });
@@ -793,11 +804,18 @@ function attachInteractionsToVideo(videoContainerEl) {
         document.getElementById('comment-modal').classList.add('show');
     });
 
+    // --- NEU: TEILEN FUNKTION MIT EIGENEM LINK ---
     container.querySelector('.share-btn').addEventListener('click', async(e) => {
-        const url = e.currentTarget.dataset.url;
-        if (navigator.share) { try { await navigator.share({ title: 'Phil Video', url: url }); } catch (err) {} } else {
-            navigator.clipboard.writeText(url);
-            showToast("Kopiert!");
+        const vidId = e.currentTarget.dataset.id;
+        const shareUrl = `${window.location.origin}${window.location.pathname}?video=${vidId}`;
+
+        if (navigator.share) {
+            try {
+                await navigator.share({ title: 'Phil Shorts', text: 'Schau dir dieses Video an!', url: shareUrl });
+            } catch (err) {}
+        } else {
+            navigator.clipboard.writeText(shareUrl);
+            showToast("Link kopiert!");
         }
     });
 }
@@ -946,10 +964,8 @@ function renderComments(id) {
             const likeCount = c.likes ? c.likes.length : 0;
             const hasLiked = c.likes && currentUser && c.likes.includes(currentUser.uid) ? 'liked-heart' : '';
 
-            // ZEITSTEMPEL FÜR KOMMENTAR
             const timeString = timeAgo(c.cId);
 
-            // Render Threaded Replies
             let repliesHtml = '';
             if (c.replies && c.replies.length > 0) {
                 repliesHtml = `<div class="reply-container">` + c.replies.map(r => {
@@ -959,7 +975,6 @@ function renderComments(id) {
                     const rLikeCount = r.likes ? r.likes.length : 0;
                     const rHasLiked = r.likes && currentUser && r.likes.includes(currentUser.uid) ? 'liked-heart' : '';
 
-                    // ZEITSTEMPEL FÜR ANTWORT
                     const replyTimeString = timeAgo(r.rId);
 
                     return `
@@ -1196,7 +1211,6 @@ window.toggleVerify = async function(targetUid, currentStatus) {
 // --- PROFIL & KOMMENTAR SYNC LOGIK ---
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
 
-    // --- STRIKTER SICHERHEITS-CHECK FÜR DEN NAMEN ---
     const newNameRaw = document.getElementById('edit-name-input').value.trim();
     const newName = newNameRaw.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
 
@@ -1210,7 +1224,6 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
     btn.disabled = true;
 
     try {
-        // --- EINZIGARTIGKEITS-CHECK (UNIQUE USERNAME) ---
         const nameQuery = query(collection(db, "users"), where("displayName", "==", newName));
         const nameSnap = await getDocs(nameQuery);
         let nameTaken = false;
@@ -1229,10 +1242,8 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
 
         btn.innerText = "Speichere...";
 
-        // 1. Profil updaten
         await updateDoc(doc(db, "users", currentUser.uid), { displayName: newName, bio: newBio, photoURL: newPic });
 
-        // 2. Videos & Kommentare auf der ganzen Plattform synchronisieren
         const q = query(collection(db, "videos"));
         const snapshot = await getDocs(q);
 
@@ -1419,7 +1430,6 @@ document.getElementById('tab-messages').addEventListener('click', function() {
     document.getElementById('inbox-messages-box').style.display = 'flex';
 });
 
-// --- INBOX NOTIFICATIONS (Aktivitäten) & TOAST SYSTEM ---
 let inboxUnsubscribe = null;
 let isInitialNotifLoad = true;
 

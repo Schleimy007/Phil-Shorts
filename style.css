@@ -915,6 +915,7 @@ body {
 .chat-input {
     flex: 1;
     min-width: 0;
+    /* Wichtig für Flex-Inputs */
     padding: 14px 20px;
     border-radius: 30px;
     border: 1px solid #333;
@@ -922,6 +923,7 @@ body {
     color: white;
     outline: none;
     font-size: 16px;
+    /* 16px blockiert Auto-Zoom auf iPhones */
 }
 
 .chat-send-btn {
@@ -947,6 +949,7 @@ body {
 .search-input-box {
     flex: 1;
     min-width: 0;
+    /* Essentiell, damit die Suchleiste nicht nach rechts buggt */
     display: flex;
     align-items: center;
     background: #222;
@@ -967,6 +970,7 @@ body {
     color: white;
     outline: none;
     font-size: 16px;
+    /* iOS Auto-Zoom Block */
 }
 
 .trending-section {
@@ -1293,6 +1297,7 @@ body {
 .comment-input {
     flex: 1;
     min-width: 0;
+    /* Verhindert Überlauf */
     padding: 14px 20px;
     border-radius: 30px;
     border: 1px solid #333;
@@ -1300,6 +1305,7 @@ body {
     color: white;
     outline: none;
     font-size: 16px;
+    /* 16px blockiert Auto-Zoom auf iPhones */
 }
 
 .comment-submit {
