@@ -186,7 +186,6 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
-// Dynamischer Daten-Abruf (Damit Namen, Bilder und Haken IMMER aktuell sind)
 function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackVerified) {
     const user = allKnownUsers.find(u => u.uid === uid);
     return {
@@ -228,7 +227,6 @@ function initLiveUser() {
             if (currentUser.coins === undefined) currentUser.coins = 1000;
             if (!currentUser.followers) currentUser.followers = [];
             if (!currentUser.following) currentUser.following = [];
-            // Sicherstellen dass currentUser auch einen username hat
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
@@ -247,13 +245,11 @@ function initLiveUser() {
     });
 }
 
-// --- SOFORTIGE ÜBERALL-AKTUALISIERUNG ---
 function initSearchUsers() {
     onSnapshot(collection(db, "users"), (snapshot) => {
         allKnownUsers = [];
         snapshot.forEach(doc => allKnownUsers.push(doc.data()));
 
-        // Patcht das komplette HTML live durch!
         allKnownUsers.forEach(u => {
             const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
             const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
@@ -539,7 +535,6 @@ window.updateGlobalVolumeUI = function() {
     });
 };
 
-// CAROUSEL Pfeil-Logik
 window.scrollCarousel = function(vidId, dir, event) {
     if (event) event.stopPropagation();
     const container = document.querySelector(`.carousel-container[data-vid="${vidId}"]`);
@@ -1008,6 +1003,48 @@ window.deleteVideo = async function(videoId) {
     }
 };
 
+// --- CREATOR HERZ LOGIK (WIE YOUTUBE) ---
+window.toggleCreatorHeart = async function(videoId, cId, rId = null) {
+    if (!currentUser) return;
+    const videoIndex = allVideosData.findIndex(v => v.id === videoId);
+    if (videoIndex === -1) return;
+    
+    const video = allVideosData[videoIndex];
+    // SICHERHEIT: Nur der Ersteller des Videos darf sein Creator-Herz vergeben!
+    if (currentUser.uid !== video.authorUid) return;
+
+    let comments = video.comments || [];
+    const cIndex = comments.findIndex(c => c.cId === cId || c.cId === cId.toString());
+    if (cIndex === -1) return;
+
+    if (rId) {
+        if (comments[cIndex].replies) {
+            const rIndex = comments[cIndex].replies.findIndex(r => r.rId === rId);
+            if (rIndex > -1) {
+                const currentState = comments[cIndex].replies[rIndex].creatorHeart || false;
+                comments[cIndex].replies[rIndex].creatorHeart = !currentState;
+                
+                renderComments(videoId);
+                await updateDoc(doc(db, "videos", videoId), { comments: comments });
+                
+                if (!currentState && comments[cIndex].replies[rIndex].uid !== currentUser.uid) {
+                    addNotification(comments[cIndex].replies[rIndex].uid, "like", "hat deiner Antwort ein Creator-Herz gegeben! ❤️", videoId);
+                }
+            }
+        }
+    } else {
+        const currentState = comments[cIndex].creatorHeart || false;
+        comments[cIndex].creatorHeart = !currentState;
+        
+        renderComments(videoId);
+        await updateDoc(doc(db, "videos", videoId), { comments: comments });
+
+        if (!currentState && comments[cIndex].uid !== currentUser.uid) {
+            addNotification(comments[cIndex].uid, "like", "hat deinem Kommentar ein Creator-Herz gegeben! ❤️", videoId);
+        }
+    }
+};
+
 window.toggleReplyBox = function(cId) {
     const box = document.getElementById(`reply-box-${cId}`);
     if (box) box.style.display = box.style.display === 'none' ? 'flex' : 'none';
@@ -1128,6 +1165,12 @@ function renderComments(id) {
     const list = document.getElementById('comment-list');
     const video = allVideosData.find(v => v.id === id);
     if (video && video.comments && video.comments.length > 0) {
+        
+        // Infos vom Video Ersteller holen (für Creator-Heart Logik)
+        const isCreator = currentUser && currentUser.uid === video.authorUid;
+        const authorData = getUserData(video.authorUid, video.authorName, video.authorUsername || video.authorName, video.authorPic, video.authorVerified);
+        const creatorPic = authorData.pic;
+        
         list.innerHTML = video.comments.map((c, index) => {
             const cUser = getUserData(c.uid, c.name, c.username, c.pic, c.verified);
             const badge = getVerifiedBadge(cUser.verified);
@@ -1140,6 +1183,22 @@ function renderComments(id) {
 
             const timeString = timeAgo(c.cId);
 
+            // Creator Heart Logik (Hauptkommentar)
+            let cCreatorHeartHtml = '';
+            if (c.creatorHeart) {
+                cCreatorHeartHtml = `
+                <div class="creator-heart-wrap" onclick="toggleCreatorHeart('${id}', '${commentId}')" style="cursor:${isCreator?'pointer':'default'};">
+                    <div class="creator-heart-img" style="background-image: url('${creatorPic}')"></div>
+                    <i class="fas fa-heart creator-heart-badge"></i>
+                </div>`;
+            } else if (isCreator) {
+                cCreatorHeartHtml = `
+                <div class="creator-heart-wrap creator-heart-inactive" onclick="toggleCreatorHeart('${id}', '${commentId}')">
+                    <div class="creator-heart-img" style="background-image: url('${creatorPic}')"></div>
+                    <i class="far fa-heart creator-heart-badge-outline"></i>
+                </div>`;
+            }
+
             let repliesHtml = '';
             if (c.replies && c.replies.length > 0) {
                 repliesHtml = `<div class="reply-container">` + c.replies.map(r => {
@@ -1151,6 +1210,22 @@ function renderComments(id) {
                     const rHasLiked = r.likes && currentUser && r.likes.includes(currentUser.uid) ? 'liked-heart' : '';
 
                     const replyTimeString = timeAgo(r.rId);
+                    
+                    // Creator Heart Logik (Antworten)
+                    let rCreatorHeartHtml = '';
+                    if (r.creatorHeart) {
+                        rCreatorHeartHtml = `
+                        <div class="creator-heart-wrap" onclick="toggleCreatorHeart('${id}', '${commentId}', '${r.rId}')" style="cursor:${isCreator?'pointer':'default'};">
+                            <div class="creator-heart-img" style="background-image: url('${creatorPic}')"></div>
+                            <i class="fas fa-heart creator-heart-badge"></i>
+                        </div>`;
+                    } else if (isCreator) {
+                        rCreatorHeartHtml = `
+                        <div class="creator-heart-wrap creator-heart-inactive" onclick="toggleCreatorHeart('${id}', '${commentId}', '${r.rId}')">
+                            <div class="creator-heart-img" style="background-image: url('${creatorPic}')"></div>
+                            <i class="far fa-heart creator-heart-badge-outline"></i>
+                        </div>`;
+                    }
 
                     return `
                     <div class="reply-item">
@@ -1165,6 +1240,7 @@ function renderComments(id) {
                             <div class="comment-actions">
                                 <span onclick="toggleReplyBox('${commentId}')">Antworten</span>
                                 <span class="${rHasLiked}" onclick="likeReply('${id}', '${commentId}', '${r.rId}')"><i class="fas fa-heart"></i> ${rLikeCount}</span>
+                                ${rCreatorHeartHtml}
                             </div>
                         </div>
                         ${rDeleteBtn}
@@ -1192,6 +1268,7 @@ function renderComments(id) {
                             <div class="comment-actions">
                                 <span onclick="toggleReplyBox('${commentId}')">Antworten</span>
                                 <span class="${hasLiked}" onclick="likeComment('${id}', '${commentId}')"><i class="fas fa-heart"></i> ${likeCount}</span>
+                                ${cCreatorHeartHtml}
                             </div>
                         </div>
                         ${deleteBtn}
@@ -1211,7 +1288,7 @@ document.getElementById('submit-comment').addEventListener('click', async() => {
     if (!text || !window.currentCommentVideoId || !currentUser) return;
 
     const commentId = Date.now().toString();
-    const comment = { cId: commentId, uid: currentUser.uid, name: currentUser.displayName, username: currentUser.username, pic: currentUser.photoURL, verified: currentUser.verified || false, text: text, likes: [], replies: [] };
+    const comment = { cId: commentId, uid: currentUser.uid, name: currentUser.displayName, username: currentUser.username, pic: currentUser.photoURL, verified: currentUser.verified || false, text: text, likes: [], replies: [], creatorHeart: false };
 
     const videoIndex = allVideosData.findIndex(v => v.id === window.currentCommentVideoId);
     if (videoIndex > -1) {
