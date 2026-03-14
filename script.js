@@ -73,7 +73,6 @@ document.getElementById('close-alert-btn').addEventListener('click', () => {
     document.getElementById('custom-alert-modal').classList.remove('show');
 });
 
-
 function parseJwt(token) {
     var base64Url = token.split('.')[1];
     var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -799,7 +798,6 @@ window.deleteReply = async function(videoId, cId, rId) {
     }
 };
 
-
 function renderComments(id) {
     const list = document.getElementById('comment-list');
     const video = allVideosData.find(v => v.id === id);
@@ -1187,6 +1185,211 @@ window.giveCoins = async function(targetUid) {
         loadAdminDashboard();
     } catch (e) {}
 };
+
+// --- SUCHFUNKTION ---
+document.getElementById('search-input').addEventListener('input', (e) => {
+    const query = e.target.value.toLowerCase();
+    const resultsGrid = document.getElementById('search-results');
+    const trendingSection = document.getElementById('trending-tags');
+    if (query.length < 2) {
+        resultsGrid.style.display = 'none';
+        trendingSection.style.display = 'block';
+        return;
+    }
+    trendingSection.style.display = 'none';
+    resultsGrid.style.display = 'grid';
+    const results = allVideosData.filter(v => (v.authorName || "").toLowerCase().includes(query) || (v.description || "").toLowerCase().includes(query));
+    resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
+});
+
+// --- INBOX TAB LOGIC ---
+document.getElementById('tab-notifications').addEventListener('click', function() {
+    this.classList.add('active');
+    document.getElementById('tab-messages').classList.remove('active');
+    document.getElementById('inbox-notifications-box').style.display = 'flex';
+    document.getElementById('inbox-messages-box').style.display = 'none';
+});
+
+document.getElementById('tab-messages').addEventListener('click', function() {
+    this.classList.add('active');
+    document.getElementById('tab-notifications').classList.remove('active');
+    document.getElementById('inbox-notifications-box').style.display = 'none';
+    document.getElementById('inbox-messages-box').style.display = 'flex';
+});
+
+// --- INBOX NOTIFICATIONS (Aktivitäten) ---
+function initInbox() {
+    const inboxBox = document.getElementById('inbox-notifications-box');
+    if (!currentUser) return;
+
+    onSnapshot(query(collection(db, "users", currentUser.uid, "notifications"), orderBy("timestamp", "desc")), (snapshot) => {
+        inboxBox.innerHTML = '';
+        if (snapshot.empty) { inboxBox.innerHTML = '<div class="empty-state" style="height: 100%;"><p>Keine neuen Benachrichtigungen</p></div>'; return; }
+
+        snapshot.forEach((doc) => {
+            const n = doc.data();
+            let icon = 'fa-bell';
+            let color = '#aaa';
+            if (n.type === 'like') {
+                icon = 'fa-heart';
+                color = '#ff0050';
+            }
+            if (n.type === 'follow') {
+                icon = 'fa-user-plus';
+                color = '#00f2fe';
+            }
+            if (n.type === 'comment') {
+                icon = 'fa-comment-dots';
+                color = '#fff';
+            }
+            if (n.type === 'gift') {
+                icon = 'fa-gift';
+                color = '#ffd700';
+            }
+
+            const clickAction = n.videoId ? `jumpToVideo('${n.videoId}')` : `openProfile('${n.fromUid}')`;
+
+            inboxBox.innerHTML += `
+                <div class="inbox-msg" onclick="${clickAction}">
+                    <img src="${n.fromPic}" class="chat-avatar">
+                    <div style="flex:1;">
+                        <span class="chat-username">@${n.fromName}</span>
+                        <div class="chat-bubble" style="background: transparent; padding: 0;">
+                            <i class="fas ${icon}" style="color:${color}; margin-right:5px;"></i> ${n.text}
+                        </div>
+                    </div>
+                </div>`;
+        });
+    });
+}
+
+// --- DM CHATS (Nachrichten) ---
+let inboxChatsUnsubscribe = null;
+
+function initInboxChats() {
+    if (!currentUser) return;
+    const msgBox = document.getElementById('inbox-messages-box');
+
+    if (inboxChatsUnsubscribe) inboxChatsUnsubscribe();
+
+    inboxChatsUnsubscribe = onSnapshot(collection(db, "chats"), (snapshot) => {
+        let chats = [];
+        snapshot.forEach(doc => {
+            const chat = doc.data();
+            if (chat.participants && chat.participants.includes(currentUser.uid)) {
+                chats.push({ id: doc.id, ...chat });
+            }
+        });
+
+        chats.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+
+        msgBox.innerHTML = '';
+        if (chats.length === 0) {
+            msgBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Keine Nachrichten vorhanden</p></div>';
+            return;
+        }
+
+        chats.forEach(chat => {
+            const partnerUid = chat.participants.find(uid => uid !== currentUser.uid);
+            const partner = chat.users[partnerUid];
+            if (!partner) return;
+
+            const safeName = partner.name.replace(/'/g, "\\'");
+
+            msgBox.innerHTML += `
+                <div class="inbox-msg" onclick="openDM('${partnerUid}', '${safeName}', '${partner.pic}')">
+                    <img src="${partner.pic}" class="chat-avatar">
+                    <div style="flex:1;">
+                        <span class="chat-username">@${partner.name}</span>
+                        <div class="chat-bubble" style="background: transparent; padding: 0; color: #888;">
+                            ${chat.lastMessage || 'Neuer Chat...'}
+                        </div>
+                    </div>
+                </div>`;
+        });
+    });
+}
+
+let currentDMSnapshot = null;
+window.currentChatId = null;
+window.currentChatPartner = null;
+
+window.openDM = async function(targetUid, targetName, targetPic) {
+    if (!currentUser) return;
+    window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic };
+
+    const uids = [currentUser.uid, targetUid].sort();
+    window.currentChatId = `${uids[0]}_${uids[1]}`;
+
+    document.getElementById('dm-title').innerText = '@' + targetName;
+    switchView('dm');
+
+    if (currentDMSnapshot) currentDMSnapshot();
+
+    const dmBox = document.getElementById('dm-box');
+    dmBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
+
+    const chatRef = doc(db, "chats", window.currentChatId);
+    const chatSnap = await getDoc(chatRef);
+    if (!chatSnap.exists()) {
+        await setDoc(chatRef, {
+            participants: [currentUser.uid, targetUid],
+            users: {
+                [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL },
+                [targetUid]: { name: targetName, pic: targetPic }
+            },
+            lastMessage: "",
+            lastMessageTime: Date.now()
+        });
+    }
+
+    currentDMSnapshot = onSnapshot(query(collection(db, `chats/${window.currentChatId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
+        dmBox.innerHTML = '';
+        if (snapshot.empty) {
+            dmBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Schreib die erste Nachricht!</p></div>';
+        } else {
+            snapshot.forEach(doc => {
+                const msg = doc.data();
+                const isMe = msg.senderUid === currentUser.uid ? 'me' : '';
+                const pic = isMe ? currentUser.photoURL : targetPic;
+                dmBox.innerHTML += `
+                    <div class="chat-msg ${isMe}">
+                        <img src="${pic}" class="chat-avatar">
+                        <div>
+                            <div class="chat-bubble">${msg.text}</div>
+                        </div>
+                    </div>`;
+            });
+        }
+        dmBox.scrollTop = dmBox.scrollHeight;
+    });
+};
+
+document.getElementById('send-dm-btn').addEventListener('click', async() => {
+    const input = document.getElementById('dm-input');
+    const text = input.value.trim();
+    if (!text || !window.currentChatId || !currentUser) return;
+    input.value = '';
+
+    await addDoc(collection(db, `chats/${window.currentChatId}/messages`), {
+        senderUid: currentUser.uid,
+        text: text,
+        timestamp: Date.now()
+    });
+
+    await updateDoc(doc(db, "chats", window.currentChatId), {
+        lastMessage: text,
+        lastMessageTime: Date.now(),
+        users: {
+            [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL },
+            [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic }
+        }
+    });
+});
+
+document.getElementById('dm-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') document.getElementById('send-dm-btn').click();
+});
 
 document.getElementById('up-file').addEventListener('change', function() {
     document.querySelector('.file-upload-design p').innerText = this.files[0] ? this.files[0].name : "Video auswählen";
