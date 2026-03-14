@@ -10,8 +10,8 @@ body {
     background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
     /* Cooler Hintergrund für PC */
     color: white;
-    height: 100vh;
-    width: 100vw;
+    height: 200vh;
+    width: 200vw;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
     overflow: hidden;
     display: flex;
