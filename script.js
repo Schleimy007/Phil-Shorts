@@ -99,9 +99,18 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
-function getVerifiedBadge(uid, fallbackBool = false) {
+// Dynamischer Daten-Abruf (Damit Namen, Bilder und Haken IMMER aktuell sind)
+function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackVerified) {
     const user = allKnownUsers.find(u => u.uid === uid);
-    const isVerif = user ? (user.verified === true) : fallbackBool;
+    return {
+        displayName: user ? user.displayName : fallbackName,
+        username: user && user.username ? user.username : (user ? user.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase() : (fallbackUsername || fallbackName)),
+        pic: user ? user.photoURL : fallbackPic,
+        verified: user ? (user.verified === true) : fallbackVerified
+    };
+}
+
+function getVerifiedBadge(isVerif) {
     return isVerif ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
 }
 
@@ -132,6 +141,8 @@ function initLiveUser() {
             if (currentUser.coins === undefined) currentUser.coins = 1000;
             if (!currentUser.followers) currentUser.followers = [];
             if (!currentUser.following) currentUser.following = [];
+            // Sicherstellen dass currentUser auch einen username hat
+            if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
             const coinEl = document.getElementById('my-coins');
@@ -149,23 +160,20 @@ function initLiveUser() {
     });
 }
 
+// --- SOFORTIGE ÜBERALL-AKTUALISIERUNG ---
 function initSearchUsers() {
     onSnapshot(collection(db, "users"), (snapshot) => {
         allKnownUsers = [];
         snapshot.forEach(doc => allKnownUsers.push(doc.data()));
 
-        document.querySelectorAll('.creator-name').forEach(el => {
-            const onclickAttr = el.getAttribute('onclick');
-            if (onclickAttr) {
-                const match = onclickAttr.match(/'([^']+)'/);
-                if (match && match[1]) {
-                    const uid = match[1];
-                    const user = allKnownUsers.find(u => u.uid === uid);
-                    if (user) {
-                        el.innerHTML = '@' + user.displayName + (user.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '');
-                    }
-                }
-            }
+        // Patcht das komplette HTML live durch!
+        allKnownUsers.forEach(u => {
+            const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
+            const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
+
+            document.querySelectorAll(`.live-name-${u.uid}`).forEach(el => el.innerHTML = u.displayName + isVerif);
+            document.querySelectorAll(`.live-username-${u.uid}`).forEach(el => el.innerText = '@' + cleanUsername);
+            document.querySelectorAll(`.live-pic-${u.uid}`).forEach(el => el.src = u.photoURL);
         });
     });
 }
@@ -176,8 +184,9 @@ window.addEventListener('googleLoginSuccess', async(event) => {
         const data = parseJwt(response.credential);
         const uid = data.sub;
 
-        let baseName = data.name.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
-        if (!baseName || baseName.length < 3) baseName = "user" + Math.floor(100 + Math.random() * 900);
+        const rawDisplayName = data.name;
+        let baseUser = rawDisplayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
+        if (!baseUser || baseUser.length < 3) baseUser = "user" + Math.floor(100 + Math.random() * 900);
 
         const pic = data.picture;
         const email = data.email;
@@ -186,19 +195,20 @@ window.addEventListener('googleLoginSuccess', async(event) => {
         const userSnap = await getDoc(userRef);
 
         if (!userSnap.exists()) {
-            let finalName = baseName;
-            let nameQuery = query(collection(db, "users"), where("displayName", "==", finalName));
+            let finalUser = baseUser;
+            let nameQuery = query(collection(db, "users"), where("username", "==", finalUser));
             let nameSnap = await getDocs(nameQuery);
 
             while (!nameSnap.empty) {
-                finalName = baseName + Math.floor(1000 + Math.random() * 9000);
-                nameQuery = query(collection(db, "users"), where("displayName", "==", finalName));
+                finalUser = baseUser + Math.floor(1000 + Math.random() * 9000);
+                nameQuery = query(collection(db, "users"), where("username", "==", finalUser));
                 nameSnap = await getDocs(nameQuery);
             }
 
             await setDoc(userRef, {
                 uid: uid,
-                displayName: finalName,
+                displayName: rawDisplayName,
+                username: finalUser,
                 email: email,
                 photoURL: pic,
                 bio: "Neu in der Community! 👋",
@@ -208,10 +218,11 @@ window.addEventListener('googleLoginSuccess', async(event) => {
                 coins: 1000,
                 profileViews: 0
             });
-            currentUser = { uid, displayName: finalName, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0 };
+            currentUser = { uid, displayName: rawDisplayName, username: finalUser, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0 };
         } else {
             currentUser = userSnap.data();
             if (!currentUser.following) currentUser.following = [];
+            if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             if (currentUser.coins === undefined) await updateDoc(userRef, { coins: 1000, profileViews: 0, followers: [] });
         }
 
@@ -232,6 +243,7 @@ window.onload = async function() {
         document.getElementById('login-screen').classList.add('show');
     } else {
         document.getElementById('login-screen').classList.remove('show');
+        if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
         initLiveDatabase();
         initLiveUser();
         initInbox();
@@ -250,6 +262,7 @@ async function addNotification(targetUid, type, text, videoId = null) {
     await addDoc(collection(db, "users", targetUid, "notifications"), {
         fromUid: currentUser.uid,
         fromName: currentUser.displayName,
+        fromUsername: currentUser.username,
         fromPic: currentUser.photoURL,
         type: type,
         text: text,
@@ -301,7 +314,6 @@ function initLiveDatabase() {
             renderFeed(true);
             isInitialLoad = false;
 
-            // URL PARAMETER PRÜFEN (TEILEN FUNKTION)
             const urlParams = new URLSearchParams(window.location.search);
             const sharedVideoId = urlParams.get('video');
             if (sharedVideoId) {
@@ -452,7 +464,8 @@ function createVideoElement(video) {
 
     const plusButton = (!isMe) ? `<i class="fas fa-circle-plus follow-btn" data-target="${video.authorUid}" onclick="toggleFollow('${video.authorUid}', this, event)" style="${isFollowing ? 'display: none;' : ''}"></i>` : '';
 
-    const verifiedBadge = getVerifiedBadge(video.authorUid, video.authorVerified);
+    const authorData = getUserData(video.authorUid, video.authorName, video.authorUsername || video.authorName, video.authorPic, video.authorVerified);
+    const verifiedBadge = getVerifiedBadge(authorData.verified);
 
     const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : '';
     const realLikes = video.likedBy ? video.likedBy.length : 0;
@@ -462,10 +475,12 @@ function createVideoElement(video) {
 
     const editVideoBtn = isMe ? `<div class="videoSidebar__button" onclick="openEditVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-pen" style="font-size:24px;"></i></div>` : '';
 
+    const mutedAttr = window.globalMuted ? 'muted' : '';
+
     div.innerHTML = `
         <div class="video-inner is-paused">
             <div class="video-wrapper">
-                <video class="video__player" data-vid="${video.id}" preload="auto" loop playsinline src="${video.url}"></video>
+                <video class="video__player" data-vid="${video.id}" preload="auto" loop playsinline ${mutedAttr} src="${video.url}"></video>
                 <div class="play-indicator"><i class="fas fa-play"></i></div>
                 
                 <div class="mute-container">
@@ -481,14 +496,18 @@ function createVideoElement(video) {
             </div>
             
             <div class="video__footer">
-                <h3 class="creator-name" onclick="openProfile('${video.authorUid}')">@${video.authorName}${verifiedBadge}</h3>
+                <h3 class="creator-name" onclick="openProfile('${video.authorUid}')">
+                    <span class="live-name-${video.authorUid}">${authorData.displayName}${verifiedBadge}</span>
+                </h3>
+                <p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p>
+                
                 <h4 class="video-title" onclick="openVideoDetails('${video.id}')">${video.title || 'Ohne Titel'}</h4>
                 <p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${(video.description || "").substring(0, 50)}${(video.description && video.description.length > 50) ? '... <strong>mehr anzeigen</strong>' : ''}</p>
             </div>
             
             <div class="video__sidebar">
                 <div class="sidebar__profile" onclick="openProfile('${video.authorUid}')">
-                    <img src="${video.authorPic}" alt="Profil">
+                    <img src="${authorData.pic}" class="live-pic-${video.authorUid}" alt="Profil">
                     ${plusButton}
                 </div>
                 <div class="videoSidebar__button like-btn ${hasLiked}" data-id="${video.id}">
@@ -804,7 +823,6 @@ function attachInteractionsToVideo(videoContainerEl) {
         document.getElementById('comment-modal').classList.add('show');
     });
 
-    // --- NEU: TEILEN FUNKTION MIT EIGENEM LINK ---
     container.querySelector('.share-btn').addEventListener('click', async(e) => {
         const vidId = e.currentTarget.dataset.id;
         const shareUrl = `${window.location.origin}${window.location.pathname}?video=${vidId}`;
@@ -847,7 +865,7 @@ window.submitReply = async function(videoId, cId) {
     if (!text) return;
 
     const replyId = Date.now().toString();
-    const reply = { rId: replyId, uid: currentUser.uid, name: currentUser.displayName, pic: currentUser.photoURL, verified: currentUser.verified || false, text: text, likes: [] };
+    const reply = { rId: replyId, uid: currentUser.uid, name: currentUser.displayName, username: currentUser.username, pic: currentUser.photoURL, verified: currentUser.verified || false, text: text, likes: [] };
 
     const videoIndex = allVideosData.findIndex(v => v.id === videoId);
     if (videoIndex > -1) {
@@ -956,7 +974,8 @@ function renderComments(id) {
     const video = allVideosData.find(v => v.id === id);
     if (video && video.comments && video.comments.length > 0) {
         list.innerHTML = video.comments.map((c, index) => {
-            const badge = getVerifiedBadge(c.uid, c.verified);
+            const cUser = getUserData(c.uid, c.name, c.username, c.pic, c.verified);
+            const badge = getVerifiedBadge(cUser.verified);
             const canDelete = currentUser && (currentUser.uid === c.uid || currentUser.email === "schleimyverteilung@gmail.com");
             const commentId = c.cId || index.toString();
             const deleteBtn = canDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteComment('${id}', '${commentId}')"></i>` : '';
@@ -969,7 +988,8 @@ function renderComments(id) {
             let repliesHtml = '';
             if (c.replies && c.replies.length > 0) {
                 repliesHtml = `<div class="reply-container">` + c.replies.map(r => {
-                    const rBadge = getVerifiedBadge(r.uid, r.verified);
+                    const rUser = getUserData(r.uid, r.name, r.username, r.pic, r.verified);
+                    const rBadge = getVerifiedBadge(rUser.verified);
                     const rCanDelete = currentUser && (currentUser.uid === r.uid || currentUser.email === "schleimyverteilung@gmail.com");
                     const rDeleteBtn = rCanDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteReply('${id}', '${commentId}', '${r.rId}')"></i>` : '';
                     const rLikeCount = r.likes ? r.likes.length : 0;
@@ -979,9 +999,13 @@ function renderComments(id) {
 
                     return `
                     <div class="reply-item">
-                        <img src="${r.pic}" alt="User" onclick="openProfile('${r.uid}')" style="cursor:pointer;">
+                        <img src="${rUser.pic}" class="live-pic-${r.uid}" alt="User" onclick="openProfile('${r.uid}')" style="cursor:pointer;">
                         <div style="flex:1; min-width: 0;">
-                            <strong onclick="openProfile('${r.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">@${r.name}${rBadge} <span class="comment-time">${replyTimeString}</span></strong>
+                            <strong onclick="openProfile('${r.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">
+                                <span class="live-name-${r.uid}">${rUser.displayName}${rBadge}</span> 
+                                <span class="live-username-${r.uid}" style="color:#888; font-weight:normal; font-size:12px;">@${rUser.username}</span> 
+                                <span class="comment-time">${replyTimeString}</span>
+                            </strong>
                             <p style="word-break: break-word;">${r.text}</p>
                             <div class="comment-actions">
                                 <span onclick="toggleReplyBox('${commentId}')">Antworten</span>
@@ -1002,9 +1026,13 @@ function renderComments(id) {
             return `
                 <div class="comment-wrapper">
                     <div class="comment" style="display:flex; align-items:flex-start; width:100%;">
-                        <img src="${c.pic}" alt="User" onclick="openProfile('${c.uid}')" style="cursor:pointer;">
+                        <img src="${cUser.pic}" class="live-pic-${c.uid}" alt="User" onclick="openProfile('${c.uid}')" style="cursor:pointer;">
                         <div style="flex:1; min-width: 0;">
-                            <strong onclick="openProfile('${c.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">@${c.name}${badge} <span class="comment-time">${timeString}</span></strong>
+                            <strong onclick="openProfile('${c.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">
+                                <span class="live-name-${c.uid}">${cUser.displayName}${badge}</span> 
+                                <span class="live-username-${c.uid}" style="color:#888; font-weight:normal; font-size:12px;">@${cUser.username}</span> 
+                                <span class="comment-time">${timeString}</span>
+                            </strong>
                             <p style="word-break: break-word;">${c.text}</p>
                             <div class="comment-actions">
                                 <span onclick="toggleReplyBox('${commentId}')">Antworten</span>
@@ -1028,7 +1056,7 @@ document.getElementById('submit-comment').addEventListener('click', async() => {
     if (!text || !window.currentCommentVideoId || !currentUser) return;
 
     const commentId = Date.now().toString();
-    const comment = { cId: commentId, uid: currentUser.uid, name: currentUser.displayName, pic: currentUser.photoURL, verified: currentUser.verified || false, text: text, likes: [], replies: [] };
+    const comment = { cId: commentId, uid: currentUser.uid, name: currentUser.displayName, username: currentUser.username, pic: currentUser.photoURL, verified: currentUser.verified || false, text: text, likes: [], replies: [] };
 
     const videoIndex = allVideosData.findIndex(v => v.id === window.currentCommentVideoId);
     if (videoIndex > -1) {
@@ -1133,9 +1161,11 @@ window.openProfile = async function(targetUid) {
 
         const verifiedBadge = targetUser.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
         const realFollowersCount = targetUser.followers ? targetUser.followers.length : 0;
+        const cleanUsername = targetUser.username || targetUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
 
-        document.getElementById('profile-title').innerHTML = '@' + targetUser.displayName;
+        document.getElementById('profile-title').innerHTML = '@' + cleanUsername;
         document.getElementById('profile-name').innerHTML = targetUser.displayName + verifiedBadge;
+        document.getElementById('profile-username').innerText = '@' + cleanUsername;
         document.getElementById('profile-bio').innerText = targetUser.bio || "Keine Bio vorhanden.";
         document.getElementById('profile-pic').src = targetUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback';
         document.getElementById('stat-likes').innerText = totalLikes;
@@ -1162,7 +1192,8 @@ window.openProfile = async function(targetUid) {
             actionBtn.innerText = "Profil bearbeiten";
             actionBtn.classList.add('edit-btn');
             actionBtn.onclick = () => {
-                document.getElementById('edit-name-input').value = currentUser.displayName;
+                document.getElementById('edit-displayname-input').value = currentUser.displayName;
+                document.getElementById('edit-username-input').value = currentUser.username || cleanUsername;
                 document.getElementById('edit-pic-input').value = currentUser.photoURL;
                 document.getElementById('edit-bio-input').value = currentUser.bio;
                 document.getElementById('settings-modal').classList.add('show');
@@ -1179,7 +1210,7 @@ window.openProfile = async function(targetUid) {
 
             if (currentUser) {
                 msgBtn.style.display = 'block';
-                msgBtn.onclick = () => { window.openDM(targetUid, targetUser.displayName, targetUser.photoURL); };
+                msgBtn.onclick = () => { window.openDM(targetUid, cleanUsername, targetUser.photoURL); };
             }
 
             if (currentUser && currentUser.following && currentUser.following.includes(targetUid)) {
@@ -1211,20 +1242,22 @@ window.toggleVerify = async function(targetUid, currentStatus) {
 // --- PROFIL & KOMMENTAR SYNC LOGIK ---
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
 
-    const newNameRaw = document.getElementById('edit-name-input').value.trim();
-    const newName = newNameRaw.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
+    const newDisplayName = document.getElementById('edit-displayname-input').value.trim();
+    const newUsernameRaw = document.getElementById('edit-username-input').value.trim();
+    const newUsername = newUsernameRaw.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
 
     const newBio = document.getElementById('edit-bio-input').value.trim();
     const newPic = document.getElementById('edit-pic-input').value.trim() || currentUser.photoURL;
 
-    if (newName.length < 3) return showCustomAlert("Hinweis", "Dein Name muss mindestens 3 Zeichen lang sein (ohne Leerzeichen).");
+    if (newUsername.length < 3) return showCustomAlert("Hinweis", "Dein Benutzername muss mindestens 3 Zeichen lang sein (ohne Leerzeichen).");
+    if (newDisplayName.length < 2) return showCustomAlert("Hinweis", "Dein Anzeigename ist zu kurz.");
 
     const btn = document.getElementById('save-settings-btn');
     btn.innerText = "Prüfe Namen...";
     btn.disabled = true;
 
     try {
-        const nameQuery = query(collection(db, "users"), where("displayName", "==", newName));
+        const nameQuery = query(collection(db, "users"), where("username", "==", newUsername));
         const nameSnap = await getDocs(nameQuery);
         let nameTaken = false;
 
@@ -1237,12 +1270,12 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
         if (nameTaken) {
             btn.innerText = "Profil Speichern";
             btn.disabled = false;
-            return showCustomAlert("Name vergeben", "Dieser Name existiert bereits! Bitte wähle einen anderen.");
+            return showCustomAlert("Name vergeben", "Dieser @Benutzername existiert bereits! Bitte wähle einen anderen.");
         }
 
         btn.innerText = "Speichere...";
 
-        await updateDoc(doc(db, "users", currentUser.uid), { displayName: newName, bio: newBio, photoURL: newPic });
+        await updateDoc(doc(db, "users", currentUser.uid), { displayName: newDisplayName, username: newUsername, bio: newBio, photoURL: newPic });
 
         const q = query(collection(db, "videos"));
         const snapshot = await getDocs(q);
@@ -1253,7 +1286,8 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
             let changed = false;
 
             if (vData.authorUid === currentUser.uid) {
-                updates.authorName = newName;
+                updates.authorName = newDisplayName;
+                updates.authorUsername = newUsername;
                 updates.authorPic = newPic;
                 changed = true;
             }
@@ -1262,14 +1296,16 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
                 let commentsChanged = false;
                 let newComments = vData.comments.map(c => {
                     if (c.uid === currentUser.uid) {
-                        c.name = newName;
+                        c.name = newDisplayName;
+                        c.username = newUsername;
                         c.pic = newPic;
                         commentsChanged = true;
                     }
                     if (c.replies) {
                         c.replies = c.replies.map(r => {
                             if (r.uid === currentUser.uid) {
-                                r.name = newName;
+                                r.name = newDisplayName;
+                                r.username = newUsername;
                                 r.pic = newPic;
                                 commentsChanged = true;
                             }
@@ -1290,8 +1326,9 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
             }
         });
 
-        document.getElementById('profile-name').innerHTML = newName + (currentUser.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '');
-        document.getElementById('profile-title').innerText = '@' + newName;
+        document.getElementById('profile-name').innerHTML = newDisplayName + (currentUser.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '');
+        document.getElementById('profile-title').innerText = '@' + newUsername;
+        document.getElementById('profile-username').innerText = '@' + newUsername;
         document.getElementById('profile-bio').innerText = newBio;
         document.getElementById('profile-pic').src = newPic;
         showToast("Profil erfolgreich aktualisiert!");
@@ -1376,8 +1413,8 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     trendingSection.style.display = 'none';
     resultsGrid.style.display = 'block';
 
-    const matchedUsers = allKnownUsers.filter(u => (u.displayName || "").toLowerCase().includes(query));
-    const matchedVideos = allVideosData.filter(v => (v.description || "").toLowerCase().includes(query) || (v.authorName || "").toLowerCase().includes(query));
+    const matchedUsers = allKnownUsers.filter(u => (u.displayName || "").toLowerCase().includes(query) || (u.username || "").toLowerCase().includes(query));
+    const matchedVideos = allVideosData.filter(v => (v.description || "").toLowerCase().includes(query) || (v.authorName || "").toLowerCase().includes(query) || (v.title || "").toLowerCase().includes(query));
 
     let html = '';
 
@@ -1386,12 +1423,13 @@ document.getElementById('search-input').addEventListener('input', (e) => {
         html += '<div style="display:flex; flex-direction:column; gap:15px; padding: 0 15px 20px;">';
         matchedUsers.forEach(u => {
             const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
+            const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             html += `
             <div style="display:flex; align-items:center; gap:15px; cursor:pointer;" onclick="openProfile('${u.uid}')">
                 <img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}" style="width:50px; height:50px; border-radius:50%; object-fit:cover; border: 1px solid #333; flex-shrink:0;">
                 <div style="flex:1; min-width:0;">
-                    <strong style="font-size:16px; display:block; margin-bottom:3px; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${u.displayName} ${isVerif}</strong>
-                    <p style="font-size:13px; color:#888;">${u.followers ? u.followers.length : 0} Follower</p>
+                    <strong style="font-size:16px; display:block; margin-bottom:3px; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span class="live-name-${u.uid}">${u.displayName}${isVerif}</span></strong>
+                    <p class="live-username-${u.uid}" style="font-size:13px; color:#888;">@${cleanUsername}</p>
                 </div>
             </div>`;
         });
@@ -1402,8 +1440,9 @@ document.getElementById('search-input').addEventListener('input', (e) => {
         html += '<h4 style="padding: 10px 15px; color:#888; font-size:14px; text-transform:uppercase;">Videos</h4>';
         html += '<div class="grid-container">';
         html += matchedVideos.map(v => {
+            const authorData = getUserData(v.authorUid, v.authorName, v.authorUsername || v.authorName, v.authorPic, v.authorVerified);
             const vBadge = getVerifiedBadge(v.authorUid, v.authorVerified);
-            return `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views" style="word-break: break-all; font-size: 11px;"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0} @${v.authorName}${vBadge}</div></div>`;
+            return `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views" style="word-break: break-all; font-size: 11px;"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0} @${authorData.username}${vBadge}</div></div>`;
         }).join('');
         html += '</div>';
     }
@@ -1430,6 +1469,7 @@ document.getElementById('tab-messages').addEventListener('click', function() {
     document.getElementById('inbox-messages-box').style.display = 'flex';
 });
 
+// --- INBOX NOTIFICATIONS (Aktivitäten) & TOAST SYSTEM ---
 let inboxUnsubscribe = null;
 let isInitialNotifLoad = true;
 
@@ -1450,12 +1490,13 @@ function initInbox() {
                     const isCurrentlyChatting = document.getElementById('view-dm').classList.contains('active') && window.currentChatPartner && window.currentChatPartner.uid === n.fromUid;
 
                     if (!isCurrentlyChatting) {
-                        let toastMsg = `🔔 Aktivität von @${n.fromName}`;
-                        if (n.type === 'message') toastMsg = `💬 Nachricht von @${n.fromName}`;
-                        else if (n.type === 'like') toastMsg = `❤️ @${n.fromName} mag dein Video`;
-                        else if (n.type === 'follow') toastMsg = `👤 @${n.fromName} folgt dir`;
-                        else if (n.type === 'gift') toastMsg = `🎁 @${n.fromName} hat gespendet!`;
-                        else if (n.type === 'comment') toastMsg = `💬 @${n.fromName} hat kommentiert`;
+                        const nUser = getUserData(n.fromUid, n.fromName, n.fromUsername, n.fromPic, false);
+                        let toastMsg = `🔔 Aktivität von @${nUser.username}`;
+                        if (n.type === 'message') toastMsg = `💬 Nachricht von @${nUser.username}`;
+                        else if (n.type === 'like') toastMsg = `❤️ @${nUser.username} mag dein Video`;
+                        else if (n.type === 'follow') toastMsg = `👤 @${nUser.username} folgt dir`;
+                        else if (n.type === 'gift') toastMsg = `🎁 @${nUser.username} hat gespendet!`;
+                        else if (n.type === 'comment') toastMsg = `💬 @${nUser.username} hat kommentiert`;
 
                         showToast(toastMsg);
                     }
@@ -1492,9 +1533,11 @@ function initInbox() {
                 color = '#00f2fe';
             }
 
+            const nUser = getUserData(n.fromUid, n.fromName, n.fromUsername, n.fromPic, false);
+
             let clickAction = `openProfile('${n.fromUid}')`;
             if (n.type === 'message') {
-                clickAction = `openDM('${n.fromUid}', '${n.fromName.replace(/'/g, "\\'")}', '${n.fromPic}')`;
+                clickAction = `openDM('${n.fromUid}', '${nUser.username.replace(/'/g, "\\'")}', '${nUser.pic}')`;
             } else if (n.videoId) {
                 clickAction = `jumpToVideo('${n.videoId}')`;
             }
@@ -1503,9 +1546,12 @@ function initInbox() {
 
             inboxBox.innerHTML += `
                 <div class="inbox-msg" onclick="${clickAction}">
-                    <img src="${n.fromPic}" class="chat-avatar" style="flex-shrink:0;">
+                    <img src="${nUser.pic}" class="chat-avatar live-pic-${n.fromUid}" style="flex-shrink:0;">
                     <div style="flex:1; min-width:0;">
-                        <span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${n.fromName} ${isVerif}</span>
+                        <span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            <span class="live-name-${n.fromUid}">${nUser.displayName}${isVerif}</span> 
+                            <span class="live-username-${n.fromUid}" style="color:#888; font-weight:normal; font-size:12px;">@${nUser.username}</span>
+                        </span>
                         <div class="chat-bubble" style="background: transparent; padding: 0; word-break: break-word;">
                             <i class="fas ${icon}" style="color:${color}; margin-right:5px;"></i> ${n.text}
                         </div>
@@ -1547,14 +1593,18 @@ function initInboxChats() {
             const partner = chat.users[partnerUid];
             if (!partner) return;
 
-            const safeName = partner.name.replace(/'/g, "\\'");
+            const nUser = getUserData(partnerUid, partner.name, partner.name, partner.pic, false);
+            const safeName = nUser.username.replace(/'/g, "\\'");
             const isVerif = getVerifiedBadge(partnerUid);
 
             msgBox.innerHTML += `
-                <div class="inbox-msg" onclick="openDM('${partnerUid}', '${safeName}', '${partner.pic}')">
-                    <img src="${partner.pic}" class="chat-avatar" style="flex-shrink:0;">
+                <div class="inbox-msg" onclick="openDM('${partnerUid}', '${safeName}', '${nUser.pic}')">
+                    <img src="${nUser.pic}" class="chat-avatar live-pic-${partnerUid}" style="flex-shrink:0;">
                     <div style="flex:1; min-width:0;">
-                        <span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${partner.name} ${isVerif}</span>
+                        <span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            <span class="live-name-${partnerUid}">${nUser.displayName}${isVerif}</span> 
+                            <span class="live-username-${partnerUid}" style="color:#888; font-weight:normal; font-size:12px;">@${nUser.username}</span>
+                        </span>
                         <div class="chat-bubble" style="background: transparent; padding: 0; color: #888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                             ${chat.lastMessage || 'Neuer Chat...'}
                         </div>
@@ -1680,6 +1730,7 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
             url: data.secure_url,
             authorUid: currentUser.uid,
             authorName: currentUser.displayName,
+            authorUsername: currentUser.username,
             authorPic: currentUser.photoURL,
             authorVerified: currentUser.verified || false,
             title: titleVal,

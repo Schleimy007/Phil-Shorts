@@ -106,7 +106,8 @@
             </div>
             <div class="profile-header">
                 <img src="" id="profile-pic" class="profile-image">
-                <h2 id="profile-name" style="word-break: break-word; text-align: center;">Benutzername</h2>
+                <h2 id="profile-name" style="word-break: break-word; text-align: center;">Anzeigename</h2>
+                <p id="profile-username" style="color: #aaa; font-weight: bold; font-size: 15px; margin-bottom: 10px;">@username</p>
                 <div id="profile-level" class="creator-level">Level 1 Creator 🌟</div>
                 <p id="profile-bio" class="profile-bio">Hier könnte deine coole Bio stehen.</p>
 
@@ -250,8 +251,11 @@
                 <h4>Profil bearbeiten</h4><i class="fas fa-times close-modal" id="close-settings"></i>
             </div>
             <div class="modal-body upload-body">
-                <label style="color:#888; font-size:12px; margin-left:5px;">Benutzername (kleingeschrieben, ohne Leerzeichen)</label>
-                <input type="text" id="edit-name-input" class="comment-input" placeholder="Dein Name" style="border-radius:10px;">
+                <label style="color:#888; font-size:12px; margin-left:5px;">Anzeigename (Leerzeichen & Großschrift erlaubt)</label>
+                <input type="text" id="edit-displayname-input" class="comment-input" placeholder="Dein Anzeigename" style="border-radius:10px; margin-bottom:10px;">
+
+                <label style="color:#888; font-size:12px; margin-left:5px;">Benutzername (@... einmalig, nur Kleinbuchstaben)</label>
+                <input type="text" id="edit-username-input" class="comment-input" placeholder="benutzername" style="border-radius:10px;">
 
                 <label style="color:#888; font-size:12px; margin-left:5px; margin-top:10px;">Profilbild (Bild-Link einfügen)</label>
                 <input type="url" id="edit-pic-input" class="comment-input" placeholder="https://..." style="border-radius:10px;">
