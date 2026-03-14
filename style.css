@@ -22,7 +22,8 @@ textarea,
 .comment p,
 .reply-item p,
 .video__footer p,
-.chat-bubble {
+.chat-bubble,
+#detail-desc {
     -webkit-user-select: text;
     -moz-user-select: text;
     -ms-user-select: text;
@@ -569,17 +570,18 @@ body {
     border-radius: 0 2px 2px 0;
 }
 
+
+/* --- NEU: TITEL UND BESCHREIBUNG IM FEED --- */
+
 .video__footer {
     position: absolute;
     bottom: 20px;
     left: 12px;
     width: calc(100% - 70px);
-    /* Besserer Puffer für Handys */
     text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
     z-index: 10;
     pointer-events: none;
     word-wrap: break-word;
-    /* Ganz wichtig: Kein Text bricht aus */
 }
 
 .creator-name {
@@ -591,17 +593,26 @@ body {
     display: inline-block;
 }
 
-.video__footer p {
+.video-title {
     font-size: 15px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.video-desc-preview {
+    font-size: 14px;
     pointer-events: auto;
     line-height: 1.3;
+    cursor: pointer;
+    color: #eee;
 }
 
 .video__sidebar {
     position: absolute;
     bottom: 25px;
     right: 12px;
-    /* Näher am Rand für schmale Handys */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -727,11 +738,8 @@ body {
     color: white;
     border: none;
     padding: 0 20px;
-    /* Vertikales Padding entfernt für perfektes Zentrieren */
     min-height: 46px;
-    /* Besser für Handys (Apple empfiehlt min 44px) */
     border-radius: 8px;
-    /* Modernerer Look */
     font-weight: 600;
     font-size: 15px;
     cursor: pointer;
@@ -741,11 +749,9 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     display: flex;
-    /* FLEXBOX für absolute Zentrierung */
     justify-content: center;
     align-items: center;
     line-height: normal;
-    /* Verhindert, dass der Text verschoben wird */
 }
 
 .profile-action-btn.edit-btn {
@@ -909,7 +915,6 @@ body {
 .chat-input {
     flex: 1;
     min-width: 0;
-    /* Wichtig für Flex-Inputs */
     padding: 14px 20px;
     border-radius: 30px;
     border: 1px solid #333;
@@ -917,7 +922,6 @@ body {
     color: white;
     outline: none;
     font-size: 16px;
-    /* 16px blockiert Auto-Zoom auf iPhones */
 }
 
 .chat-send-btn {
@@ -943,7 +947,6 @@ body {
 .search-input-box {
     flex: 1;
     min-width: 0;
-    /* Essentiell, damit die Suchleiste nicht nach rechts buggt */
     display: flex;
     align-items: center;
     background: #222;
@@ -964,7 +967,6 @@ body {
     color: white;
     outline: none;
     font-size: 16px;
-    /* iOS Auto-Zoom Block */
 }
 
 .trending-section {
@@ -1205,6 +1207,16 @@ body {
     margin-bottom: 5px;
 }
 
+
+/* Zeitstempel für Kommentare und Replies */
+
+.comment-time {
+    font-size: 11px;
+    color: #666;
+    margin-left: 8px;
+    font-weight: normal;
+}
+
 .comment p {
     font-size: 15px;
     line-height: 1.4;
@@ -1281,7 +1293,6 @@ body {
 .comment-input {
     flex: 1;
     min-width: 0;
-    /* Verhindert Überlauf */
     padding: 14px 20px;
     border-radius: 30px;
     border: 1px solid #333;
@@ -1289,7 +1300,6 @@ body {
     color: white;
     outline: none;
     font-size: 16px;
-    /* 16px blockiert Auto-Zoom auf iPhones */
 }
 
 .comment-submit {

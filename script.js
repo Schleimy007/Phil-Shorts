@@ -28,8 +28,8 @@ if (currentUser) {
 let currentFeedMode = 'foryou';
 let isInitialLoad = true;
 let sortedFeed = [];
+const viewedVideos = new Set(); // Speichert, welche Videos in dieser Session schon als "View" gezählt wurden
 
-// Sound ist standardmäßig AN
 window.globalVolume = 1;
 window.globalMuted = false;
 
@@ -103,6 +103,22 @@ function getVerifiedBadge(uid, fallbackBool = false) {
     const user = allKnownUsers.find(u => u.uid === uid);
     const isVerif = user ? (user.verified === true) : fallbackBool;
     return isVerif ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
+}
+
+// Zeit-Umrechnung für Kommentare und DMs
+function timeAgo(timestamp) {
+    const now = Date.now();
+    const diff = now - Number(timestamp);
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (minutes < 1) return 'gerade eben';
+    if (minutes < 60) return `vor ${minutes} Min.`;
+    if (hours < 24) return `vor ${hours} Std.`;
+    if (days < 7) return `vor ${days} T.`;
+    const date = new Date(Number(timestamp));
+    return date.toLocaleDateString('de-DE');
 }
 
 let userUnsubscribe = null;
@@ -326,10 +342,6 @@ function initLiveDatabase() {
                         el.innerText = vData.gifts || 0;
                     });
 
-                    document.querySelectorAll(`.video[data-id="${vData.id}"] .video__footer p`).forEach(el => {
-                        el.innerText = vData.description || "";
-                    });
-
                     if (window.currentCommentVideoId === vData.id && document.getElementById('comment-modal').classList.contains('show')) {
                         renderComments(vData.id);
                     }
@@ -435,7 +447,7 @@ function createVideoElement(video) {
     div.innerHTML = `
         <div class="video-inner is-paused">
             <div class="video-wrapper">
-                <video class="video__player" preload="auto" loop playsinline src="${video.url}"></video>
+                <video class="video__player" data-vid="${video.id}" preload="auto" loop playsinline src="${video.url}"></video>
                 <div class="play-indicator"><i class="fas fa-play"></i></div>
                 
                 <div class="mute-container">
@@ -452,7 +464,8 @@ function createVideoElement(video) {
             
             <div class="video__footer">
                 <h3 class="creator-name" onclick="openProfile('${video.authorUid}')">@${video.authorName}${verifiedBadge}</h3>
-                <p>${video.description}</p>
+                <h4 class="video-title" onclick="openVideoDetails('${video.id}')">${video.title || 'Ohne Titel'}</h4>
+                <p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${(video.description || "").substring(0, 50)}${(video.description && video.description.length > 50) ? '... <strong>mehr anzeigen</strong>' : ''}</p>
             </div>
             
             <div class="video__sidebar">
@@ -485,29 +498,49 @@ function createVideoElement(video) {
     return div;
 }
 
+// --- VIDEO DETAILS MODAL (Description, Views, Date) ---
+window.openVideoDetails = function(id) {
+    const video = allVideosData.find(v => v.id === id);
+    if (!video) return;
+
+    document.getElementById('detail-title').innerText = video.title || 'Ohne Titel';
+    document.getElementById('detail-likes').innerHTML = `<i class="fas fa-heart" style="color: #ff0050;"></i> ${video.likedBy ? video.likedBy.length : 0}`;
+    document.getElementById('detail-views').innerHTML = `<i class="fas fa-play" style="color: #00f2fe;"></i> ${video.views || 0}`;
+
+    const timestampStr = video.timestamp ? timeAgo(video.timestamp) : 'Unbekannt';
+    document.getElementById('detail-date').innerHTML = `<i class="fas fa-calendar" style="color: #ffd700;"></i> ${timestampStr}`;
+
+    document.getElementById('detail-desc').innerText = video.description || '';
+    document.getElementById('video-details-modal').classList.add('show');
+}
+document.getElementById('close-details').addEventListener('click', () => { document.getElementById('video-details-modal').classList.remove('show'); });
+
+
 // --- VIDEO BEARBEITEN ---
 window.openEditVideo = function(videoId) {
     const video = allVideosData.find(v => v.id === videoId);
     if (video) {
         window.currentEditVideoId = videoId;
+        document.getElementById('edit-video-title').value = video.title || "";
         document.getElementById('edit-video-desc').value = video.description || "";
         document.getElementById('edit-video-modal').classList.add('show');
     }
 };
 
 document.getElementById('save-video-edit-btn').addEventListener('click', async() => {
+    const newTitle = document.getElementById('edit-video-title').value.trim();
     const newDesc = document.getElementById('edit-video-desc').value.trim();
-    if (!window.currentEditVideoId || !newDesc) return;
+
+    if (!window.currentEditVideoId || (!newDesc && !newTitle)) return;
 
     try {
-        document.querySelectorAll(`.video[data-id="${window.currentEditVideoId}"] .video__footer p`).forEach(el => {
-            el.innerText = newDesc;
-        });
-
         document.getElementById('edit-video-modal').classList.remove('show');
         showToast("Video aktualisiert!");
 
-        await updateDoc(doc(db, "videos", window.currentEditVideoId), { description: newDesc });
+        await updateDoc(doc(db, "videos", window.currentEditVideoId), {
+            title: newTitle,
+            description: newDesc
+        });
     } catch (e) {
         showCustomAlert("Fehler", "Konnte nicht gespeichert werden.");
     }
@@ -578,11 +611,15 @@ videoContainer.addEventListener('wheel', (e) => {
     scrollTimeout = setTimeout(() => { scrollTimeout = null; }, 600);
 }, { passive: false });
 
+// --- NEUER SAUBERER OBSERVER ---
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         const v = e.target;
+        const container = v.closest('.video-inner');
+        const vidId = v.dataset.vid;
 
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
+            // STOPPE SOFORT ALLE ANDEREN VIDEOS (Anti-Race-Condition)
             document.querySelectorAll('.video__player').forEach(otherVid => {
                 if (otherVid !== v && !otherVid.paused) {
                     otherVid.pause();
@@ -590,14 +627,23 @@ const videoObserver = new IntersectionObserver(entries => {
                 }
             });
 
+            // Start-Versuch
             v.muted = window.globalMuted;
             const playPromise = v.play();
+
             if (playPromise !== undefined) {
-                playPromise.catch(error => {
+                playPromise.then(() => {
+                    // View Tracker: Increment Views in Background
+                    if (vidId && !viewedVideos.has(vidId)) {
+                        viewedVideos.add(vidId);
+                        updateDoc(doc(db, "videos", vidId), { views: increment(1) }).catch(() => {});
+                    }
+                }).catch(error => {
                     console.log("Autoplay blockiert oder abgebrochen:", error);
                 });
             }
         } else {
+            // AUS DEM BILD VERSCHWUNDEN -> PAUSE
             v.pause();
             v.currentTime = 0;
         }
@@ -611,6 +657,7 @@ function attachInteractionsToVideo(videoContainerEl) {
 
     videoObserver.observe(v);
 
+    // --- MAGIE: NATIVE EVENT LISTENER FÜR DIE UI ---
     v.addEventListener('play', () => {
         container.classList.remove('is-paused');
     });
@@ -899,6 +946,9 @@ function renderComments(id) {
             const likeCount = c.likes ? c.likes.length : 0;
             const hasLiked = c.likes && currentUser && c.likes.includes(currentUser.uid) ? 'liked-heart' : '';
 
+            // ZEITSTEMPEL FÜR KOMMENTAR
+            const timeString = timeAgo(c.cId);
+
             // Render Threaded Replies
             let repliesHtml = '';
             if (c.replies && c.replies.length > 0) {
@@ -909,11 +959,14 @@ function renderComments(id) {
                     const rLikeCount = r.likes ? r.likes.length : 0;
                     const rHasLiked = r.likes && currentUser && r.likes.includes(currentUser.uid) ? 'liked-heart' : '';
 
+                    // ZEITSTEMPEL FÜR ANTWORT
+                    const replyTimeString = timeAgo(r.rId);
+
                     return `
                     <div class="reply-item">
                         <img src="${r.pic}" alt="User" onclick="openProfile('${r.uid}')" style="cursor:pointer;">
                         <div style="flex:1; min-width: 0;">
-                            <strong onclick="openProfile('${r.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">@${r.name}${rBadge}</strong>
+                            <strong onclick="openProfile('${r.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">@${r.name}${rBadge} <span class="comment-time">${replyTimeString}</span></strong>
                             <p style="word-break: break-word;">${r.text}</p>
                             <div class="comment-actions">
                                 <span onclick="toggleReplyBox('${commentId}')">Antworten</span>
@@ -936,7 +989,7 @@ function renderComments(id) {
                     <div class="comment" style="display:flex; align-items:flex-start; width:100%;">
                         <img src="${c.pic}" alt="User" onclick="openProfile('${c.uid}')" style="cursor:pointer;">
                         <div style="flex:1; min-width: 0;">
-                            <strong onclick="openProfile('${c.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">@${c.name}${badge}</strong>
+                            <strong onclick="openProfile('${c.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">@${c.name}${badge} <span class="comment-time">${timeString}</span></strong>
                             <p style="word-break: break-word;">${c.text}</p>
                             <div class="comment-actions">
                                 <span onclick="toggleReplyBox('${commentId}')">Antworten</span>
@@ -1379,13 +1432,11 @@ function initInbox() {
 
     inboxUnsubscribe = onSnapshot(query(collection(db, "users", currentUser.uid, "notifications"), orderBy("timestamp", "desc")), (snapshot) => {
 
-        // --- NEU: LIVE TOAST BENACHRICHTIGUNG ---
         if (!isInitialNotifLoad) {
             snapshot.docChanges().forEach((change) => {
                 if (change.type === "added") {
                     const n = change.doc.data();
 
-                    // Prüfen ob wir gerade mit dieser Person im Chat sind, dann keinen Toast zeigen
                     const isCurrentlyChatting = document.getElementById('view-dm').classList.contains('active') && window.currentChatPartner && window.currentChatPartner.uid === n.fromUid;
 
                     if (!isCurrentlyChatting) {
@@ -1448,6 +1499,7 @@ function initInbox() {
                         <div class="chat-bubble" style="background: transparent; padding: 0; word-break: break-word;">
                             <i class="fas ${icon}" style="color:${color}; margin-right:5px;"></i> ${n.text}
                         </div>
+                        <div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(n.timestamp)}</div>
                     </div>
                 </div>`;
         });
@@ -1496,6 +1548,7 @@ function initInboxChats() {
                         <div class="chat-bubble" style="background: transparent; padding: 0; color: #888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                             ${chat.lastMessage || 'Neuer Chat...'}
                         </div>
+                        <div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(chat.lastMessageTime)}</div>
                     </div>
                 </div>`;
         });
@@ -1550,6 +1603,7 @@ window.openDM = async function(targetUid, targetName, targetPic) {
                         <img src="${pic}" class="chat-avatar" style="flex-shrink:0;">
                         <div style="min-width:0; max-width: 100%;">
                             <div class="chat-bubble">${msg.text}</div>
+                            <div class="chat-time" style="font-size: 10px; color: #666; margin-top: 4px; text-align: ${isMe ? 'right' : 'left'};">${timeAgo(msg.timestamp)}</div>
                         </div>
                     </div>`;
             });
@@ -1579,7 +1633,6 @@ document.getElementById('send-dm-btn').addEventListener('click', async() => {
         }
     });
 
-    // --- NEU: BENACHRICHTIGUNG FÜR DIE ANDERE PERSON AUSLÖSEN ---
     addNotification(window.currentChatPartner.uid, "message", `hat geschrieben: "${text}"`);
 });
 
@@ -1594,8 +1647,10 @@ document.getElementById('up-file').addEventListener('change', function() {
 });
 document.getElementById('submit-upload').addEventListener('click', async() => {
     const file = document.getElementById('up-file').files[0];
+    const titleVal = document.getElementById('up-title').value.trim();
     const desc = document.getElementById('up-desc').value.trim();
-    if (!file || !desc) return showCustomAlert("Fehlende Daten", "Bitte wähle ein Video aus und schreibe eine Beschreibung.");
+
+    if (!file || (!desc && !titleVal)) return showCustomAlert("Fehlende Daten", "Bitte wähle ein Video aus und schreibe einen Titel oder eine Beschreibung.");
     if (file.size > 20 * 1024 * 1024) return showCustomAlert("Video zu groß", "Maximal 20 MB!");
 
     const btn = document.getElementById('submit-upload');
@@ -1610,10 +1665,26 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
         const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: formData });
         const data = await res.json();
         if (!data.secure_url) throw new Error("Upload fehlgeschlagen.");
-        await addDoc(collection(db, "videos"), { url: data.secure_url, authorUid: currentUser.uid, authorName: currentUser.displayName, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, description: desc, likedBy: [], gifts: 0, comments: [] });
+
+        await addDoc(collection(db, "videos"), {
+            url: data.secure_url,
+            authorUid: currentUser.uid,
+            authorName: currentUser.displayName,
+            authorPic: currentUser.photoURL,
+            authorVerified: currentUser.verified || false,
+            title: titleVal,
+            description: desc,
+            likedBy: [],
+            gifts: 0,
+            comments: [],
+            views: 0,
+            timestamp: Date.now()
+        });
+
         showToast("Video veröffentlicht! 🎉");
         document.getElementById('upload-modal').classList.remove('show');
         document.getElementById('up-file').value = '';
+        document.getElementById('up-title').value = '';
         document.getElementById('up-desc').value = '';
         document.querySelector('.file-upload-design p').innerText = "Video auswählen";
         document.querySelector('.file-upload-design i').className = "fas fa-cloud-upload-alt";
