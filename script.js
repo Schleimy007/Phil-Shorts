@@ -72,7 +72,6 @@ function initLiveUser() {
     if (!currentUser) return;
     if (userUnsubscribe) userUnsubscribe();
 
-    // LIVE HÖRGERÄT: Aktualisiert deine Coins/Follower in Millisekunden!
     userUnsubscribe = onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => {
         if (docSnap.exists()) {
             currentUser = {...currentUser, ...docSnap.data() };
@@ -80,7 +79,6 @@ function initLiveUser() {
             if (!currentUser.followers) currentUser.followers = [];
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
-            // UI LIVE UPDATE (Wenn auf dem eigenen Profil)
             const coinEl = document.getElementById('my-coins');
             if (coinEl) coinEl.innerText = currentUser.coins;
 
@@ -166,7 +164,6 @@ function initLiveDatabase() {
             renderFeed();
             isInitialLoad = false;
         } else {
-            // NUR ÄNDERUNGEN UPDATEN = KEIN VIDEO-STUTTERN!
             snapshot.docChanges().forEach((change) => {
                 const vData = { id: change.doc.id, ...change.doc.data() };
 
@@ -176,14 +173,12 @@ function initLiveDatabase() {
                         if (currentFeedMode === 'foryou' || (currentFeedMode === 'following' && currentUser.following.includes(vData.authorUid))) {
                             const container = document.getElementById('video-container');
                             container.insertBefore(newVidEl, container.firstChild);
-                            // Leeren State entfernen, falls vorhanden
                             const emptyState = container.querySelector('.empty-state');
                             if (emptyState) emptyState.remove();
                         }
                     }
                 }
                 if (change.type === "modified") {
-                    // LIVE LIKES UPDATE
                     const likeEl = document.querySelector(`.like-btn[data-id="${vData.id}"] .like-count`);
                     if (likeEl) likeEl.innerText = vData.likedBy ? vData.likedBy.length : 0;
 
@@ -193,15 +188,12 @@ function initLiveDatabase() {
                         else likeBtn.classList.remove('liked');
                     }
 
-                    // LIVE COMMENTS UPDATE
                     const commentEl = document.querySelector(`.comment-btn[data-id="${vData.id}"] p`);
                     if (commentEl) commentEl.innerText = vData.comments ? vData.comments.length : 0;
 
-                    // LIVE GIFTS UPDATE
                     const giftEl = document.querySelector(`.gift-btn[data-id="${vData.id}"] .gift-count`);
                     if (giftEl) giftEl.innerText = vData.gifts || 0;
 
-                    // LIVE MODAL UPDATE (Wenn offen)
                     if (window.currentCommentVideoId === vData.id && document.getElementById('comment-modal').classList.contains('show')) {
                         renderComments(vData.id);
                     }
@@ -238,7 +230,14 @@ function createVideoElement(video) {
         <div class="video-inner">
             <video class="video__player" loop playsinline src="${video.url}"></video>
             <div class="play-indicator"><i class="fas fa-play"></i></div>
-            <div class="mute-btn"><i class="fas fa-volume-up"></i></div>
+            
+            <div class="mute-container">
+                <div class="mute-btn"><i class="fas fa-volume-up"></i></div>
+                <div class="volume-slider-wrapper">
+                    <input type="range" class="volume-slider" min="0" max="1" step="0.05" value="1">
+                </div>
+            </div>
+
             <div class="like-animation"><i class="fas fa-heart"></i></div>
             <div class="gift-animation"><i class="fas fa-coins"></i></div>
             <div class="player-progress-bar"><div class="player-progress-filled"></div></div>
@@ -317,13 +316,11 @@ document.getElementById('tab-following').addEventListener('click', function() {
 
 // --- INTERAKTIONEN & PC STEUERUNG (TIKTOK RHYTHMUS) ---
 
-// Tastatur Rhythmus
 window.addEventListener('keydown', (e) => {
     if (document.getElementById('view-feed').classList.contains('active')) {
         const container = document.getElementById('video-container');
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            // Statt window.innerHeight den Container exakt nehmen
             container.scrollBy({ top: container.clientHeight, behavior: 'smooth' });
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
@@ -332,17 +329,15 @@ window.addEventListener('keydown', (e) => {
     }
 });
 
-// Mausrad Hijacker für sauberen 1-Video Rhythmus (wie TikTok)
 const videoContainer = document.getElementById('video-container');
 let scrollTimeout = null;
 
 videoContainer.addEventListener('wheel', (e) => {
-    // Wenn das Mausrad eher seitlich bewegt wird (z.B. Trackpad), lass es durch
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
 
-    e.preventDefault(); // Stoppt normales unsauberes Scrollen
+    e.preventDefault();
 
-    if (scrollTimeout) return; // Verhindert Spam-Scrollen
+    if (scrollTimeout) return;
 
     if (e.deltaY > 0) {
         videoContainer.scrollBy({ top: videoContainer.clientHeight, behavior: 'smooth' });
@@ -350,21 +345,18 @@ videoContainer.addEventListener('wheel', (e) => {
         videoContainer.scrollBy({ top: -videoContainer.clientHeight, behavior: 'smooth' });
     }
 
-    // Harter Rhythmus: 600ms Sperre bis man weiter scrollen kann
     scrollTimeout = setTimeout(() => {
         scrollTimeout = null;
     }, 600);
 }, { passive: false });
 
-
-// Globaler Observer für Auto-Play
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
             e.target.play().catch(() => {});
         } else {
             e.target.pause();
-            e.target.currentTime = 0; // Startet Video von vorne beim Weiterscrollen!
+            e.target.currentTime = 0;
         }
     });
 }, { threshold: 0.6 });
@@ -374,7 +366,7 @@ function attachInteractionsToVideo(videoContainerEl) {
     const container = videoContainerEl.querySelector('.video-inner');
     let lastTap = 0;
 
-    videoObserver.observe(v); // Fügt Auto-Play hinzu
+    videoObserver.observe(v);
 
     v.addEventListener('click', (e) => {
         const tapLength = new Date().getTime() - lastTap;
@@ -397,20 +389,52 @@ function attachInteractionsToVideo(videoContainerEl) {
         lastTap = new Date().getTime();
     });
 
+    // Volume & Mute Logik
+    const muteContainer = container.querySelector('.mute-container');
     const muteBtn = container.querySelector('.mute-btn');
+    const volumeSlider = container.querySelector('.volume-slider');
+
+    function updateVolumeIcon(vol) {
+        if (vol == 0) {
+            muteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+            v.muted = true;
+        } else if (vol < 0.5) {
+            muteBtn.innerHTML = '<i class="fas fa-volume-down"></i>';
+        } else {
+            muteBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
+        }
+    }
+
     muteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         v.muted = !v.muted;
-        muteBtn.innerHTML = v.muted ? '<i class="fas fa-volume-mute"></i>' : '<i class="fas fa-volume-up"></i>';
+        if (v.muted) {
+            volumeSlider.value = 0;
+            muteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+        } else {
+            v.volume = v.volume || 1;
+            if (v.volume === 0) v.volume = 1;
+            volumeSlider.value = v.volume;
+            updateVolumeIcon(v.volume);
+        }
     });
+
+    volumeSlider.addEventListener('input', (e) => {
+        e.stopPropagation();
+        v.muted = false;
+        v.volume = e.target.value;
+        updateVolumeIcon(v.volume);
+    });
+
+    // Verhindert, dass das Video pausiert, wenn man den Slider anklickt
+    muteContainer.addEventListener('click', (e) => e.stopPropagation());
+    volumeSlider.addEventListener('mousedown', (e) => e.stopPropagation());
 
     v.addEventListener('timeupdate', () => { container.querySelector('.player-progress-filled').style.width = (v.currentTime / v.duration * 100) + '%'; });
 
-    // Buttons
     container.querySelector('.like-btn').addEventListener('click', async(e) => {
         const btn = e.currentTarget;
         const id = btn.dataset.id;
-        // Optimistic UI Update (schnelles Feedback)
         const isLiked = btn.classList.contains('liked');
         if (isLiked) {
             await updateDoc(doc(db, "videos", id), { likedBy: arrayRemove(currentUser.uid) });
@@ -427,7 +451,6 @@ function attachInteractionsToVideo(videoContainerEl) {
         anim.style.animation = 'none';
         setTimeout(() => anim.style.animation = 'flyUpCoin 1s ease-out forwards', 10);
 
-        // Optimistic UI (wird vom Snapshot bestätigt)
         currentUser.coins -= 10;
         await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-10) });
         await updateDoc(doc(db, "videos", id), { gifts: increment(10) });
@@ -449,7 +472,6 @@ function attachInteractionsToVideo(videoContainerEl) {
     });
 }
 
-// Admin / Delete Funktionen
 window.deleteVideo = async function(videoId) {
     if (confirm("Möchtest du dieses Video wirklich endgültig löschen?")) {
         try {
@@ -477,8 +499,6 @@ window.deleteComment = async function(videoId, commentIndex) {
     }
 };
 
-
-// --- SECURE FOLLOW SYSTEM ---
 window.toggleFollow = async function(targetUid, element, event) {
     if (event) event.stopPropagation();
     const userRef = doc(db, "users", currentUser.uid);
@@ -496,7 +516,6 @@ window.toggleFollow = async function(targetUid, element, event) {
     }
 };
 
-// --- ECHTES PROFIL & EXTRA STATS ---
 window.openProfile = async function(targetUid) {
     switchView('profile');
     document.getElementById('profile-grid').innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
@@ -555,7 +574,6 @@ window.openProfile = async function(targetUid) {
             settingsIcon.style.display = 'block';
             adminDashboardBtn.style.display = currentUser.email === "schleimyverteilung@gmail.com" ? 'block' : 'none';
             privateStats.style.display = 'block';
-            // Zieht die Live-Werte vom currentUser Objekt!
             document.getElementById('my-coins').innerText = currentUser.coins || 0;
             document.getElementById('my-views').innerText = currentUser.profileViews || 0;
 
@@ -622,8 +640,6 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
     }
 });
 
-
-// --- ADMIN DASHBOARD FUNKTIONEN ---
 document.getElementById('open-admin-dashboard').addEventListener('click', () => {
     switchView('admin');
     loadAdminDashboard();
@@ -679,8 +695,6 @@ window.giveCoins = async function(targetUid) {
     } catch (e) {}
 };
 
-
-// --- LIVE CHAT ---
 function initLiveChat() {
     const chatBox = document.getElementById('chat-box');
     onSnapshot(query(collection(db, "global_chat"), orderBy("timestamp", "asc")), (snapshot) => {
@@ -704,7 +718,6 @@ document.getElementById('send-chat-btn').addEventListener('click', async() => {
 });
 document.getElementById('chat-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-chat-btn').click(); });
 
-// --- SUCHE ---
 document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     const resultsGrid = document.getElementById('search-results');
@@ -720,7 +733,6 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="switchView('feed')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
 });
 
-// --- KOMMENTARE (LIVE) ---
 function renderComments(id) {
     const list = document.getElementById('comment-list');
     const video = allVideosData.find(v => v.id === id);
@@ -741,11 +753,9 @@ document.getElementById('submit-comment').addEventListener('click', async() => {
     if (!input.value.trim() || !window.currentCommentVideoId || !currentUser) return;
     const comment = { uid: currentUser.uid, name: currentUser.displayName, pic: currentUser.photoURL, verified: currentUser.verified || false, text: input.value.trim() };
     await updateDoc(doc(db, "videos", window.currentCommentVideoId), { comments: arrayUnion(comment) });
-    // Live update passiert automatisch über Snapshot!
     input.value = '';
 });
 
-// --- UPLOAD ---
 document.getElementById('up-file').addEventListener('change', function() {
     document.querySelector('.file-upload-design p').innerText = this.files[0] ? this.files[0].name : "Video auswählen";
     document.querySelector('.file-upload-design i').className = "fas fa-check-circle";
@@ -788,24 +798,15 @@ document.getElementById('close-upload').addEventListener('click', () => document
 document.getElementById('close-comments').addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
 document.getElementById('close-settings').addEventListener('click', () => document.getElementById('settings-modal').classList.remove('show'));
 
-/* =========================================================
-   === RESPONSIVE HTML RESTRUCTURING LOGIC FÜR PC       ===
-   ========================================================= */
-
-// Wrapper-Funktion, um sie nach dem Laden des DOMs auszuführen
 function initResponsiveLayout() {
     const appContainer = document.querySelector('.app');
     const originalNav = appContainer.querySelector('.app__bottom-nav');
 
-    let currentMode = ''; // 'handy' oder 'pc'
-
-    // Platztalter für Desktop-Container
+    let currentMode = '';
     let pcSidebar = null;
 
-    // Funktion zum Erstellen des PC-Seitenleisten-Containers
     function createPCContainers() {
         if (!pcSidebar) {
-            // PC Sidebar links erstellen
             pcSidebar = document.createElement('div');
             pcSidebar.id = 'pc-nav-sidebar';
             pcSidebar.innerHTML = `
@@ -814,20 +815,17 @@ function initResponsiveLayout() {
                     Phil Shorts
                 </div>
                 `;
-            appContainer.prepend(pcSidebar); // Als erstes Kind hinzufügen (grid-column: 1)
+            appContainer.prepend(pcSidebar);
         }
     }
 
-    // Funktion zum Umstrukturieren eines Videos für PC
     function restructureVideoForPC(videoEl) {
         let infoPanel = videoEl.querySelector('#pc-info-panel-container');
         if (!infoPanel) {
-            // Erstelle ein Info-Panel, falls es noch nicht existiert
             infoPanel = document.createElement('div');
             infoPanel.id = 'pc-info-panel-container';
-            videoEl.appendChild(infoPanel); // Als grid-column: 2 hinzufügen
+            videoEl.appendChild(infoPanel);
 
-            // Verschiebe Video-Footer und Sidebar in das Panel
             const videoFooter = videoEl.querySelector('.video__footer');
             const videoSidebar = videoEl.querySelector('.video__sidebar');
 
@@ -836,7 +834,6 @@ function initResponsiveLayout() {
         }
     }
 
-    // Funktion zum Zurückrollen der Video-Umstrukturierung für Handy
     function rollBackVideoForHandy(videoEl) {
         const infoPanel = videoEl.querySelector('#pc-info-panel-container');
         if (infoPanel) {
@@ -850,7 +847,6 @@ function initResponsiveLayout() {
         }
     }
 
-    // Hauptfunktion zum Überprüfen und Umschalten
     function checkResponsiveMode() {
         const isPC = window.innerWidth > 768;
 
@@ -858,29 +854,23 @@ function initResponsiveLayout() {
             currentMode = 'pc';
             createPCContainers();
 
-            // Verschiebe die Bottom Nav in die PC-Sidebar
             if (originalNav) pcSidebar.appendChild(originalNav);
 
-            // Restrukturiere alle aktuell geladenen Videos
             document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC);
         } else if (!isPC && currentMode !== 'handy') {
             currentMode = 'handy';
 
-            // Verschiebe die originalNav zurück in den Hauptcontainer
             if (originalNav) appContainer.appendChild(originalNav);
 
-            // Entferne die PC-Sidebar
             if (pcSidebar) {
                 pcSidebar.remove();
                 pcSidebar = null;
             }
 
-            // Rolle die Restrukturierung aller geladenen Videos zurück
             document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy);
         }
     }
 
-    // Starte die Responsive-Überprüfung
     checkResponsiveMode();
     window.addEventListener('resize', checkResponsiveMode);
 
@@ -903,13 +893,11 @@ function initResponsiveLayout() {
         }
     }
 
-    // Hilfsfunktion zum Prüfen, ob PC-Layout aktiv ist
     function isPCLayoutActive() {
         return window.innerWidth > 768;
     }
 }
 
-// Führe die Logik nach dem Laden des DOMs aus
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initResponsiveLayout);
 } else {
