@@ -187,6 +187,7 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
+// Dynamischer Daten-Abruf (Damit Namen, Bilder und Haken IMMER aktuell sind)
 function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackVerified) {
     const user = allKnownUsers.find(u => u.uid === uid);
     return {
@@ -228,6 +229,7 @@ function initLiveUser() {
             if (currentUser.coins === undefined) currentUser.coins = 1000;
             if (!currentUser.followers) currentUser.followers = [];
             if (!currentUser.following) currentUser.following = [];
+            // Sicherstellen dass currentUser auch einen username hat
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
@@ -246,11 +248,13 @@ function initLiveUser() {
     });
 }
 
+// --- SOFORTIGE ÜBERALL-AKTUALISIERUNG ---
 function initSearchUsers() {
     onSnapshot(collection(db, "users"), (snapshot) => {
         allKnownUsers = [];
         snapshot.forEach(doc => allKnownUsers.push(doc.data()));
 
+        // Patcht das komplette HTML live durch!
         allKnownUsers.forEach(u => {
             const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
             const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
@@ -385,6 +389,7 @@ function applyAlgorithm(videos, mode) {
     }
 }
 
+// --- LIVE DATENBANK FÜR VIDEOS & BILDER ---
 function initLiveDatabase() {
     document.getElementById('video-container').innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i><p>Lade Algorithmus...</p></div>';
 
@@ -560,22 +565,44 @@ function createVideoElement(video) {
 
     const mutedAttr = window.globalMuted ? 'muted' : '';
 
+    // --- NEU: BILD ODER VIDEO RENDERN ---
+    let mediaHTML = '';
+    let muteUIHtml = '';
+
+    if (video.mediaType === 'images' && video.urls && video.urls.length > 0) {
+        mediaHTML = `
+            <div class="carousel-container" data-vid="${video.id}">
+                ${video.urls.map(u => `<div class="carousel-item"><img src="${u}"></div>`).join('')}
+            </div>
+            <div class="carousel-dots">
+                ${video.urls.map((_, i) => `<div class="dot ${i===0 ? 'active' : ''}"></div>`).join('')}
+            </div>
+        `;
+        // Bei Bildern kein Mute-Button
+        muteUIHtml = `<div class="mute-container" style="display:none;"></div>`;
+    } else {
+        mediaHTML = `
+            <video class="video__player" data-vid="${video.id}" preload="auto" loop playsinline ${mutedAttr} src="${video.url}"></video>
+            <div class="play-indicator"><i class="fas fa-play"></i></div>
+            <div class="player-progress-bar"><div class="player-progress-filled"></div></div>
+        `;
+        muteUIHtml = `
+            <div class="mute-container">
+                <div class="mute-btn"><i class="fas fa-volume-up"></i></div>
+                <div class="volume-slider-wrapper">
+                    <input type="range" class="volume-slider" min="0" max="1" step="0.05" value="1">
+                </div>
+            </div>
+        `;
+    }
+
     div.innerHTML = `
         <div class="video-inner is-paused">
             <div class="video-wrapper">
-                <video class="video__player" data-vid="${video.id}" preload="auto" loop playsinline ${mutedAttr} src="${video.url}"></video>
-                <div class="play-indicator"><i class="fas fa-play"></i></div>
-                
-                <div class="mute-container">
-                    <div class="mute-btn"><i class="fas fa-volume-up"></i></div>
-                    <div class="volume-slider-wrapper">
-                        <input type="range" class="volume-slider" min="0" max="1" step="0.05" value="1">
-                    </div>
-                </div>
-
+                ${mediaHTML}
+                ${muteUIHtml}
                 <div class="like-animation"><i class="fas fa-heart"></i></div>
                 <div class="gift-animation"><i class="fas fa-coins"></i></div>
-                <div class="player-progress-bar"><div class="player-progress-filled"></div></div>
             </div>
             
             <div class="video__footer">
@@ -618,6 +645,7 @@ function createVideoElement(video) {
     return div;
 }
 
+// --- VIDEO DETAILS MODAL ---
 window.openVideoDetails = function(id) {
     const video = allVideosData.find(v => v.id === id);
     if (!video) return;
@@ -635,6 +663,7 @@ window.openVideoDetails = function(id) {
 document.getElementById('close-details').addEventListener('click', () => { document.getElementById('video-details-modal').classList.remove('show'); });
 
 
+// --- VIDEO BEARBEITEN ---
 window.openEditVideo = function(videoId) {
     const video = allVideosData.find(v => v.id === videoId);
     if (video) {
@@ -680,6 +709,7 @@ document.getElementById('tab-following').addEventListener('click', function() {
     renderFeed(true);
 });
 
+// --- SCROLL ---
 const videoContainer = document.getElementById('video-container');
 videoContainer.addEventListener('scroll', () => {
     if (videoContainer.scrollTop + videoContainer.clientHeight >= videoContainer.scrollHeight - 20) {
@@ -730,53 +760,49 @@ videoContainer.addEventListener('wheel', (e) => {
 
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
-        const v = e.target;
-        const vidId = v.dataset.vid;
+        const el = e.target;
+        const vidId = el.dataset.vid;
 
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
-            document.querySelectorAll('.video__player').forEach(otherVid => {
-                if (otherVid !== v && !otherVid.paused) {
-                    otherVid.pause();
-                    otherVid.currentTime = 0;
-                }
-            });
+            // Egal ob Video oder Bild - Views zählen
+            if (vidId && !viewedVideos.has(vidId)) {
+                viewedVideos.add(vidId);
+                updateDoc(doc(db, "videos", vidId), { views: increment(1) }).catch(() => {});
+            }
 
-            v.muted = window.globalMuted;
-            const playPromise = v.play();
-
-            if (playPromise !== undefined) {
-                playPromise.then(() => {
-                    if (vidId && !viewedVideos.has(vidId)) {
-                        viewedVideos.add(vidId);
-                        updateDoc(doc(db, "videos", vidId), { views: increment(1) }).catch(() => {});
+            if (el.tagName === 'VIDEO') {
+                document.querySelectorAll('.video__player').forEach(otherVid => {
+                    if (otherVid !== el && !otherVid.paused) {
+                        otherVid.pause();
+                        otherVid.currentTime = 0;
                     }
-                }).catch(error => {
-                    console.log("Autoplay blockiert oder abgebrochen:", error);
                 });
+
+                el.muted = window.globalMuted;
+                const playPromise = el.play();
+
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => { console.log("Autoplay blockiert:", error); });
+                }
             }
         } else {
-            v.pause();
-            v.currentTime = 0;
+            if (el.tagName === 'VIDEO') {
+                el.pause();
+                el.currentTime = 0;
+            }
         }
     });
 }, { threshold: 0.5 });
 
+
 function attachInteractionsToVideo(videoContainerEl) {
     const v = videoContainerEl.querySelector('.video__player');
+    const c = videoContainerEl.querySelector('.carousel-container');
     const container = videoContainerEl.querySelector('.video-inner');
     let lastTap = 0;
 
-    videoObserver.observe(v);
-
-    v.addEventListener('play', () => {
-        container.classList.remove('is-paused');
-    });
-
-    v.addEventListener('pause', () => {
-        container.classList.add('is-paused');
-    });
-
-    v.addEventListener('click', (e) => {
+    // --- DOUBLE TAP LOGIK ---
+    const handleDoubleTap = (e) => {
         const tapLength = new Date().getTime() - lastTap;
         if (tapLength < 300 && tapLength > 0) {
             const likeBtn = container.querySelector('.like-btn');
@@ -785,55 +811,100 @@ function attachInteractionsToVideo(videoContainerEl) {
             anim.style.animation = 'none';
             setTimeout(() => anim.style.animation = 'doubleTapHeart 0.8s ease-out forwards', 10);
             e.preventDefault();
-        } else {
+            lastTap = 0;
+            return true;
+        }
+        lastTap = new Date().getTime();
+        return false;
+    };
+
+
+    if (v) {
+        // --- VIDEO LOGIK ---
+        videoObserver.observe(v);
+
+        v.addEventListener('play', () => container.classList.remove('is-paused'));
+        v.addEventListener('pause', () => container.classList.add('is-paused'));
+
+        v.addEventListener('click', (e) => {
+            if (handleDoubleTap(e)) return;
             if (v.paused) {
                 document.querySelectorAll('.video__player').forEach(vid => {
-                    if (vid !== v && !vid.paused) {
-                        vid.pause();
-                    }
+                    if (vid !== v && !vid.paused) vid.pause();
                 });
                 v.muted = window.globalMuted;
                 v.play().catch(err => console.log("Play error:", err));
             } else {
                 v.pause();
             }
+        });
+
+        v.addEventListener('timeupdate', () => { 
+            const prog = container.querySelector('.player-progress-filled');
+            if(prog) prog.style.width = (v.currentTime / v.duration * 100) + '%'; 
+        });
+
+        const muteContainer = container.querySelector('.mute-container');
+        const muteBtn = container.querySelector('.mute-btn');
+        const volumeSlider = container.querySelector('.volume-slider');
+
+        window.updateGlobalVolumeUI();
+
+        if (muteBtn) {
+            muteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.globalMuted = !window.globalMuted;
+                if (!window.globalMuted && window.globalVolume == 0) window.globalVolume = 1;
+                window.updateGlobalVolumeUI();
+            });
         }
-        lastTap = new Date().getTime();
+        if (volumeSlider) {
+            volumeSlider.addEventListener('input', (e) => {
+                e.stopPropagation();
+                window.globalMuted = false;
+                window.globalVolume = e.target.value;
+                window.updateGlobalVolumeUI();
+            });
+            volumeSlider.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+                muteContainer.classList.add('active-slider');
+            });
+            volumeSlider.addEventListener('touchstart', (e) => {
+                e.stopPropagation();
+                muteContainer.classList.add('active-slider');
+            }, { passive: false });
+        }
+
+    } else if (c) {
+        // --- BILDER CAROUSEL LOGIK ---
+        videoObserver.observe(c);
+        container.classList.remove('is-paused'); // Immer "play" bei Bildern
+
+        c.addEventListener('click', (e) => {
+            handleDoubleTap(e);
+        });
+
+        // Wisch-Indikatoren aktualisieren
+        c.addEventListener('scroll', () => {
+            const idx = Math.round(c.scrollLeft / c.clientWidth);
+            const dots = videoContainerEl.querySelectorAll('.dot');
+            dots.forEach((d, i) => {
+                if (i === idx) d.classList.add('active');
+                else d.classList.remove('active');
+            });
+        });
+    }
+
+    // --- GLOBALE BUTTONS ---
+    document.addEventListener('mouseup', () => { 
+        document.querySelectorAll('.mute-container').forEach(mc => mc.classList.remove('active-slider')); 
     });
-
-    const muteContainer = container.querySelector('.mute-container');
-    const muteBtn = container.querySelector('.mute-btn');
-    const volumeSlider = container.querySelector('.volume-slider');
-
-    window.updateGlobalVolumeUI();
-
-    muteBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        window.globalMuted = !window.globalMuted;
-        if (!window.globalMuted && window.globalVolume == 0) window.globalVolume = 1;
-        window.updateGlobalVolumeUI();
+    document.addEventListener('touchend', () => { 
+        document.querySelectorAll('.mute-container').forEach(mc => mc.classList.remove('active-slider')); 
     });
-
-    volumeSlider.addEventListener('input', (e) => {
-        e.stopPropagation();
-        window.globalMuted = false;
-        window.globalVolume = e.target.value;
-        window.updateGlobalVolumeUI();
-    });
-
-    volumeSlider.addEventListener('mousedown', (e) => {
-        e.stopPropagation();
-        muteContainer.classList.add('active-slider');
-    });
-    volumeSlider.addEventListener('touchstart', (e) => {
-        e.stopPropagation();
-        muteContainer.classList.add('active-slider');
-    }, { passive: false });
-    document.addEventListener('mouseup', () => { muteContainer.classList.remove('active-slider'); });
-    document.addEventListener('touchend', () => { muteContainer.classList.remove('active-slider'); });
-    muteContainer.addEventListener('click', (e) => e.stopPropagation());
-
-    v.addEventListener('timeupdate', () => { container.querySelector('.player-progress-filled').style.width = (v.currentTime / v.duration * 100) + '%'; });
+    
+    const mc = container.querySelector('.mute-container');
+    if (mc) mc.addEventListener('click', (e) => e.stopPropagation());
 
     container.querySelector('.like-btn').addEventListener('click', async(e) => {
         const btn = e.currentTarget;
@@ -858,7 +929,7 @@ function attachInteractionsToVideo(videoContainerEl) {
             await updateDoc(doc(db, "videos", id), { likedBy: arrayRemove(currentUser.uid) });
         } else {
             await updateDoc(doc(db, "videos", id), { likedBy: arrayUnion(currentUser.uid) });
-            if (targetVidData) addNotification(targetVidData.authorUid, "like", "hat dein Video geliket.", id);
+            if (targetVidData) addNotification(targetVidData.authorUid, "like", "hat dein Post geliket.", id);
         }
     });
 
@@ -909,7 +980,7 @@ function attachInteractionsToVideo(videoContainerEl) {
 
         if (navigator.share) {
             try {
-                await navigator.share({ title: 'Phil Shorts', text: 'Schau dir dieses Video an!', url: shareUrl });
+                await navigator.share({ title: 'Phil Shorts', text: 'Schau dir dieses an!', url: shareUrl });
             } catch (err) {}
         } else {
             navigator.clipboard.writeText(shareUrl);
@@ -919,16 +990,19 @@ function attachInteractionsToVideo(videoContainerEl) {
 }
 
 window.deleteVideo = async function(videoId) {
-    if (confirm("Möchtest du dieses Video wirklich endgültig löschen?")) {
+    if (confirm("Möchtest du diesen Post wirklich endgültig löschen?")) {
         try {
             await deleteDoc(doc(db, "videos", videoId));
-            showToast("Video erfolgreich gelöscht! 🗑️");
+            showToast("Post erfolgreich gelöscht! 🗑️");
             if (document.getElementById('view-profile').classList.contains('active')) {
                 openProfile(document.getElementById('profile-action-btn').dataset.uid);
             }
-        } catch (e) { showCustomAlert("Fehler", "Video konnte nicht gelöscht werden."); }
+        } catch (e) { showCustomAlert("Fehler", "Konnte nicht gelöscht werden."); }
     }
 };
+
+
+// --- THREADED REPLIES & KOMMENTAR LIKES ---
 
 window.toggleReplyBox = function(cId) {
     const box = document.getElementById(`reply-box-${cId}`);
@@ -1208,7 +1282,14 @@ window.renderProfileGrid = function(targetUid) {
     if (userVideos.length === 0) {
         grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`;
     } else {
-        userVideos.forEach(v => { grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`; });
+        userVideos.forEach(v => { 
+            // Vorschau Bild rendern wenn Bilder, sonst Video
+            const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`;
+            const mediaTag = v.mediaType === 'images' ? `<img src="${previewSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<video src="${previewSrc}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`;
+            const icon = v.mediaType === 'images' ? 'fa-images' : 'fa-play';
+            
+            grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')">${mediaTag}<div class="grid-views"><i class="fas ${icon}"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`; 
+        });
     }
 }
 
@@ -1275,14 +1356,14 @@ window.openProfile = async function(targetUid) {
                 document.getElementById('edit-bio-input').value = currentUser.bio;
                 document.getElementById('settings-modal').classList.add('show');
             };
-
+            
             // NEU: Zahnrad Klick-Befehl
             settingsIcon.style.display = 'block';
             settingsIcon.onclick = () => {
                 updateNotifUI(); // Lade Notification Toggles Status
                 document.getElementById('app-settings-modal').classList.add('show');
             };
-
+            
             adminDashboardBtn.style.display = currentUser.email === "schleimyverteilung@gmail.com" ? 'block' : 'none';
             privateStats.style.display = 'block';
             document.getElementById('my-coins').innerText = targetUser.coins || 0;
@@ -1323,6 +1404,7 @@ window.toggleVerify = async function(targetUid, currentStatus) {
     } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); }
 };
 
+// --- PROFIL & KOMMENTAR SYNC LOGIK ---
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
 
     const newDisplayName = document.getElementById('edit-displayname-input').value.trim();
@@ -1481,6 +1563,7 @@ window.giveCoins = async function(targetUid) {
     } catch (e) {}
 };
 
+// --- SUCHFUNKTION ---
 document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     const resultsGrid = document.getElementById('search-results');
@@ -1524,7 +1607,10 @@ document.getElementById('search-input').addEventListener('input', (e) => {
         html += matchedVideos.map(v => {
             const authorData = getUserData(v.authorUid, v.authorName, v.authorUsername || v.authorName, v.authorPic, v.authorVerified);
             const vBadge = getVerifiedBadge(v.authorUid, v.authorVerified);
-            return `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views" style="word-break: break-all; font-size: 11px;"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0} @${authorData.username}${vBadge}</div></div>`;
+            const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`;
+            const mediaTag = v.mediaType === 'images' ? `<img src="${previewSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<video src="${previewSrc}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`;
+            const icon = v.mediaType === 'images' ? 'fa-images' : 'fa-play';
+            return `<div class="grid-item" onclick="jumpToVideo('${v.id}')">${mediaTag}<div class="grid-views" style="word-break: break-all; font-size: 11px;"><i class="fas ${icon}"></i> ${v.likedBy ? v.likedBy.length : 0} @${authorData.username}${vBadge}</div></div>`;
         }).join('');
         html += '</div>';
     }
@@ -1536,6 +1622,7 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     resultsGrid.innerHTML = html;
 });
 
+// --- INBOX TAB LOGIC ---
 document.getElementById('tab-notifications').addEventListener('click', function() {
     this.classList.add('active');
     document.getElementById('tab-messages').classList.remove('active');
@@ -1550,6 +1637,7 @@ document.getElementById('tab-messages').addEventListener('click', function() {
     document.getElementById('inbox-messages-box').style.display = 'flex';
 });
 
+// --- INBOX NOTIFICATIONS (Aktivitäten) & TOAST SYSTEM ---
 let inboxUnsubscribe = null;
 let isInitialNotifLoad = true;
 
@@ -1573,13 +1661,13 @@ function initInbox() {
                         const nUser = getUserData(n.fromUid, n.fromName, n.fromUsername, n.fromPic, false);
                         let toastMsg = `🔔 Aktivität von @${nUser.username}`;
                         if (n.type === 'message') toastMsg = `💬 Nachricht von @${nUser.username}`;
-                        else if (n.type === 'like') toastMsg = `❤️ @${nUser.username} mag dein Video`;
+                        else if (n.type === 'like') toastMsg = `❤️ @${nUser.username} mag dein Post`;
                         else if (n.type === 'follow') toastMsg = `👤 @${nUser.username} folgt dir`;
                         else if (n.type === 'gift') toastMsg = `🎁 @${nUser.username} hat gespendet!`;
                         else if (n.type === 'comment') toastMsg = `💬 @${nUser.username} hat kommentiert`;
 
                         showToast(toastMsg);
-
+                        
                         // DESKTOP BENACHRICHTIGUNG SENDEN
                         window.sendDesktopNotification("Phil Shorts", toastMsg, n.type);
                     }
@@ -1645,6 +1733,7 @@ function initInbox() {
     });
 }
 
+// --- DM CHATS (Nachrichten) ---
 let inboxChatsUnsubscribe = null;
 
 function initInboxChats() {
@@ -1782,57 +1871,181 @@ document.getElementById('dm-input').addEventListener('keypress', (e) => {
     if (e.key === 'Enter') document.getElementById('send-dm-btn').click();
 });
 
-document.getElementById('up-file').addEventListener('change', function() {
-    document.querySelector('.file-upload-design p').innerText = this.files[0] ? this.files[0].name : "Video auswählen";
-    document.querySelector('.file-upload-design i').className = "fas fa-check-circle";
-    document.querySelector('.file-upload-design i').style.color = "#ff0050";
+
+// --- UPLOAD LOGIK: VIDEO TRIMMEN & BILDER + TEXT ---
+
+document.getElementById('up-file').addEventListener('change', function(e) {
+    const files = e.target.files;
+    const txt = document.querySelector('.file-upload-design p');
+    const icon = document.querySelector('.file-upload-design i');
+    const trimmerUi = document.getElementById('trimmer-ui');
+    const imageEditUi = document.getElementById('image-edit-ui');
+    const trimPreview = document.getElementById('trim-preview');
+    const trimStart = document.getElementById('trim-start');
+    const trimEnd = document.getElementById('trim-end');
+
+    if (!files || files.length === 0) {
+        txt.innerText = "Video oder Bilder auswählen";
+        icon.className = "fas fa-cloud-upload-alt";
+        icon.style.color = "#aaa";
+        trimmerUi.style.display = 'none';
+        imageEditUi.style.display = 'none';
+        return;
+    }
+
+    const isVideo = files[0].type.startsWith('video/');
+
+    if (isVideo) {
+        txt.innerText = files[0].name;
+        icon.className = "fas fa-video";
+        icon.style.color = "#00f2fe";
+        
+        trimmerUi.style.display = 'block';
+        imageEditUi.style.display = 'none';
+        
+        // Video Preview laden
+        const url = URL.createObjectURL(files[0]);
+        trimPreview.src = url;
+        trimPreview.onloadedmetadata = () => {
+            const dur = trimPreview.duration;
+            trimStart.max = dur;
+            trimEnd.max = dur;
+            trimEnd.value = dur;
+            document.getElementById('val-end').innerText = dur.toFixed(1);
+        };
+    } else {
+        txt.innerText = `${files.length} Bild(er) ausgewählt`;
+        icon.className = "fas fa-images";
+        icon.style.color = "#ffd700";
+        
+        trimmerUi.style.display = 'none';
+        imageEditUi.style.display = 'block';
+    }
 });
+
+// Slider Updates für Video Vorschau
+document.getElementById('trim-start').addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    const endVal = parseFloat(document.getElementById('trim-end').value);
+    if (val >= endVal) e.target.value = endVal - 0.1;
+    document.getElementById('val-start').innerText = parseFloat(e.target.value).toFixed(1);
+    document.getElementById('trim-preview').currentTime = parseFloat(e.target.value);
+});
+document.getElementById('trim-end').addEventListener('input', (e) => {
+    const val = parseFloat(e.target.value);
+    const startVal = parseFloat(document.getElementById('trim-start').value);
+    if (val <= startVal) e.target.value = startVal + 0.1;
+    document.getElementById('val-end').innerText = parseFloat(e.target.value).toFixed(1);
+    document.getElementById('trim-preview').currentTime = parseFloat(e.target.value);
+});
+
+
 document.getElementById('submit-upload').addEventListener('click', async() => {
-    const file = document.getElementById('up-file').files[0];
+    const files = document.getElementById('up-file').files;
     const titleVal = document.getElementById('up-title').value.trim();
     const desc = document.getElementById('up-desc').value.trim();
 
-    if (!file || (!desc && !titleVal)) return showCustomAlert("Fehlende Daten", "Bitte wähle ein Video aus und schreibe einen Titel oder eine Beschreibung.");
-    if (file.size > 20 * 1024 * 1024) return showCustomAlert("Video zu groß", "Maximal 20 MB!");
+    if (!files || files.length === 0 || (!desc && !titleVal)) {
+        return showCustomAlert("Fehlende Daten", "Bitte wähle Dateien aus und schreibe einen Titel oder eine Beschreibung.");
+    }
+    
+    let isVideo = files[0].type.startsWith('video/');
+
+    if (isVideo && files[0].size > 30 * 1024 * 1024) return showCustomAlert("Zu groß", "Videos dürfen maximal 30 MB groß sein!");
 
     const btn = document.getElementById('submit-upload');
     const status = document.getElementById('upload-status');
     btn.disabled = true;
-    status.innerText = "Wird verarbeitet... Bitte warten!";
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('upload_preset', UPLOAD_PRESET);
-
+    status.innerText = "Wird verarbeitet und optimiert... Bitte warten!";
+    
     try {
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: formData });
-        const data = await res.json();
-        if (!data.secure_url) throw new Error("Upload fehlgeschlagen.");
+        if (isVideo) {
+            // --- VIDEO UPLOAD (Mit Trimming) ---
+            const formData = new FormData();
+            formData.append('file', files[0]);
+            formData.append('upload_preset', UPLOAD_PRESET);
+            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: formData });
+            const data = await res.json();
+            if (!data.secure_url) throw new Error("Upload fehlgeschlagen.");
 
-        await addDoc(collection(db, "videos"), {
-            url: data.secure_url,
-            authorUid: currentUser.uid,
-            authorName: currentUser.displayName,
-            authorUsername: currentUser.username,
-            authorPic: currentUser.photoURL,
-            authorVerified: currentUser.verified || false,
-            title: titleVal,
-            description: desc,
-            likedBy: [],
-            gifts: 0,
-            comments: [],
-            views: 0,
-            timestamp: Date.now()
-        });
+            // Trimming Parameter anwenden & Auto-Optimierung
+            const tStart = parseFloat(document.getElementById('trim-start').value);
+            const tEnd = parseFloat(document.getElementById('trim-end').value);
+            const dur = document.getElementById('trim-start').max;
+            
+            let transform = 'q_auto,f_auto,vc_auto'; // IMMER optimieren für schnelles Laden
+            if (tStart > 0 || tEnd < dur) {
+                transform += `,so_${tStart},eo_${tEnd}`;
+            }
+            
+            const finalUrl = data.secure_url.replace('/upload/', `/upload/${transform}/`);
 
-        showToast("Video veröffentlicht! 🎉");
+            await addDoc(collection(db, "videos"), {
+                mediaType: 'video',
+                url: finalUrl,
+                authorUid: currentUser.uid,
+                authorName: currentUser.displayName,
+                authorUsername: currentUser.username,
+                authorPic: currentUser.photoURL,
+                authorVerified: currentUser.verified || false,
+                title: titleVal,
+                description: desc,
+                likedBy: [], gifts: 0, comments: [], views: 0,
+                timestamp: Date.now()
+            });
+
+        } else {
+            // --- MULTI BILDER UPLOAD (Mit Text Edit) ---
+            const textOverlay = document.getElementById('image-text-overlay').value.trim();
+            let uploadedUrls = [];
+
+            for (let i = 0; i < files.length; i++) {
+                if(files[i].size > 10 * 1024 * 1024) continue; // Bilder > 10MB skippen
+                const formData = new FormData();
+                formData.append('file', files[i]);
+                formData.append('upload_preset', UPLOAD_PRESET);
+                const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`, { method: 'POST', body: formData });
+                const data = await res.json();
+                
+                let transform = 'q_auto,f_auto'; // IMMER optimieren für schnelles Laden
+                if (textOverlay) {
+                    // Cloudinary Text Overlay (Mittig)
+                    transform += `,l_text:Arial_60_bold:${encodeURIComponent(textOverlay)},co_white`;
+                }
+                const finalUrl = data.secure_url.replace('/upload/', `/upload/${transform}/`);
+                uploadedUrls.push(finalUrl);
+            }
+
+            if(uploadedUrls.length === 0) throw new Error("Keine Bilder hochgeladen.");
+
+            await addDoc(collection(db, "videos"), {
+                mediaType: 'images',
+                urls: uploadedUrls, // Array von Bildern
+                authorUid: currentUser.uid,
+                authorName: currentUser.displayName,
+                authorUsername: currentUser.username,
+                authorPic: currentUser.photoURL,
+                authorVerified: currentUser.verified || false,
+                title: titleVal,
+                description: desc,
+                likedBy: [], gifts: 0, comments: [], views: 0,
+                timestamp: Date.now()
+            });
+        }
+
+        showToast("Erfolgreich veröffentlicht! 🎉");
         document.getElementById('upload-modal').classList.remove('show');
         document.getElementById('up-file').value = '';
         document.getElementById('up-title').value = '';
         document.getElementById('up-desc').value = '';
-        document.querySelector('.file-upload-design p').innerText = "Video auswählen";
+        document.getElementById('image-text-overlay').value = '';
+        document.querySelector('.file-upload-design p').innerText = "Video oder Bilder auswählen";
         document.querySelector('.file-upload-design i').className = "fas fa-cloud-upload-alt";
         document.querySelector('.file-upload-design i').style.color = "#aaa";
-    } catch (e) { showCustomAlert("Upload Fehler", "Fehler! Cloudinary Name korrekt?"); } finally {
+        document.getElementById('trimmer-ui').style.display = 'none';
+        document.getElementById('image-edit-ui').style.display = 'none';
+        
+    } catch (e) { showCustomAlert("Upload Fehler", "Fehler! Evtl. falsches Format."); } finally {
         btn.disabled = false;
         status.innerText = "";
     }
