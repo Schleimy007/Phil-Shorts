@@ -6,7 +6,6 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    /* 100% Wichtig für Handy-Layout: Padding bläht Container nicht mehr auf */
     -webkit-tap-highlight-color: transparent;
     -webkit-user-select: none;
     -moz-user-select: none;
@@ -36,13 +35,10 @@ body {
     color: white;
     height: 100dvh;
     width: 100%;
-    /* Niemals 100vw nutzen, das verursacht oft horizontales scrollen */
     max-width: 100%;
     overflow-x: hidden;
-    /* Verhindert das Rausbuggen komplett */
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
     display: block;
-    /* Block für Handy, um Flexbox Blowouts zu verhindern */
 }
 
 
@@ -50,13 +46,11 @@ body {
 
 .app {
     height: 100dvh;
-    /* Mobile First: 100% Bildschirm */
     width: 100%;
     max-width: 100%;
     position: relative;
     background-color: #000;
     overflow: hidden;
-    /* App darf nicht über Bildschirmrand wachsen */
 }
 
 @media (min-width: 769px) {
@@ -66,7 +60,6 @@ body {
         justify-content: center;
         align-items: center;
         background: #111;
-        /* Dunklerer Hintergrund am PC für Kontrast */
     }
     .app {
         height: 92vh;
@@ -141,7 +134,6 @@ body {
     left: 0;
     width: 100%;
     max-width: 100%;
-    /* Verhindert Rausbuggen der Ansicht */
     height: calc(100% - 60px - env(safe-area-inset-bottom));
     opacity: 0;
     pointer-events: none;
@@ -303,7 +295,6 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    /* Wichtig fürs Handy */
     gap: 25px;
     padding: 20px;
     z-index: 100;
@@ -337,7 +328,6 @@ body {
     position: absolute;
     right: 20px;
     top: 50%;
-    /* Positionierung korrigiert */
     transform: translateY(-50%);
     font-size: 22px;
     cursor: pointer;
@@ -347,25 +337,6 @@ body {
 
 .search-icon:active {
     transform: translateY(-50%) scale(0.8);
-}
-
-.top-bar {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    max-width: 100%;
-    gap: 10px;
-    /* Besser als feste Margins für Handys */
-    padding: 15px;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-}
-
-.back-btn {
-    font-size: 22px;
-    cursor: pointer;
-    padding: 5px;
 }
 
 .app__videos {
@@ -391,7 +362,6 @@ body {
     scroll-snap-align: start;
     background: #000;
     overflow: hidden;
-    /* STRICT clipping */
 }
 
 .video-inner {
@@ -401,7 +371,6 @@ body {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    /* STRICT clipping */
 }
 
 .video-wrapper {
@@ -419,7 +388,6 @@ body {
     height: 100%;
     cursor: pointer;
     display: block;
-    /* Wichtig gegen Lücken */
 }
 
 .play-indicator {
@@ -775,40 +743,6 @@ body {
 .profile-tab.active {
     color: white;
     border-bottom: 2px solid white;
-}
-
-.grid-container {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1px;
-    align-content: start;
-    padding-bottom: 20px;
-}
-
-.grid-item {
-    aspect-ratio: 9/16;
-    background: #222;
-    position: relative;
-    cursor: pointer;
-    overflow: hidden;
-}
-
-.grid-item video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.grid-views {
-    position: absolute;
-    bottom: 5px;
-    left: 5px;
-    font-size: 13px;
-    font-weight: bold;
-    text-shadow: 1px 1px 3px black;
-    display: flex;
-    align-items: center;
-    gap: 5px;
 }
 
 
@@ -1549,6 +1483,51 @@ input:checked+.slider:before {
 /* --- TIKTOK PC LAYOUT --- */
 
 @media (min-width: 769px) {
+    /* --- PC LAYOUT FIXES FÜR PROFILE, SUCHE & INBOX --- */
+    .top-bar {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    .profile-header {
+        max-width: 600px;
+        margin: 0 auto;
+        padding-top: 40px;
+    }
+    .profile-tabs {
+        max-width: 600px;
+        margin: 0 auto;
+        border-bottom: 1px solid #333;
+        margin-bottom: 20px;
+    }
+    .grid-container {
+        max-width: 900px;
+        margin: 0 auto;
+        grid-template-columns: repeat(4, 1fr) !important;
+        /* 4 Videos in einer Reihe auf PC */
+        gap: 15px;
+        padding: 0 20px;
+    }
+    .chat-container,
+    .trending-section,
+    #search-results {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    .chat-input-wrapper {
+        max-width: 600px;
+        left: 0;
+        right: 0;
+        margin: 0 auto;
+        bottom: 20px;
+        border-radius: 30px;
+        border: 1px solid #333;
+    }
+    .admin-stats,
+    .admin-user-list {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    /* App Rahmen */
     .app {
         max-width: 100vw;
         width: 100vw;

@@ -139,10 +139,8 @@ function timeAgo(timestamp) {
 
 // --- DESKTOP NOTIFICATION LOGIK ---
 function sendDesktopNotification(title, body, type, iconUrl) {
-    // Schickt nur eine native Meldung, wenn der User gerade woanders ist (anderer Tab oder Hintergrund)
     if (!document.hidden) return;
 
-    // Prüfe die Nutzer-Einstellungen
     if (!notifSettings.master) return;
     if (type === 'like' && !notifSettings.likes) return;
     if (type === 'gift' && !notifSettings.likes) return;
@@ -1150,7 +1148,7 @@ window.renderProfileGrid = function(targetUid) {
 
     grid.innerHTML = '';
     if (userVideos.length === 0) {
-        grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`;
+        grid.innerHTML = `<div style="grid-column: 1 / -1; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`;
     } else {
         userVideos.forEach(v => { grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`; });
     }
@@ -1158,7 +1156,7 @@ window.renderProfileGrid = function(targetUid) {
 
 window.openProfile = async function(targetUid) {
     switchView('profile');
-    document.getElementById('profile-grid').innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
+    document.getElementById('profile-grid').innerHTML = '<div class="loading-screen" style="grid-column: 1 / -1;"><i class="fas fa-circle-notch fa-spin"></i></div>';
 
     if (currentProfileUnsubscribe) currentProfileUnsubscribe();
 
@@ -1256,7 +1254,6 @@ window.openProfile = async function(targetUid) {
     }
 };
 
-// --- BENACHRICHTIGUNGS EINSTELLUNGEN UI ---
 function loadNotifSettingsUI() {
     document.getElementById('toggle-master').checked = notifSettings.master;
     document.getElementById('toggle-likes').checked = notifSettings.likes;
@@ -1552,7 +1549,6 @@ document.getElementById('tab-messages').addEventListener('click', function() {
     document.getElementById('inbox-messages-box').style.display = 'flex';
 });
 
-// --- INBOX NOTIFICATIONS (Aktivitäten) & TOAST SYSTEM ---
 let inboxUnsubscribe = null;
 let isInitialNotifLoad = true;
 
@@ -1582,7 +1578,7 @@ function initInbox() {
                         else if (n.type === 'comment') toastMsg = `💬 @${nUser.username} hat kommentiert`;
 
                         showToast(toastMsg);
-                        sendDesktopNotification(toastMsg, n.text, n.type, nUser.pic); // NATIVE PUSH NOTIFICATION
+                        sendDesktopNotification(toastMsg, n.text, n.type, nUser.pic);
                     }
                 }
             });
