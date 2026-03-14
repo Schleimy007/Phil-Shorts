@@ -19,6 +19,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let allVideosData = [];
+let allKnownUsers = []; // Speichert alle registrierten User für die Suche
 let currentUser = JSON.parse(localStorage.getItem('phil_session'));
 let currentFeedMode = 'foryou';
 let isInitialLoad = true;
@@ -111,6 +112,13 @@ function initLiveUser() {
     });
 }
 
+function initSearchUsers() {
+    onSnapshot(collection(db, "users"), (snapshot) => {
+        allKnownUsers = [];
+        snapshot.forEach(doc => allKnownUsers.push(doc.data()));
+    });
+}
+
 window.addEventListener('googleLoginSuccess', async(event) => {
     try {
         const response = event.detail;
@@ -149,6 +157,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
         initLiveUser();
         initInbox();
         initInboxChats();
+        initSearchUsers();
     } catch (error) {
         showCustomAlert("Login Fehler", "Datenbank-Fehler beim Login.");
     }
@@ -163,6 +172,7 @@ window.onload = async function() {
         initLiveUser();
         initInbox();
         initInboxChats();
+        initSearchUsers();
     }
 };
 
@@ -1193,15 +1203,54 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     const resultsGrid = document.getElementById('search-results');
     const trendingSection = document.getElementById('trending-tags');
+
     if (query.length < 2) {
         resultsGrid.style.display = 'none';
         trendingSection.style.display = 'block';
         return;
     }
+
     trendingSection.style.display = 'none';
-    resultsGrid.style.display = 'grid';
-    const results = allVideosData.filter(v => (v.authorName || "").toLowerCase().includes(query) || (v.description || "").toLowerCase().includes(query));
-    resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
+    resultsGrid.style.display = 'block'; // Block-Layout, da wir Listen und Grids mixen
+
+    // Benutzer durchsuchen
+    const matchedUsers = allKnownUsers.filter(u => (u.displayName || "").toLowerCase().includes(query));
+    // Videos durchsuchen
+    const matchedVideos = allVideosData.filter(v => (v.description || "").toLowerCase().includes(query) || (v.authorName || "").toLowerCase().includes(query));
+
+    let html = '';
+
+    // Abschnitt: Benutzer
+    if (matchedUsers.length > 0) {
+        html += '<h4 style="padding: 10px 15px; color:#888; font-size:14px; text-transform:uppercase;">Benutzer</h4>';
+        html += '<div style="display:flex; flex-direction:column; gap:15px; padding: 0 15px 20px;">';
+        matchedUsers.forEach(u => {
+            const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
+            html += `
+            <div style="display:flex; align-items:center; gap:15px; cursor:pointer;" onclick="openProfile('${u.uid}')">
+                <img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}" style="width:50px; height:50px; border-radius:50%; object-fit:cover; border: 1px solid #333;">
+                <div>
+                    <strong style="font-size:16px; display:block; margin-bottom:3px; color:white;">@${u.displayName} ${isVerif}</strong>
+                    <p style="font-size:13px; color:#888;">${u.followers ? u.followers.length : 0} Follower</p>
+                </div>
+            </div>`;
+        });
+        html += '</div>';
+    }
+
+    // Abschnitt: Videos
+    if (matchedVideos.length > 0) {
+        html += '<h4 style="padding: 10px 15px; color:#888; font-size:14px; text-transform:uppercase;">Videos</h4>';
+        html += '<div class="grid-container">';
+        html += matchedVideos.map(v => `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`).join('');
+        html += '</div>';
+    }
+
+    if (matchedUsers.length === 0 && matchedVideos.length === 0) {
+        html = '<div style="text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>';
+    }
+
+    resultsGrid.innerHTML = html;
 });
 
 // --- INBOX TAB LOGIC ---
