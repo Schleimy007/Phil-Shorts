@@ -117,8 +117,8 @@
                 </div>
 
                 <div style="display: flex; gap: 10px; align-items: center; justify-content: center; width: 100%;">
-                    <button id="profile-action-btn" class="profile-action-btn">Folgen</button>
-                    <button id="profile-message-btn" class="profile-action-btn edit-btn" style="display: none; padding: 12px 20px;"><i class="fas fa-paper-plane"></i></button>
+                    <button id="profile-action-btn" class="profile-action-btn" style="flex: 1;">Folgen</button>
+                    <button id="profile-message-btn" class="profile-action-btn edit-btn" style="display: none; width: 46px; padding: 0;"><i class="fas fa-paper-plane"></i></button>
                 </div>
 
                 <div id="admin-controls" style="width: 100%;"></div>
@@ -205,7 +205,7 @@
             <div class="modal-body upload-body">
                 <label style="color:#888; font-size:12px; margin-left:5px;">Beschreibung & Hashtags</label>
                 <textarea id="edit-video-desc" class="comment-input" placeholder="Beschreibe dein Video..." rows="4" style="resize:none; border-radius:15px;"></textarea>
-                <button id="save-video-edit-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; padding:15px; font-size:16px;">Speichern</button>
+                <button id="save-video-edit-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; min-height: 56px; font-size:16px;">Speichern</button>
             </div>
         </div>
 
@@ -223,7 +223,7 @@
                 </div>
                 <textarea id="up-desc" class="comment-input" placeholder="Beschreibe dein Video... #hashtags" rows="3" style="resize:none; border-radius:15px;"></textarea>
                 <p id="upload-status" style="text-align: center; font-size: 14px; font-weight: bold; color: #ff0050;"></p>
-                <button id="submit-upload" class="profile-action-btn" style="width:100%; padding:15px; font-size:16px;">Veröffentlichen</button>
+                <button id="submit-upload" class="profile-action-btn" style="width:100%; min-height: 56px; font-size:16px;">Veröffentlichen</button>
             </div>
         </div>
 
@@ -232,7 +232,7 @@
                 <h4>Profil bearbeiten</h4><i class="fas fa-times close-modal" id="close-settings"></i>
             </div>
             <div class="modal-body upload-body">
-                <label style="color:#888; font-size:12px; margin-left:5px;">Benutzername (nur Buchstaben, Zahlen, Unterstriche)</label>
+                <label style="color:#888; font-size:12px; margin-left:5px;">Benutzername (kleingeschrieben, ohne Leerzeichen)</label>
                 <input type="text" id="edit-name-input" class="comment-input" placeholder="Dein Name" style="border-radius:10px;">
 
                 <label style="color:#888; font-size:12px; margin-left:5px; margin-top:10px;">Profilbild (Bild-Link einfügen)</label>
@@ -241,10 +241,10 @@
                 <label style="color:#888; font-size:12px; margin-left:5px; margin-top:10px;">Deine Bio / Beschreibung</label>
                 <textarea id="edit-bio-input" class="comment-input" placeholder="Wer bist du?" rows="3" style="resize:none; border-radius:10px;"></textarea>
 
-                <button id="save-settings-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; padding: 15px; font-size: 17px;">Profil Speichern</button>
+                <button id="save-settings-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; min-height: 56px; font-size: 17px;">Profil Speichern</button>
 
                 <hr style="border:0; border-top:1px solid #222; margin: 25px 0;">
-                <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050; padding: 15px; font-size: 17px;">Abmelden / Account wechseln</button>
+                <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050; min-height: 56px; font-size: 17px;">Abmelden / Account wechseln</button>
             </div>
         </div>
 
@@ -253,7 +253,7 @@
                 <i class="fas fa-exclamation-circle alert-icon"></i>
                 <h3 id="alert-title">Hinweis</h3>
                 <p id="alert-message">Dies ist eine Nachricht.</p>
-                <button id="close-alert-btn" class="profile-action-btn" style="width:100%; margin-top:20px;">Okay</button>
+                <button id="close-alert-btn" class="profile-action-btn" style="width:100%; margin-top:20px; min-height: 50px;">Okay</button>
             </div>
         </div>
 

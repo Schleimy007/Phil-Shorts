@@ -719,13 +719,19 @@ body {
     color: #888;
 }
 
+
+/* --- NEUES BUTTON STYLING (FÜR ZENTRIERTEN TEXT) --- */
+
 .profile-action-btn {
     background: #ff0050;
     color: white;
     border: none;
-    padding: 12px 20px;
-    /* Besser für Handys */
-    border-radius: 6px;
+    padding: 0 20px;
+    /* Vertikales Padding entfernt für perfektes Zentrieren */
+    min-height: 46px;
+    /* Besser für Handys (Apple empfiehlt min 44px) */
+    border-radius: 8px;
+    /* Modernerer Look */
     font-weight: 600;
     font-size: 15px;
     cursor: pointer;
@@ -734,6 +740,12 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: flex;
+    /* FLEXBOX für absolute Zentrierung */
+    justify-content: center;
+    align-items: center;
+    line-height: normal;
+    /* Verhindert, dass der Text verschoben wird */
 }
 
 .profile-action-btn.edit-btn {
@@ -1063,13 +1075,18 @@ body {
 
 .admin-btn {
     flex: 1;
-    padding: 10px;
+    padding: 0 10px;
+    min-height: 36px;
     border-radius: 8px;
     border: none;
     font-weight: bold;
     cursor: pointer;
     font-size: 12px;
     transition: transform 0.1s;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
 }
 
 .admin-btn:active {

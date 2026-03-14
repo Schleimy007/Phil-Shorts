@@ -98,10 +98,8 @@ function parseJwt(token) {
 }
 
 // --- GLOBALE ZENTRALE HAKEN-FUNKTION ---
-// Diese Funktion holt den Haken IMMER aus der Live-Datenbank, egal was im Video-Eintrag steht!
 function getVerifiedBadge(uid, fallbackBool = false) {
     const user = allKnownUsers.find(u => u.uid === uid);
-    // Wenn User existiert, ZWINGEND seinen echten Haken-Status nehmen. Sonst Fallback.
     const isVerif = user ? (user.verified === true) : fallbackBool;
     return isVerif ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
 }
@@ -140,7 +138,7 @@ function initSearchUsers() {
         allKnownUsers = [];
         snapshot.forEach(doc => allKnownUsers.push(doc.data()));
 
-        // Live-Update der Haken im gesamten DOM, falls sich ein Haken ändert!
+        // Live-Update der Haken im gesamten DOM
         document.querySelectorAll('.creator-name').forEach(el => {
             const onclickAttr = el.getAttribute('onclick');
             if (onclickAttr) {
@@ -163,7 +161,6 @@ window.addEventListener('googleLoginSuccess', async(event) => {
         const data = parseJwt(response.credential);
         const uid = data.sub;
 
-        // WICHTIG: Erzwungene Filterung: Nur Buchstaben, Zahlen, Unterstriche für den Einzigartigkeits-Check
         let baseName = data.name.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
         if (!baseName || baseName.length < 3) baseName = "user" + Math.floor(100 + Math.random() * 900);
 
@@ -174,7 +171,6 @@ window.addEventListener('googleLoginSuccess', async(event) => {
         const userSnap = await getDoc(userRef);
 
         if (!userSnap.exists()) {
-            // Checke ob der Google-Name schon an jemand anderen vergeben ist!
             let finalName = baseName;
             let nameQuery = query(collection(db, "users"), where("displayName", "==", finalName));
             let nameSnap = await getDocs(nameQuery);
@@ -426,7 +422,6 @@ function createVideoElement(video) {
 
     const plusButton = (!isMe) ? `<i class="fas fa-circle-plus follow-btn" data-target="${video.authorUid}" onclick="toggleFollow('${video.authorUid}', this, event)" style="${isFollowing ? 'display: none;' : ''}"></i>` : '';
 
-    // Zentrale Live-Haken Funktion!
     const verifiedBadge = getVerifiedBadge(video.authorUid, video.authorVerified);
 
     const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : '';
@@ -1150,7 +1145,7 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
     const newBio = document.getElementById('edit-bio-input').value.trim();
     const newPic = document.getElementById('edit-pic-input').value.trim() || currentUser.photoURL;
 
-    if (newName.length < 3) return showCustomAlert("Hinweis", "Dein Name muss mindestens 3 Zeichen lang sein (nur Buchstaben, Zahlen, Unterstriche).");
+    if (newName.length < 3) return showCustomAlert("Hinweis", "Dein Name muss mindestens 3 Zeichen lang sein (ohne Leerzeichen).");
 
     const btn = document.getElementById('save-settings-btn');
     btn.innerText = "Prüfe Namen...";
