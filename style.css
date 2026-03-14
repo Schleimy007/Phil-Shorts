@@ -383,6 +383,10 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    max-width: 100%;
+    /* Verhindert ungewolltes Strecken durch das Video-Format auf Handys */
+    overflow: hidden;
+    /* Sorgt dafür, dass Elemente nicht aus dem Rand buggen */
 }
 
 .video__player {
@@ -390,6 +394,9 @@ body {
     width: 100%;
     height: 100%;
     cursor: pointer;
+    min-width: 0;
+    /* Sorgt dafür, dass Flexbox das Video auf Handy-Breite limitiert */
+    min-height: 0;
 }
 
 .play-indicator {
@@ -473,14 +480,27 @@ body {
     pointer-events: none;
 }
 
+
+/* Aktiver Slider funktioniert jetzt geräteübergreifend perfekt */
+
+.mute-container.active-slider {
+    background: rgba(0, 0, 0, 0.6);
+    padding-left: 15px;
+}
+
+.mute-container.active-slider .volume-slider-wrapper {
+    width: 80px;
+    opacity: 1;
+    pointer-events: auto;
+    margin-right: 5px;
+}
+
 @media (min-width: 769px) {
-    .mute-container:hover,
-    .mute-container.active-slider {
+    .mute-container:hover {
         background: rgba(0, 0, 0, 0.6);
         padding-left: 15px;
     }
-    .mute-container:hover .volume-slider-wrapper,
-    .mute-container.active-slider .volume-slider-wrapper {
+    .mute-container:hover .volume-slider-wrapper {
         width: 80px;
         opacity: 1;
         pointer-events: auto;
