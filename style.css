@@ -1,12 +1,14 @@
 /* --- GLOBALE TEXTAUSWAHL VERBIETEN (TIKTOK STYLE) --- */
 
-* {
+*,
+*::before,
+*::after {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    /* 100% Wichtig für Handy-Layout: Padding bläht Container nicht mehr auf */
     -webkit-tap-highlight-color: transparent;
     -webkit-user-select: none;
-    /* Verhindert das Markieren von Buttons/Icons */
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
@@ -32,9 +34,12 @@ body {
     background: #000;
     color: white;
     height: 100dvh;
-    width: 100vw;
+    width: 100%;
+    /* Niemals 100vw nutzen, das verursacht oft horizontales scrollen */
+    max-width: 100%;
+    overflow-x: hidden;
+    /* Verhindert das Rausbuggen komplett */
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
-    overflow: hidden;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -50,7 +55,8 @@ body {
     max-width: 480px;
     position: relative;
     background-color: #000;
-    overflow: hidden;
+    overflow-x: hidden;
+    /* App darf nicht über Bildschirmrand wachsen */
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
     border-radius: 30px;
     border: 6px solid #222;
@@ -60,7 +66,7 @@ body {
     .app {
         height: 100vh;
         max-height: 100vh;
-        max-width: 100vw;
+        max-width: 100%;
         border-radius: 0;
         border: none;
     }
@@ -128,6 +134,8 @@ body {
     top: 0;
     left: 0;
     width: 100%;
+    max-width: 100%;
+    /* Verhindert Rausbuggen der Ansicht */
     height: calc(100% - 60px - env(safe-area-inset-bottom));
     opacity: 0;
     pointer-events: none;
@@ -332,7 +340,10 @@ body {
 .top-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    width: 100%;
+    max-width: 100%;
+    gap: 10px;
+    /* Besser als feste Margins für Handys */
     padding: 15px;
     position: sticky;
     top: 0;
@@ -384,7 +395,7 @@ body {
     justify-content: center;
     align-items: center;
     max-width: 100%;
-    /* Verhindert ungewolltes Strecken durch das Video-Format auf Handys */
+    /* Verhindert ungewolltes Strecken */
     overflow: hidden;
     /* Sorgt dafür, dass Elemente nicht aus dem Rand buggen */
 }
@@ -395,7 +406,6 @@ body {
     height: 100%;
     cursor: pointer;
     min-width: 0;
-    /* Sorgt dafür, dass Flexbox das Video auf Handy-Breite limitiert */
     min-height: 0;
 }
 
@@ -480,9 +490,6 @@ body {
     pointer-events: none;
 }
 
-
-/* Aktiver Slider funktioniert jetzt geräteübergreifend perfekt */
-
 .mute-container.active-slider {
     background: rgba(0, 0, 0, 0.6);
     padding-left: 15px;
@@ -554,10 +561,13 @@ body {
     position: absolute;
     bottom: 30px;
     left: 15px;
-    width: calc(100% - 80px);
+    width: calc(100% - 70px);
+    /* Besserer Puffer für Handys */
     text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
     z-index: 10;
     pointer-events: none;
+    word-wrap: break-word;
+    /* Ganz wichtig: Kein Text bricht aus */
 }
 
 .creator-name {
@@ -578,7 +588,8 @@ body {
 .video__sidebar {
     position: absolute;
     bottom: 30px;
-    right: 15px;
+    right: 10px;
+    /* Näher am Rand für schmale Handys */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -700,12 +711,17 @@ body {
     background: #ff0050;
     color: white;
     border: none;
-    padding: 12px 40px;
+    padding: 12px 20px;
+    /* Besser für Handys */
     border-radius: 6px;
     font-weight: 600;
     font-size: 15px;
     cursor: pointer;
     transition: background 0.2s;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .profile-action-btn.edit-btn {
@@ -868,13 +884,16 @@ body {
 
 .chat-input {
     flex: 1;
+    min-width: 0;
+    /* Wichtig für Flex-Inputs */
     padding: 14px 20px;
     border-radius: 30px;
     border: 1px solid #333;
     background: #111;
     color: white;
     outline: none;
-    font-size: 15px;
+    font-size: 16px;
+    /* 16px blockiert Auto-Zoom auf iPhones */
 }
 
 .chat-send-btn {
@@ -890,6 +909,7 @@ body {
     font-size: 18px;
     cursor: pointer;
     transition: transform 0.1s;
+    flex-shrink: 0;
 }
 
 .chat-send-btn:active {
@@ -898,6 +918,8 @@ body {
 
 .search-input-box {
     flex: 1;
+    min-width: 0;
+    /* Essentiell, damit die Suchleiste nicht nach rechts buggt */
     display: flex;
     align-items: center;
     background: #222;
@@ -910,13 +932,15 @@ body {
 }
 
 .search-bar {
-    flex: 1;
+    width: 100%;
+    min-width: 0;
     padding: 12px 10px;
     border: none;
     background: transparent;
     color: white;
     outline: none;
-    font-size: 15px;
+    font-size: 16px;
+    /* iOS Auto-Zoom Block */
 }
 
 .trending-section {
@@ -947,6 +971,7 @@ body {
     align-items: center;
     color: #aaa;
     font-size: 18px;
+    flex-shrink: 0;
 }
 
 .trend-info strong {
@@ -1141,6 +1166,7 @@ body {
     height: 40px;
     border-radius: 50%;
     object-fit: cover;
+    flex-shrink: 0;
 }
 
 .comment strong {
@@ -1173,9 +1199,6 @@ body {
     color: #ff0050;
 }
 
-
-/* NEU: Antworten einrücken (wie YouTube/TikTok) */
-
 .reply-container {
     margin-left: 55px;
     margin-top: 15px;
@@ -1195,6 +1218,7 @@ body {
     height: 30px;
     border-radius: 50%;
     object-fit: cover;
+    flex-shrink: 0;
 }
 
 .reply-item strong {
@@ -1227,13 +1251,16 @@ body {
 
 .comment-input {
     flex: 1;
+    min-width: 0;
+    /* Verhindert Überlauf */
     padding: 14px 20px;
     border-radius: 30px;
     border: 1px solid #333;
     background: #222;
     color: white;
     outline: none;
-    font-size: 15px;
+    font-size: 16px;
+    /* 16px blockiert Auto-Zoom auf iPhones */
 }
 
 .comment-submit {
@@ -1249,6 +1276,7 @@ body {
     justify-content: center;
     align-items: center;
     font-size: 18px;
+    flex-shrink: 0;
 }
 
 .upload-body {
@@ -1295,7 +1323,10 @@ body {
     position: absolute;
     bottom: 0;
     width: 100%;
+    max-width: 100%;
     height: calc(60px + env(safe-area-inset-bottom));
+    padding: 0 5px;
+    /* Etwas Puffer zum Rand */
     padding-bottom: env(safe-area-inset-bottom);
     display: flex;
     justify-content: space-around;
@@ -1312,6 +1343,8 @@ body {
     font-size: 10px;
     gap: 5px;
     transition: color 0.2s;
+    min-width: 0;
+    /* Schrumpft auf sehr kleinen Geräten */
 }
 
 .nav__item.active {

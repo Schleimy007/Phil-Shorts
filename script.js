@@ -836,9 +836,9 @@ function renderComments(id) {
                     return `
                     <div class="reply-item">
                         <img src="${r.pic}" alt="User" onclick="openProfile('${r.uid}')" style="cursor:pointer;">
-                        <div style="flex:1;">
-                            <strong onclick="openProfile('${r.uid}')" style="cursor:pointer;">@${r.name}${rBadge}</strong>
-                            <p>${r.text}</p>
+                        <div style="flex:1; min-width: 0;">
+                            <strong onclick="openProfile('${r.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">@${r.name}${rBadge}</strong>
+                            <p style="word-break: break-word;">${r.text}</p>
                             <div class="comment-actions">
                                 <span onclick="toggleReplyBox('${commentId}')">Antworten</span>
                                 <span class="${rHasLiked}" onclick="likeReply('${id}', '${commentId}', '${r.rId}')"><i class="fas fa-heart"></i> ${rLikeCount}</span>
@@ -851,17 +851,17 @@ function renderComments(id) {
 
             const replyBoxHtml = `
                 <div class="reply-box" id="reply-box-${commentId}" style="display:none;">
-                    <input type="text" placeholder="Antworten..." id="reply-input-${commentId}" class="comment-input" style="font-size:13px; padding:8px 15px;">
-                    <button onclick="submitReply('${id}', '${commentId}')" class="chat-send-btn" style="width:32px; height:32px; font-size:12px;"><i class="fas fa-paper-plane"></i></button>
+                    <input type="text" placeholder="Antworten..." id="reply-input-${commentId}" class="comment-input" style="font-size:16px; padding:8px 15px;">
+                    <button onclick="submitReply('${id}', '${commentId}')" class="chat-send-btn" style="width:32px; height:32px; font-size:12px; flex-shrink: 0;"><i class="fas fa-paper-plane"></i></button>
                 </div>`;
 
             return `
                 <div class="comment-wrapper">
                     <div class="comment" style="display:flex; align-items:flex-start; width:100%;">
                         <img src="${c.pic}" alt="User" onclick="openProfile('${c.uid}')" style="cursor:pointer;">
-                        <div style="flex:1;">
-                            <strong onclick="openProfile('${c.uid}')" style="cursor:pointer;">@${c.name}${badge}</strong>
-                            <p>${c.text}</p>
+                        <div style="flex:1; min-width: 0;">
+                            <strong onclick="openProfile('${c.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">@${c.name}${badge}</strong>
+                            <p style="word-break: break-word;">${c.text}</p>
                             <div class="comment-actions">
                                 <span onclick="toggleReplyBox('${commentId}')">Antworten</span>
                                 <span class="${hasLiked}" onclick="likeComment('${id}', '${commentId}')"><i class="fas fa-heart"></i> ${likeCount}</span>
@@ -1167,9 +1167,9 @@ window.loadAdminDashboard = async function() {
                 <div class="admin-user-card">
                     <div class="admin-user-header" onclick="openProfile('${u.uid}')" style="cursor:pointer;">
                         <img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}">
-                        <div>
-                            <strong>@${u.displayName} ${isVerif}</strong>
-                            <div style="font-size:11px; color:#888;">${u.email} | Coins: ${u.coins || 0}</div>
+                        <div style="flex:1; min-width:0;">
+                            <strong style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;">@${u.displayName} ${isVerif}</strong>
+                            <div style="font-size:11px; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${u.email} | Coins: ${u.coins || 0}</div>
                         </div>
                     </div>
                     <div class="admin-actions">
@@ -1228,9 +1228,9 @@ document.getElementById('search-input').addEventListener('input', (e) => {
             const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
             html += `
             <div style="display:flex; align-items:center; gap:15px; cursor:pointer;" onclick="openProfile('${u.uid}')">
-                <img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}" style="width:50px; height:50px; border-radius:50%; object-fit:cover; border: 1px solid #333;">
-                <div>
-                    <strong style="font-size:16px; display:block; margin-bottom:3px; color:white;">@${u.displayName} ${isVerif}</strong>
+                <img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}" style="width:50px; height:50px; border-radius:50%; object-fit:cover; border: 1px solid #333; flex-shrink:0;">
+                <div style="flex:1; min-width:0;">
+                    <strong style="font-size:16px; display:block; margin-bottom:3px; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${u.displayName} ${isVerif}</strong>
                     <p style="font-size:13px; color:#888;">${u.followers ? u.followers.length : 0} Follower</p>
                 </div>
             </div>`;
@@ -1242,7 +1242,7 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     if (matchedVideos.length > 0) {
         html += '<h4 style="padding: 10px 15px; color:#888; font-size:14px; text-transform:uppercase;">Videos</h4>';
         html += '<div class="grid-container">';
-        html += matchedVideos.map(v => `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`).join('');
+        html += matchedVideos.map(v => `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views" style="word-break: break-all; font-size: 11px;"><i class="fas fa-play"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`).join('');
         html += '</div>';
     }
 
@@ -1302,10 +1302,10 @@ function initInbox() {
 
             inboxBox.innerHTML += `
                 <div class="inbox-msg" onclick="${clickAction}">
-                    <img src="${n.fromPic}" class="chat-avatar">
-                    <div style="flex:1;">
-                        <span class="chat-username">@${n.fromName}</span>
-                        <div class="chat-bubble" style="background: transparent; padding: 0;">
+                    <img src="${n.fromPic}" class="chat-avatar" style="flex-shrink:0;">
+                    <div style="flex:1; min-width:0;">
+                        <span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${n.fromName}</span>
+                        <div class="chat-bubble" style="background: transparent; padding: 0; word-break: break-word;">
                             <i class="fas ${icon}" style="color:${color}; margin-right:5px;"></i> ${n.text}
                         </div>
                     </div>
@@ -1349,10 +1349,10 @@ function initInboxChats() {
 
             msgBox.innerHTML += `
                 <div class="inbox-msg" onclick="openDM('${partnerUid}', '${safeName}', '${partner.pic}')">
-                    <img src="${partner.pic}" class="chat-avatar">
-                    <div style="flex:1;">
-                        <span class="chat-username">@${partner.name}</span>
-                        <div class="chat-bubble" style="background: transparent; padding: 0; color: #888;">
+                    <img src="${partner.pic}" class="chat-avatar" style="flex-shrink:0;">
+                    <div style="flex:1; min-width:0;">
+                        <span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">@${partner.name}</span>
+                        <div class="chat-bubble" style="background: transparent; padding: 0; color: #888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                             ${chat.lastMessage || 'Neuer Chat...'}
                         </div>
                     </div>
@@ -1405,8 +1405,8 @@ window.openDM = async function(targetUid, targetName, targetPic) {
                 const pic = isMe ? currentUser.photoURL : targetPic;
                 dmBox.innerHTML += `
                     <div class="chat-msg ${isMe}">
-                        <img src="${pic}" class="chat-avatar">
-                        <div>
+                        <img src="${pic}" class="chat-avatar" style="flex-shrink:0;">
+                        <div style="min-width:0; max-width: 100%;">
                             <div class="chat-bubble">${msg.text}</div>
                         </div>
                     </div>`;

@@ -51,7 +51,7 @@
 
         <div id="view-search" class="view">
             <div class="top-bar glass-nav">
-                <h3 style="margin-right: 15px;">Entdecken</h3>
+                <h3 style="white-space: nowrap;">Entdecken</h3>
                 <div class="search-input-box">
                     <i class="fas fa-search"></i>
                     <input type="text" id="search-input" placeholder="Suchen..." class="search-bar">
@@ -88,7 +88,7 @@
         <div id="view-dm" class="view">
             <div class="top-bar glass-nav">
                 <i class="fas fa-chevron-left back-btn" onclick="switchView('inbox')"></i>
-                <h3 id="dm-title">Chat</h3>
+                <h3 id="dm-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">Chat</h3>
                 <i class="fas fa-info-circle back-btn" style="opacity: 0; pointer-events: none;"></i>
             </div>
             <div class="chat-container" id="dm-box"></div>
@@ -101,12 +101,12 @@
         <div id="view-profile" class="view">
             <div class="top-bar glass-nav">
                 <i class="fas fa-chevron-left back-btn" onclick="switchView('feed')"></i>
-                <h3 id="profile-title" style="font-weight: 600;">@username</h3>
+                <h3 id="profile-title" style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">@username</h3>
                 <i class="fas fa-bars back-btn" id="open-settings" style="display:none;"></i>
             </div>
             <div class="profile-header">
                 <img src="" id="profile-pic" class="profile-image">
-                <h2 id="profile-name">Benutzername</h2>
+                <h2 id="profile-name" style="word-break: break-word; text-align: center;">Benutzername</h2>
                 <div id="profile-level" class="creator-level">Level 1 Creator 🌟</div>
                 <p id="profile-bio" class="profile-bio">Hier könnte deine coole Bio stehen.</p>
 
@@ -189,7 +189,7 @@
 
         <div id="comment-modal" class="modal">
             <div class="modal-header">
-                <h4>Kommentare</h4><i class="fas fa-times close-modal" id="close-comments"></i>
+                <h4 style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Kommentare</h4><i class="fas fa-times close-modal" id="close-comments"></i>
             </div>
             <div class="modal-body" id="comment-list"></div>
             <div class="modal-footer">
@@ -218,7 +218,7 @@
                     <input type="file" id="up-file" class="file-input-hidden" accept="video/*" required>
                     <div class="file-upload-design" onclick="document.getElementById('up-file').click()">
                         <i class="fas fa-cloud-upload-alt"></i>
-                        <p>Video auswählen</p>
+                        <p style="word-break: break-all; padding: 0 10px;">Video auswählen</p>
                     </div>
                 </div>
                 <textarea id="up-desc" class="comment-input" placeholder="Beschreibe dein Video... #hashtags" rows="3" style="resize:none; border-radius:15px;"></textarea>
