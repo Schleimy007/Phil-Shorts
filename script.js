@@ -186,6 +186,7 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
+// Dynamischer Daten-Abruf (Damit Namen, Bilder und Haken IMMER aktuell sind)
 function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackVerified) {
     const user = allKnownUsers.find(u => u.uid === uid);
     return {
@@ -227,6 +228,7 @@ function initLiveUser() {
             if (currentUser.coins === undefined) currentUser.coins = 1000;
             if (!currentUser.followers) currentUser.followers = [];
             if (!currentUser.following) currentUser.following = [];
+            // Sicherstellen dass currentUser auch einen username hat
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
@@ -245,11 +247,13 @@ function initLiveUser() {
     });
 }
 
+// --- SOFORTIGE ÜBERALL-AKTUALISIERUNG ---
 function initSearchUsers() {
     onSnapshot(collection(db, "users"), (snapshot) => {
         allKnownUsers = [];
         snapshot.forEach(doc => allKnownUsers.push(doc.data()));
 
+        // Patcht das komplette HTML live durch!
         allKnownUsers.forEach(u => {
             const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
             const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
@@ -535,6 +539,7 @@ window.updateGlobalVolumeUI = function() {
     });
 };
 
+// CAROUSEL Pfeil-Logik
 window.scrollCarousel = function(vidId, dir, event) {
     if (event) event.stopPropagation();
     const container = document.querySelector(`.carousel-container[data-vid="${vidId}"]`);
@@ -1169,7 +1174,7 @@ function renderComments(id) {
         // Infos vom Video Ersteller holen (für Creator-Heart Logik)
         const isCreator = currentUser && currentUser.uid === video.authorUid;
         const authorData = getUserData(video.authorUid, video.authorName, video.authorUsername || video.authorName, video.authorPic, video.authorVerified);
-        const creatorPic = authorData.pic;
+        const creatorPic = authorData.pic || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback';
         
         list.innerHTML = video.comments.map((c, index) => {
             const cUser = getUserData(c.uid, c.name, c.username, c.pic, c.verified);
@@ -1187,14 +1192,13 @@ function renderComments(id) {
             let cCreatorHeartHtml = '';
             if (c.creatorHeart) {
                 cCreatorHeartHtml = `
-                <div class="creator-heart-wrap" onclick="toggleCreatorHeart('${id}', '${commentId}')" style="cursor:${isCreator?'pointer':'default'};">
+                <div class="creator-heart-wrap" onclick="toggleCreatorHeart('${id}', '${commentId}')" style="cursor:${isCreator?'pointer':'default'};" title="Vom Creator geliket">
                     <div class="creator-heart-img" style="background-image: url('${creatorPic}')"></div>
                     <i class="fas fa-heart creator-heart-badge"></i>
                 </div>`;
             } else if (isCreator) {
                 cCreatorHeartHtml = `
-                <div class="creator-heart-wrap creator-heart-inactive" onclick="toggleCreatorHeart('${id}', '${commentId}')">
-                    <div class="creator-heart-img" style="background-image: url('${creatorPic}')"></div>
+                <div class="creator-heart-wrap creator-heart-inactive" onclick="toggleCreatorHeart('${id}', '${commentId}')" title="Creator Herz geben">
                     <i class="far fa-heart creator-heart-badge-outline"></i>
                 </div>`;
             }
@@ -1215,14 +1219,13 @@ function renderComments(id) {
                     let rCreatorHeartHtml = '';
                     if (r.creatorHeart) {
                         rCreatorHeartHtml = `
-                        <div class="creator-heart-wrap" onclick="toggleCreatorHeart('${id}', '${commentId}', '${r.rId}')" style="cursor:${isCreator?'pointer':'default'};">
+                        <div class="creator-heart-wrap" onclick="toggleCreatorHeart('${id}', '${commentId}', '${r.rId}')" style="cursor:${isCreator?'pointer':'default'};" title="Vom Creator geliket">
                             <div class="creator-heart-img" style="background-image: url('${creatorPic}')"></div>
                             <i class="fas fa-heart creator-heart-badge"></i>
                         </div>`;
                     } else if (isCreator) {
                         rCreatorHeartHtml = `
-                        <div class="creator-heart-wrap creator-heart-inactive" onclick="toggleCreatorHeart('${id}', '${commentId}', '${r.rId}')">
-                            <div class="creator-heart-img" style="background-image: url('${creatorPic}')"></div>
+                        <div class="creator-heart-wrap creator-heart-inactive" onclick="toggleCreatorHeart('${id}', '${commentId}', '${r.rId}')" title="Creator Herz geben">
                             <i class="far fa-heart creator-heart-badge-outline"></i>
                         </div>`;
                     }
