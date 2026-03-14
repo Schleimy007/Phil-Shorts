@@ -406,73 +406,73 @@ body {
 }
 
 
-/* --- MUTE CONTAINER & VOLUME SLIDER --- */
+/* --- TIKTOK HORIZONTAL MUTE CONTAINER & VOLUME SLIDER --- */
 
 .mute-container {
     position: absolute;
     top: 80px;
     right: 20px;
     display: flex;
-    flex-direction: column;
+    flex-direction: row-reverse;
+    /* Icon rechts, Slider links davon */
     align-items: center;
     z-index: 20;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 30px;
+    /* Pillenform */
+    backdrop-filter: blur(5px);
+    transition: all 0.3s ease;
 }
 
 .mute-btn {
     width: 40px;
     height: 40px;
-    background: rgba(0, 0, 0, 0.4);
     border-radius: 50%;
     display: flex;
     justify-content: center;
     align-items: center;
     cursor: pointer;
-    backdrop-filter: blur(5px);
-    transition: background 0.2s;
 }
 
 .volume-slider-wrapper {
-    position: absolute;
-    top: 45px;
-    width: 40px;
-    height: 0;
-    background: rgba(0, 0, 0, 0.6);
-    border-radius: 20px;
-    backdrop-filter: blur(5px);
-    transition: height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;
+    width: 0;
+    height: 40px;
+    /* Gleiche Höhe wie der Button für sauberes Flexing */
     opacity: 0;
+    overflow: hidden;
+    transition: width 0.3s ease, opacity 0.3s ease;
     display: flex;
-    justify-content: center;
     align-items: center;
     pointer-events: none;
-    overflow: hidden;
 }
 
 
-/* Hält den Slider offen beim Hovern ODER wenn .active-slider getriggert wird */
+/* Hält den Slider horizontal offen beim Hovern ODER wenn .active-slider getriggert wird */
 
 @media (min-width: 769px) {
+    .mute-container:hover,
+    .mute-container.active-slider {
+        background: rgba(0, 0, 0, 0.6);
+        padding-left: 15px;
+        /* Platz links schaffen für den einfliegenden Slider */
+    }
     .mute-container:hover .volume-slider-wrapper,
     .mute-container.active-slider .volume-slider-wrapper {
-        height: 120px;
+        width: 80px;
+        /* So breit klappt er nach links auf */
         opacity: 1;
-        margin-top: 5px;
         pointer-events: auto;
-    }
-    .mute-container:hover .mute-btn,
-    .mute-container.active-slider .mute-btn {
-        background: rgba(0, 0, 0, 0.8);
+        margin-right: 5px;
     }
 }
 
 .volume-slider {
     -webkit-appearance: none;
-    width: 100px;
+    width: 80px;
     height: 4px;
     background: rgba(255, 255, 255, 0.3);
     border-radius: 2px;
     outline: none;
-    transform: rotate(-90deg);
     cursor: pointer;
 }
 

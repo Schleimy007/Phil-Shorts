@@ -409,6 +409,9 @@ function attachInteractionsToVideo(videoContainerEl) {
     const muteBtn = container.querySelector('.mute-btn');
     const volumeSlider = container.querySelector('.volume-slider');
 
+    // Initiale Hintergrundfüllung des Sliders (auf 100%)
+    volumeSlider.style.background = `linear-gradient(to right, #fff 100%, rgba(255, 255, 255, 0.3) 100%)`;
+
     function updateVolumeIcon(vol) {
         if (vol == 0) {
             muteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
@@ -418,6 +421,9 @@ function attachInteractionsToVideo(videoContainerEl) {
         } else {
             muteBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
         }
+
+        // Füllt den linken Teil des Sliders dynamisch weiß auf
+        volumeSlider.style.background = `linear-gradient(to right, #fff ${vol * 100}%, rgba(255, 255, 255, 0.3) ${vol * 100}%)`;
     }
 
     muteBtn.addEventListener('click', (e) => {
@@ -425,7 +431,7 @@ function attachInteractionsToVideo(videoContainerEl) {
         v.muted = !v.muted;
         if (v.muted) {
             volumeSlider.value = 0;
-            muteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+            updateVolumeIcon(0);
         } else {
             v.volume = v.volume || 1;
             if (v.volume === 0) v.volume = 1;
