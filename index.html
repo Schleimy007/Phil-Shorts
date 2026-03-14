@@ -7,7 +7,7 @@
     <title>Phil - Deine Community</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
         function handleGoogleLogin(response) {
             document.getElementById('login-text').innerText = "Wird authentifiziert...";
@@ -16,7 +16,6 @@
             }));
         }
     </script>
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 
 <body>
@@ -28,7 +27,6 @@
                 <div class="logo-pulse"><i class="fas fa-play"></i></div>
                 <h2>Willkommen bei Phil</h2>
                 <p id="login-text" style="color: #aaa; margin-bottom: 30px; font-size: 14px;">Logge dich mit deinem offiziellen Google Account ein.</p>
-
                 <div id="g_id_onload" data-client_id="825368838802-830ev6a720t4hb5qrb7jo5de7orb4pr0.apps.googleusercontent.com" data-context="signin" data-ux_mode="popup" data-callback="handleGoogleLogin" data-auto_prompt="false">
                 </div>
                 <div style="display: flex; justify-content: center; width: 100%;">

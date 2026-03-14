@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, arrayRemove, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+// NEU: deleteDoc hinzugefügt, um Videos aus der Datenbank zu vernichten!
+import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 // !!! DEINE FIREBASE KEYS !!!
 const firebaseConfig = {
@@ -77,7 +78,6 @@ async function fetchFreshUserData() {
     } catch (e) {}
 }
 
-// HIER IST DIE REPARIERTE BRÜCKE FÜR DEN GOOGLE LOGIN!
 window.addEventListener('googleLoginSuccess', async(event) => {
     try {
         const response = event.detail;
@@ -136,6 +136,49 @@ document.getElementById('logout-btn').addEventListener('click', () => {
     window.location.reload();
 });
 
+// --- INHALTE LÖSCHEN (ADMIN & EIGENTÜMER) ---
+window.deleteVideo = async function(videoId) {
+    if (confirm("Möchtest du dieses Video wirklich endgültig löschen?")) {
+        try {
+            await deleteDoc(doc(db, "videos", videoId));
+            showToast("Video erfolgreich gelöscht! 🗑️");
+            loadDatabase(); // Lädt den Feed neu (ohne das Video)
+
+            // Falls das Profilfenster offen ist, das Profil auch neu laden
+            if (document.getElementById('view-profile').classList.contains('active')) {
+                openProfile(document.getElementById('profile-action-btn').dataset.uid);
+            }
+        } catch (e) {
+            showCustomAlert("Fehler", "Video konnte nicht gelöscht werden.");
+        }
+    }
+};
+
+window.deleteComment = async function(videoId, commentIndex) {
+    if (confirm("Möchtest du diesen Kommentar löschen?")) {
+        try {
+            const videoRef = doc(db, "videos", videoId);
+            const snap = await getDoc(videoRef);
+            if (snap.exists()) {
+                const videoData = snap.data();
+                videoData.comments.splice(commentIndex, 1); // Entfernt den Kommentar per Position im Array
+                await updateDoc(videoRef, { comments: videoData.comments });
+
+                // Update Lokale Variable, damit man nicht sofort neu laden muss
+                const localVid = allVideosData.find(v => v.id === videoId);
+                if (localVid) localVid.comments = videoData.comments;
+
+                renderComments(videoId); // Fenster sofort updaten
+
+                const countDisplay = document.querySelector(`.comment-btn[data-id="${videoId}"] p`);
+                if (countDisplay) countDisplay.innerText = videoData.comments.length;
+
+                showToast("Kommentar gelöscht!");
+            }
+        } catch (e) { showCustomAlert("Fehler", "Kommentar konnte nicht gelöscht werden."); }
+    }
+};
+
 
 // --- DATENBANK & FEED LADEN ---
 async function loadDatabase() {
@@ -176,9 +219,16 @@ function renderFeed() {
         const plusButton = isFollowing ? '' : `<i class="fas fa-circle-plus follow-btn" onclick="toggleFollow('${video.authorUid}', this, event)"></i>`;
         const verifiedBadge = video.authorVerified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
 
-        // CHECK OB SCHON GELIKED!
         const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : '';
         const realLikes = video.likedBy ? video.likedBy.length : 0;
+
+        // PRÜFE RECHTE FÜR VIDEO-LÖSCHEN (Entweder du bist der Creator, oder du bist der Admin)
+        const canDeleteVideo = currentUser && (video.authorUid === currentUser.uid || currentUser.email === "schleimyverteilung@gmail.com");
+        const deleteVideoBtn = canDeleteVideo ? `
+            <div class="videoSidebar__button" onclick="deleteVideo('${video.id}')" style="margin-top:15px;">
+                <i class="fas fa-trash" style="color: #ff4444; font-size:24px;"></i>
+            </div>
+        ` : '';
 
         container.innerHTML += `
             <div class="video" data-id="${video.id}">
@@ -215,7 +265,7 @@ function renderFeed() {
                         <i class="fas fa-share"></i>
                         <p>Teilen</p>
                     </div>
-                </div>
+                    ${deleteVideoBtn} </div>
             </div>`;
     });
     attachFeedInteractions();
@@ -572,15 +622,30 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="switchView('feed')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
 });
 
-// --- KOMMENTARE ---
+// --- KOMMENTARE (Mit LÖSCH-FUNKTION) ---
 function renderComments(id) {
     const list = document.getElementById('comment-list');
     const video = allVideosData.find(v => v.id === id);
-    list.innerHTML = video.comments && video.comments.length ? video.comments.map(c => {
-        const badge = c.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
-        return `<div class="comment"><img src="${c.pic}" alt="User"><div><strong>@${c.name}${badge}</strong><p>${c.text}</p></div></div>`;
-    }).join('') : '<div class="no-comments">Sei der Erste, der kommentiert!</div>';
+    if (video.comments && video.comments.length > 0) {
+        list.innerHTML = video.comments.map((c, index) => {
+            const badge = c.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
+
+            // PRÜFE RECHTE FÜR KOMMENTAR LÖSCHEN (Eigentümer oder Admin)
+            const canDelete = currentUser && (currentUser.uid === c.uid || currentUser.email === "schleimyverteilung@gmail.com");
+            const deleteBtn = canDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteComment('${id}', ${index})"></i>` : '';
+
+            return `
+            <div class="comment" style="display:flex; align-items:flex-start; width:100%;">
+                <img src="${c.pic}" alt="User">
+                <div style="flex:1;"><strong>@${c.name}${badge}</strong><p>${c.text}</p></div>
+                ${deleteBtn}
+            </div>`;
+        }).join('');
+    } else {
+        list.innerHTML = '<div class="no-comments">Sei der Erste, der kommentiert!</div>';
+    }
 }
+
 document.getElementById('submit-comment').addEventListener('click', async() => {
     const input = document.getElementById('new-comment-input');
     if (!input.value.trim() || !window.currentCommentVideoId || !currentUser) return;
