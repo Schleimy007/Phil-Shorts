@@ -25,6 +25,67 @@ if (currentUser) {
     currentUser.verified = false;
 }
 
+// --- DESKTOP BENACHRICHTIGUNGEN EINSTELLUNGEN ---
+let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || {
+    master: false,
+    comments: true,
+    likes: true,
+    dms: true,
+    follows: true
+};
+
+window.sendDesktopNotification = function(title, body, type) {
+    if (!("Notification" in window)) return;
+    if (!notifSettings.master || Notification.permission !== "granted") return;
+
+    if (type === 'comment' && !notifSettings.comments) return;
+    if ((type === 'like' || type === 'gift') && !notifSettings.likes) return;
+    if (type === 'message' && !notifSettings.dms) return;
+    if (type === 'follow' && !notifSettings.follows) return;
+
+    new Notification(title, { body: body });
+};
+
+// UI Aktualisierung der Toggles
+function updateNotifUI() {
+    const masterToggle = document.getElementById('notif-master');
+    const subSettings = document.getElementById('notif-sub-settings');
+    if (!masterToggle) return;
+
+    masterToggle.checked = notifSettings.master;
+    document.getElementById('notif-comments').checked = notifSettings.comments;
+    document.getElementById('notif-likes').checked = notifSettings.likes;
+    document.getElementById('notif-dms').checked = notifSettings.dms;
+    document.getElementById('notif-follows').checked = notifSettings.follows;
+
+    if (notifSettings.master) {
+        subSettings.style.opacity = '1';
+        subSettings.style.pointerEvents = 'auto';
+    } else {
+        subSettings.style.opacity = '0.5';
+        subSettings.style.pointerEvents = 'none';
+    }
+}
+
+document.getElementById('notif-master').addEventListener('change', async(e) => {
+    notifSettings.master = e.target.checked;
+    if (notifSettings.master && "Notification" in window) {
+        if (Notification.permission !== "granted" && Notification.permission !== "denied") {
+            await Notification.requestPermission();
+        }
+    }
+    localStorage.setItem('phil_notif_settings', JSON.stringify(notifSettings));
+    updateNotifUI();
+});
+
+['comments', 'likes', 'dms', 'follows'].forEach(id => {
+    document.getElementById(`notif-${id}`).addEventListener('change', (e) => {
+        notifSettings[id] = e.target.checked;
+        localStorage.setItem('phil_notif_settings', JSON.stringify(notifSettings));
+    });
+});
+
+
 let currentFeedMode = 'foryou';
 let isInitialLoad = true;
 let sortedFeed = [];
@@ -99,7 +160,6 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
-// Dynamischer Daten-Abruf (Damit Namen, Bilder und Haken IMMER aktuell sind)
 function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackVerified) {
     const user = allKnownUsers.find(u => u.uid === uid);
     return {
@@ -141,7 +201,6 @@ function initLiveUser() {
             if (currentUser.coins === undefined) currentUser.coins = 1000;
             if (!currentUser.followers) currentUser.followers = [];
             if (!currentUser.following) currentUser.following = [];
-            // Sicherstellen dass currentUser auch einen username hat
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
@@ -160,13 +219,11 @@ function initLiveUser() {
     });
 }
 
-// --- SOFORTIGE ÜBERALL-AKTUALISIERUNG ---
 function initSearchUsers() {
     onSnapshot(collection(db, "users"), (snapshot) => {
         allKnownUsers = [];
         snapshot.forEach(doc => allKnownUsers.push(doc.data()));
 
-        // Patcht das komplette HTML live durch!
         allKnownUsers.forEach(u => {
             const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
             const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
@@ -301,7 +358,6 @@ function applyAlgorithm(videos, mode) {
     }
 }
 
-// --- LIVE DATENBANK FÜR VIDEOS ---
 function initLiveDatabase() {
     document.getElementById('video-container').innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i><p>Lade Algorithmus...</p></div>';
 
@@ -535,7 +591,6 @@ function createVideoElement(video) {
     return div;
 }
 
-// --- VIDEO DETAILS MODAL ---
 window.openVideoDetails = function(id) {
     const video = allVideosData.find(v => v.id === id);
     if (!video) return;
@@ -553,7 +608,6 @@ window.openVideoDetails = function(id) {
 document.getElementById('close-details').addEventListener('click', () => { document.getElementById('video-details-modal').classList.remove('show'); });
 
 
-// --- VIDEO BEARBEITEN ---
 window.openEditVideo = function(videoId) {
     const video = allVideosData.find(v => v.id === videoId);
     if (video) {
@@ -599,7 +653,6 @@ document.getElementById('tab-following').addEventListener('click', function() {
     renderFeed(true);
 });
 
-// --- SCROLL ---
 const videoContainer = document.getElementById('video-container');
 videoContainer.addEventListener('scroll', () => {
     if (videoContainer.scrollTop + videoContainer.clientHeight >= videoContainer.scrollHeight - 20) {
@@ -849,9 +902,6 @@ window.deleteVideo = async function(videoId) {
         } catch (e) { showCustomAlert("Fehler", "Video konnte nicht gelöscht werden."); }
     }
 };
-
-
-// --- THREADED REPLIES & KOMMENTAR LIKES ---
 
 window.toggleReplyBox = function(cId) {
     const box = document.getElementById(`reply-box-${cId}`);
@@ -1196,6 +1246,7 @@ window.openProfile = async function(targetUid) {
                 document.getElementById('edit-username-input').value = currentUser.username || cleanUsername;
                 document.getElementById('edit-pic-input').value = currentUser.photoURL;
                 document.getElementById('edit-bio-input').value = currentUser.bio;
+                updateNotifUI(); // Lade Notification Toggles Status
                 document.getElementById('settings-modal').classList.add('show');
             };
             settingsIcon.style.display = 'block';
@@ -1239,7 +1290,6 @@ window.toggleVerify = async function(targetUid, currentStatus) {
     } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); }
 };
 
-// --- PROFIL & KOMMENTAR SYNC LOGIK ---
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
 
     const newDisplayName = document.getElementById('edit-displayname-input').value.trim();
@@ -1398,7 +1448,6 @@ window.giveCoins = async function(targetUid) {
     } catch (e) {}
 };
 
-// --- SUCHFUNKTION ---
 document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     const resultsGrid = document.getElementById('search-results');
@@ -1454,7 +1503,6 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     resultsGrid.innerHTML = html;
 });
 
-// --- INBOX TAB LOGIC ---
 document.getElementById('tab-notifications').addEventListener('click', function() {
     this.classList.add('active');
     document.getElementById('tab-messages').classList.remove('active');
@@ -1469,7 +1517,6 @@ document.getElementById('tab-messages').addEventListener('click', function() {
     document.getElementById('inbox-messages-box').style.display = 'flex';
 });
 
-// --- INBOX NOTIFICATIONS (Aktivitäten) & TOAST SYSTEM ---
 let inboxUnsubscribe = null;
 let isInitialNotifLoad = true;
 
@@ -1499,6 +1546,9 @@ function initInbox() {
                         else if (n.type === 'comment') toastMsg = `💬 @${nUser.username} hat kommentiert`;
 
                         showToast(toastMsg);
+
+                        // DESKTOP BENACHRICHTIGUNG SENDEN
+                        window.sendDesktopNotification("Phil Shorts", toastMsg, n.type);
                     }
                 }
             });
@@ -1562,7 +1612,6 @@ function initInbox() {
     });
 }
 
-// --- DM CHATS (Nachrichten) ---
 let inboxChatsUnsubscribe = null;
 
 function initInboxChats() {
@@ -1759,7 +1808,10 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
 document.getElementById('open-upload').addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
 document.getElementById('close-upload').addEventListener('click', () => document.getElementById('upload-modal').classList.remove('show'));
 document.getElementById('close-comments').addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
-document.getElementById('close-settings').addEventListener('click', () => document.getElementById('settings-modal').classList.remove('show'));
+document.getElementById('close-settings').addEventListener('click', () => {
+    document.getElementById('settings-modal').classList.remove('show');
+    updateNotifUI(); // Fallback UI Reset
+});
 
 function initResponsiveLayout() {
     const appContainer = document.querySelector('.app');

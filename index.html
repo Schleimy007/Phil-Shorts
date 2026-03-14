@@ -102,7 +102,7 @@
             <div class="top-bar glass-nav">
                 <i class="fas fa-chevron-left back-btn" onclick="switchView('feed')"></i>
                 <h3 id="profile-title" style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">@username</h3>
-                <i class="fas fa-bars back-btn" id="open-settings" style="display:none;"></i>
+                <i class="fas fa-cog back-btn" id="open-settings" style="display:none;"></i>
             </div>
             <div class="profile-header">
                 <img src="" id="profile-pic" class="profile-image">
@@ -248,7 +248,7 @@
 
         <div id="settings-modal" class="modal">
             <div class="modal-header">
-                <h4>Profil bearbeiten</h4><i class="fas fa-times close-modal" id="close-settings"></i>
+                <h4>Einstellungen</h4><i class="fas fa-times close-modal" id="close-settings"></i>
             </div>
             <div class="modal-body upload-body">
                 <label style="color:#888; font-size:12px; margin-left:5px;">Anzeigename (Leerzeichen & Großschrift erlaubt)</label>
@@ -264,6 +264,31 @@
                 <textarea id="edit-bio-input" class="comment-input" placeholder="Wer bist du?" rows="3" style="resize:none; border-radius:10px;"></textarea>
 
                 <button id="save-settings-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; min-height: 56px; font-size: 17px;">Profil Speichern</button>
+
+                <hr style="border:0; border-top:1px solid #222; margin: 25px 0;">
+                <h4 style="margin-bottom: 15px; font-size: 15px;">Desktop Benachrichtigungen</h4>
+                <div class="setting-toggle-row">
+                    <span>Alle Desktop Benachrichtigungen</span>
+                    <label class="switch"><input type="checkbox" id="notif-master"><span class="slider round"></span></label>
+                </div>
+                <div id="notif-sub-settings" class="sub-settings-box">
+                    <div class="setting-toggle-row">
+                        <span>Kommentare</span>
+                        <label class="switch"><input type="checkbox" id="notif-comments"><span class="slider round"></span></label>
+                    </div>
+                    <div class="setting-toggle-row">
+                        <span>Likes & Gifts</span>
+                        <label class="switch"><input type="checkbox" id="notif-likes"><span class="slider round"></span></label>
+                    </div>
+                    <div class="setting-toggle-row">
+                        <span>Nachrichten (DMs)</span>
+                        <label class="switch"><input type="checkbox" id="notif-dms"><span class="slider round"></span></label>
+                    </div>
+                    <div class="setting-toggle-row">
+                        <span>Neue Follower</span>
+                        <label class="switch"><input type="checkbox" id="notif-follows"><span class="slider round"></span></label>
+                    </div>
+                </div>
 
                 <hr style="border:0; border-top:1px solid #222; margin: 25px 0;">
                 <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050; min-height: 56px; font-size: 17px;">Abmelden / Account wechseln</button>
