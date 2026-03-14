@@ -18,9 +18,6 @@ body {
     align-items: center;
 }
 
-
-/* --- RESPONSIVE APP CONTAINER --- */
-
 .app {
     height: 92vh;
     max-height: 950px;
@@ -34,9 +31,6 @@ body {
     border: 6px solid #222;
 }
 
-
-/* Auf mobilen Geräten den kompletten Bildschirm füllen */
-
 @media (max-width: 768px) {
     .app {
         height: 100vh;
@@ -46,9 +40,6 @@ body {
         border: none;
     }
 }
-
-
-/* --- RESTLICHES CSS --- */
 
 .verified-badge {
     color: #00f2fe;
@@ -404,9 +395,6 @@ body {
         opacity: 0;
     }
 }
-
-
-/* --- TIKTOK HORIZONTAL MUTE CONTAINER & VOLUME SLIDER --- */
 
 .mute-container {
     position: absolute;

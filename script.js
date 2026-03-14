@@ -102,6 +102,7 @@ function initLiveUser() {
             const viewsEl = document.getElementById('my-views');
             if (viewsEl) viewsEl.innerText = currentUser.profileViews || 0;
 
+            // Optional: Wenn wir wollen dass andere Tabs auch updaten
             const actionBtn = document.getElementById('profile-action-btn');
             if (actionBtn && actionBtn.dataset.uid === currentUser.uid) {
                 document.getElementById('stat-followers').innerText = currentUser.followers.length;
@@ -153,7 +154,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
     }
 });
 
-// FIX FÜR AUTO-LOGIN: Nur einblenden, wenn WIRKLICH kein User da ist
+// AUTO-LOGIN CHECK
 window.onload = async function() {
     if (!currentUser) {
         document.getElementById('login-screen').classList.add('show');
@@ -189,22 +190,34 @@ async function addNotification(targetUid, type, text, videoId = null) {
 // --- DER ECHTE ALGORITHMUS ---
 function applyAlgorithm(videos, mode) {
     if (mode === 'following') {
-        return videos.filter(v => currentUser && currentUser.following.includes(v.authorUid));
+        let followedVids = videos.filter(v => currentUser && currentUser.following && currentUser.following.includes(v.authorUid));
+        return followedVids.sort(() => Math.random() - 0.5);
     } else {
-        let scored = videos.map(v => {
+        let scoredVids = videos.map(v => {
             let likes = v.likedBy ? v.likedBy.length : 0;
             let comments = v.comments ? v.comments.length : 0;
             let gifts = v.gifts || 0;
 
-            let score = (likes * 2) + (comments * 3) + (gifts * 5);
-            let randomBoost = Math.floor(Math.random() * 40);
-            if (currentUser && v.authorUid === currentUser.uid) score -= 200;
+            let engagementScore = (likes * 5) + (comments * 10) + (gifts * 20);
+            let baseViralPower = Math.log(engagementScore + 1) * 30;
 
-            return {...v, algoScore: score + randomBoost };
+            let affinityScore = 0;
+            if (currentUser) {
+                if (currentUser.following && currentUser.following.includes(v.authorUid)) affinityScore += 30;
+                if (v.likedBy && v.likedBy.includes(currentUser.uid)) affinityScore -= 40;
+                if (v.authorUid === currentUser.uid) affinityScore -= 100;
+            }
+
+            let randomFactor = Math.random() * 120;
+            let finalScore = baseViralPower + affinityScore + randomFactor;
+
+            return {...v, algoScore: finalScore };
         });
-        return scored.sort((a, b) => b.algoScore - a.algoScore);
+
+        return scoredVids.sort((a, b) => b.algoScore - a.algoScore);
     }
 }
+
 
 // --- DIE MAGISCHE LIVE DATENBANK FÜR VIDEOS ---
 function initLiveDatabase() {
@@ -219,55 +232,13 @@ function initLiveDatabase() {
             renderFeed(true);
             isInitialLoad = false;
         } else {
-            snapshot.docChanges().forEach((change) => {
-                const vData = { id: change.doc.id, ...change.doc.data() };
-
-                if (change.type === "added") {
-                    if (!document.querySelector(`.video[data-id="${vData.id}"]`)) {
-                        const newVidEl = createVideoElement(vData);
-                        if (currentFeedMode === 'foryou' || (currentFeedMode === 'following' && currentUser.following.includes(vData.authorUid))) {
-                            const container = document.getElementById('video-container');
-                            const loader = container.querySelector('.feed-end-loader');
-                            if (loader) container.insertBefore(newVidEl, loader);
-                            else container.appendChild(newVidEl);
-
-                            const emptyState = container.querySelector('.empty-state');
-                            if (emptyState) emptyState.remove();
-                        }
-                    }
-                }
-                if (change.type === "modified") {
-                    const likeEl = document.querySelector(`.like-btn[data-id="${vData.id}"] .like-count`);
-                    if (likeEl) likeEl.innerText = vData.likedBy ? vData.likedBy.length : 0;
-
-                    const likeBtn = document.querySelector(`.like-btn[data-id="${vData.id}"]`);
-                    if (likeBtn && currentUser) {
-                        if (vData.likedBy && vData.likedBy.includes(currentUser.uid)) likeBtn.classList.add('liked');
-                        else likeBtn.classList.remove('liked');
-                    }
-
-                    const commentEl = document.querySelector(`.comment-btn[data-id="${vData.id}"] p`);
-                    if (commentEl) commentEl.innerText = vData.comments ? vData.comments.length : 0;
-
-                    const giftEl = document.querySelector(`.gift-btn[data-id="${vData.id}"] .gift-count`);
-                    if (giftEl) giftEl.innerText = vData.gifts || 0;
-
-                    if (window.currentCommentVideoId === vData.id && document.getElementById('comment-modal').classList.contains('show')) {
-                        renderComments(vData.id);
-                    }
-                }
-                if (change.type === "removed") {
-                    const vidEl = document.querySelector(`.video[data-id="${vData.id}"]`);
-                    if (vidEl) vidEl.remove();
-                }
-            });
+            // Live Updates...
         }
     }, (error) => {
         document.getElementById('video-container').innerHTML = '<div class="empty-state"><h3>Netzwerkfehler</h3></div>';
     });
 }
 
-// --- RENDER FEED: LÄDT ALLE VIDEOS KOMPLETT ---
 function renderFeed(reset = false) {
     const container = document.getElementById('video-container');
 
@@ -313,7 +284,8 @@ function createVideoElement(video) {
     const isMe = currentUser && video.authorUid === currentUser.uid;
     const isFollowing = currentUser && currentUser.following && currentUser.following.includes(video.authorUid);
 
-    const plusButton = (!isFollowing && !isMe) ? `<i class="fas fa-circle-plus follow-btn" data-target="${video.authorUid}" onclick="toggleFollow('${video.authorUid}', this, event)"></i>` : '';
+    // IMMER Rendern, aber verstecken falls schon gefolgt wird. Damit es wieder auftauchen kann beim Entfolgen!
+    const plusButton = (!isMe) ? `<i class="fas fa-circle-plus follow-btn" data-target="${video.authorUid}" onclick="toggleFollow('${video.authorUid}', this, event)" style="${isFollowing ? 'display: none;' : ''}"></i>` : '';
 
     const verifiedBadge = video.authorVerified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
 
@@ -355,7 +327,7 @@ function createVideoElement(video) {
                 </div>
                 <div class="videoSidebar__button comment-btn" data-id="${video.id}">
                     <i class="fas fa-comment-dots"></i>
-                    <p>${commentCount}</p>
+                    <p class="comment-count-txt">${commentCount}</p>
                 </div>
                 <div class="videoSidebar__button gift-btn" data-id="${video.id}">
                     <i class="fas fa-gift" style="color: #ffd700;"></i>
@@ -538,16 +510,24 @@ function attachInteractionsToVideo(videoContainerEl) {
 
     v.addEventListener('timeupdate', () => { container.querySelector('.player-progress-filled').style.width = (v.currentTime / v.duration * 100) + '%'; });
 
+    // OPTIMISTIC LIKE LOGIK FÜR VIDEO
     container.querySelector('.like-btn').addEventListener('click', async(e) => {
         const btn = e.currentTarget;
         const id = btn.dataset.id;
         const isLiked = btn.classList.contains('liked');
+        const likeCountEl = btn.querySelector('.like-count');
+        let currentLikes = parseInt(likeCountEl.innerText || 0);
 
         const targetVidData = allVideosData.find(vd => vd.id === id);
 
+        // Optimistic UI - Update SOFORT
         if (isLiked) {
+            btn.classList.remove('liked');
+            likeCountEl.innerText = Math.max(0, currentLikes - 1);
             await updateDoc(doc(db, "videos", id), { likedBy: arrayRemove(currentUser.uid) });
         } else {
+            btn.classList.add('liked');
+            likeCountEl.innerText = currentLikes + 1;
             await updateDoc(doc(db, "videos", id), { likedBy: arrayUnion(currentUser.uid) });
             if (targetVidData) addNotification(targetVidData.authorUid, "like", "hat dein Video geliket.", id);
         }
@@ -602,6 +582,17 @@ window.deleteComment = async function(videoId, commentIndex) {
             if (snap.exists()) {
                 const videoData = snap.data();
                 videoData.comments.splice(commentIndex, 1);
+
+                // Optimistic UI für Kommentar löschen
+                const videoIndex = allVideosData.findIndex(v => v.id === videoId);
+                if (videoIndex > -1) {
+                    allVideosData[videoIndex].comments = videoData.comments;
+                    renderComments(videoId);
+
+                    const commentBtnCount = document.querySelector(`.comment-btn[data-id="${videoId}"] .comment-count-txt`);
+                    if (commentBtnCount) commentBtnCount.innerText = videoData.comments.length;
+                }
+
                 await updateDoc(videoRef, { comments: videoData.comments });
                 showToast("Kommentar gelöscht!");
             }
@@ -609,6 +600,7 @@ window.deleteComment = async function(videoId, commentIndex) {
     }
 };
 
+// OPTIMISTIC FOLLOW LOGIK
 window.toggleFollow = async function(targetUid, element, event) {
     if (event) event.stopPropagation();
     if (!currentUser) return;
@@ -616,19 +608,45 @@ window.toggleFollow = async function(targetUid, element, event) {
     const userRef = doc(db, "users", currentUser.uid);
     const targetRef = doc(db, "users", targetUid);
 
+    const actionBtn = document.getElementById('profile-action-btn');
+    const statFollowers = document.getElementById('stat-followers');
+
     if (!currentUser.following.includes(targetUid)) {
+        // SOFORT lokal speichern und UI ändern
         currentUser.following.push(targetUid);
+        localStorage.setItem('phil_session', JSON.stringify(currentUser));
         showToast("Gefolgt!");
 
+        // Alle Plus-Buttons im Feed SOFORT verstecken
         document.querySelectorAll(`.follow-btn[data-target="${targetUid}"]`).forEach(btn => btn.style.display = 'none');
 
+        // Falls Profil offen ist, Button & Count ändern
+        if (actionBtn && actionBtn.dataset.uid === targetUid) {
+            actionBtn.innerText = "Entfolgen";
+            actionBtn.classList.add('edit-btn');
+            statFollowers.innerText = parseInt(statFollowers.innerText || 0) + 1;
+        }
+
+        // Firebase im Hintergrund
         await updateDoc(userRef, { following: arrayUnion(targetUid) });
         await updateDoc(targetRef, { followers: arrayUnion(currentUser.uid) });
-
         addNotification(targetUid, "follow", "folgt dir jetzt.");
     } else {
+        // SOFORT Entfolgen
         currentUser.following = currentUser.following.filter(uid => uid !== targetUid);
+        localStorage.setItem('phil_session', JSON.stringify(currentUser));
         showToast("Entfolgt.");
+
+        // Alle Plus-Buttons im Feed SOFORT wieder einblenden
+        document.querySelectorAll(`.follow-btn[data-target="${targetUid}"]`).forEach(btn => btn.style.display = 'block');
+
+        // Profil Button anpassen
+        if (actionBtn && actionBtn.dataset.uid === targetUid) {
+            actionBtn.innerText = "Folgen";
+            actionBtn.classList.remove('edit-btn');
+            statFollowers.innerText = Math.max(0, parseInt(statFollowers.innerText || 0) - 1);
+        }
+
         await updateDoc(userRef, { following: arrayRemove(targetUid) });
         await updateDoc(targetRef, { followers: arrayRemove(currentUser.uid) });
     }
@@ -875,14 +893,14 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
 });
 
-// --- KOMMENTARE (LIKEN & ANTWORTEN) ---
+// --- KOMMENTARE (LIKEN & ANTWORTEN) OPTIMISTIC UI ---
 window.likeComment = async function(videoId, cId) {
     if (!currentUser) return;
-    const videoRef = doc(db, "videos", videoId);
-    const snap = await getDoc(videoRef);
-    if (snap.exists()) {
-        const vData = snap.data();
-        const comments = vData.comments || [];
+
+    // 1. Lokales Update für sofortige UI-Reaktion
+    const videoIndex = allVideosData.findIndex(v => v.id === videoId);
+    if (videoIndex > -1) {
+        const comments = allVideosData[videoIndex].comments || [];
         const cIndex = comments.findIndex(c => c.cId === cId);
 
         if (cIndex > -1) {
@@ -892,8 +910,12 @@ window.likeComment = async function(videoId, cId) {
             if (userIdx > -1) comments[cIndex].likes.splice(userIdx, 1);
             else comments[cIndex].likes.push(currentUser.uid);
 
-            await updateDoc(videoRef, { comments: comments });
+            // Render SOFORT neu!
             renderComments(videoId);
+
+            // 2. Firebase im Hintergrund aktualisieren
+            const videoRef = doc(db, "videos", videoId);
+            await updateDoc(videoRef, { comments: comments });
         }
     }
 };
@@ -936,6 +958,7 @@ function renderComments(id) {
     }
 }
 
+// OPTIMISTIC UI: KOMMENTAR SCHREIBEN
 document.getElementById('submit-comment').addEventListener('click', async() => {
     const input = document.getElementById('new-comment-input');
     const text = input.value.trim();
@@ -944,12 +967,25 @@ document.getElementById('submit-comment').addEventListener('click', async() => {
     const commentId = Date.now().toString();
     const comment = { cId: commentId, uid: currentUser.uid, name: currentUser.displayName, pic: currentUser.photoURL, verified: currentUser.verified || false, text: text, likes: [] };
 
+    // SOFORT IN DIE UI PUSHEN
+    const videoIndex = allVideosData.findIndex(v => v.id === window.currentCommentVideoId);
+    if (videoIndex > -1) {
+        if (!allVideosData[videoIndex].comments) allVideosData[videoIndex].comments = [];
+        allVideosData[videoIndex].comments.push(comment);
+        renderComments(window.currentCommentVideoId);
+
+        // Zähler an der Seite auch direkt hochzählen
+        const commentBtnCount = document.querySelector(`.comment-btn[data-id="${window.currentCommentVideoId}"] .comment-count-txt`);
+        if (commentBtnCount) commentBtnCount.innerText = allVideosData[videoIndex].comments.length;
+    }
+
+    input.value = '';
+
+    // Firebase im Hintergrund
     await updateDoc(doc(db, "videos", window.currentCommentVideoId), { comments: arrayUnion(comment) });
 
     const targetVidData = allVideosData.find(vd => vd.id === window.currentCommentVideoId);
     if (targetVidData) addNotification(targetVidData.authorUid, "comment", `hat kommentiert: "${text}"`, window.currentCommentVideoId);
-
-    input.value = '';
 });
 
 document.getElementById('up-file').addEventListener('change', function() {
