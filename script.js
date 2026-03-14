@@ -578,7 +578,6 @@ function createVideoElement(video) {
     let muteUIHtml = '';
 
     if (video.mediaType === 'images' && video.urls && video.urls.length > 0) {
-        // NEU: Pfeile für Carousel
         let arrowsHTML = '';
         if (video.urls.length > 1) {
             arrowsHTML = `
@@ -1715,7 +1714,7 @@ function initInbox() {
                 clickAction = `jumpToVideo('${n.videoId}')`;
             }
 
-            const isVerif = getVerifiedBadge(n.fromUid);
+            const isVerif = getVerifiedBadge(nUser.verified);
 
             inboxBox.innerHTML += `
                 <div class="inbox-msg" onclick="${clickAction}">
@@ -1768,7 +1767,7 @@ function initInboxChats() {
 
             const nUser = getUserData(partnerUid, partner.name, partner.name, partner.pic, false);
             const safeName = nUser.username.replace(/'/g, "\\'");
-            const isVerif = getVerifiedBadge(partnerUid);
+            const isVerif = getVerifiedBadge(nUser.verified);
 
             msgBox.innerHTML += `
                 <div class="inbox-msg" onclick="openDM('${partnerUid}', '${safeName}', '${nUser.pic}')">
@@ -1799,7 +1798,9 @@ window.openDM = async function(targetUid, targetName, targetPic) {
     const uids = [currentUser.uid, targetUid].sort();
     window.currentChatId = `${uids[0]}_${uids[1]}`;
 
-    const isVerif = getVerifiedBadge(targetUid);
+    const nUser = getUserData(targetUid, targetName, targetName, targetPic, false);
+    const isVerif = getVerifiedBadge(nUser.verified);
+    
     document.getElementById('dm-title').innerHTML = '@' + targetName + ' ' + isVerif;
     switchView('dm');
 
