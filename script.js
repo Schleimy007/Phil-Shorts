@@ -55,7 +55,7 @@ document.getElementById('close-alert-btn').addEventListener('click', () => {
 });
 
 
-// --- AUTHENTIFIZIERUNG & GOOGLE BRÜCKE ---
+// --- AUTHENTIFIZIERUNG ---
 function parseJwt(token) {
     var base64Url = token.split('.')[1];
     var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -215,53 +215,50 @@ function renderFeed() {
         const isFollowing = myFollowing.includes(video.authorUid) || video.authorUid === currentUser.uid;
         const plusButton = isFollowing ? '' : `<i class="fas fa-circle-plus follow-btn" onclick="toggleFollow('${video.authorUid}', this, event)"></i>`;
         const verifiedBadge = video.authorVerified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
-
         const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : '';
         const realLikes = video.likedBy ? video.likedBy.length : 0;
-
         const canDeleteVideo = currentUser && (video.authorUid === currentUser.uid || currentUser.email === "schleimyverteilung@gmail.com");
-        const deleteVideoBtn = canDeleteVideo ? `
-            <div class="videoSidebar__button" onclick="deleteVideo('${video.id}')" style="margin-top:15px;">
-                <i class="fas fa-trash" style="color: #ff4444; font-size:24px;"></i>
-            </div>
-        ` : '';
+        const deleteVideoBtn = canDeleteVideo ? `<div class="videoSidebar__button" onclick="deleteVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-trash" style="color: #ff4444; font-size:24px;"></i></div>` : '';
 
+        // NEU: Die .video-inner Struktur macht das Desktop Layout magisch!
         container.innerHTML += `
             <div class="video" data-id="${video.id}">
-                <video class="video__player" loop playsinline src="${video.url}"></video>
-                <div class="play-indicator"><i class="fas fa-play"></i></div>
-                <div class="mute-btn"><i class="fas fa-volume-up"></i></div>
-                <div class="like-animation"><i class="fas fa-heart"></i></div>
-                <div class="gift-animation"><i class="fas fa-coins"></i></div>
-                <div class="player-progress-bar"><div class="player-progress-filled"></div></div>
-                
-                <div class="video__footer">
-                    <h3 class="creator-name" onclick="openProfile('${video.authorUid}')">@${video.authorName}${verifiedBadge}</h3>
-                    <p>${video.description}</p>
-                </div>
-                
-                <div class="video__sidebar">
-                    <div class="sidebar__profile" onclick="openProfile('${video.authorUid}')">
-                        <img src="${video.authorPic}" alt="Profil">
-                        ${plusButton}
+                <div class="video-inner">
+                    <video class="video__player" loop playsinline src="${video.url}"></video>
+                    <div class="play-indicator"><i class="fas fa-play"></i></div>
+                    <div class="mute-btn"><i class="fas fa-volume-up"></i></div>
+                    <div class="like-animation"><i class="fas fa-heart"></i></div>
+                    <div class="gift-animation"><i class="fas fa-coins"></i></div>
+                    <div class="player-progress-bar"><div class="player-progress-filled"></div></div>
+                    
+                    <div class="video__footer">
+                        <h3 class="creator-name" onclick="openProfile('${video.authorUid}')">@${video.authorName}${verifiedBadge}</h3>
+                        <p>${video.description}</p>
                     </div>
-                    <div class="videoSidebar__button like-btn ${hasLiked}" data-id="${video.id}">
-                        <i class="fas fa-heart"></i>
-                        <p class="like-count">${realLikes}</p>
+                    
+                    <div class="video__sidebar">
+                        <div class="sidebar__profile" onclick="openProfile('${video.authorUid}')">
+                            <img src="${video.authorPic}" alt="Profil">
+                            ${plusButton}
+                        </div>
+                        <div class="videoSidebar__button like-btn ${hasLiked}" data-id="${video.id}">
+                            <i class="fas fa-heart"></i>
+                            <p class="like-count">${realLikes}</p>
+                        </div>
+                        <div class="videoSidebar__button comment-btn" data-id="${video.id}">
+                            <i class="fas fa-comment-dots"></i>
+                            <p>${commentCount}</p>
+                        </div>
+                        <div class="videoSidebar__button gift-btn" data-id="${video.id}">
+                            <i class="fas fa-gift" style="color: #ffd700;"></i>
+                            <p class="gift-count">${video.gifts || 0}</p>
+                        </div>
+                        <div class="videoSidebar__button share-btn" data-url="${video.url}">
+                            <i class="fas fa-share"></i>
+                            <p>Teilen</p>
+                        </div>
+                        ${deleteVideoBtn}
                     </div>
-                    <div class="videoSidebar__button comment-btn" data-id="${video.id}">
-                        <i class="fas fa-comment-dots"></i>
-                        <p>${commentCount}</p>
-                    </div>
-                    <div class="videoSidebar__button gift-btn" data-id="${video.id}">
-                        <i class="fas fa-gift" style="color: #ffd700;"></i>
-                        <p class="gift-count">${video.gifts || 0}</p>
-                    </div>
-                    <div class="videoSidebar__button share-btn" data-url="${video.url}">
-                        <i class="fas fa-share"></i>
-                        <p>Teilen</p>
-                    </div>
-                    ${deleteVideoBtn}
                 </div>
             </div>`;
     });
@@ -283,17 +280,16 @@ document.getElementById('tab-following').addEventListener('click', function() {
 });
 
 // --- INTERAKTIONEN & PC STEUERUNG ---
-// PC Steuerung (Pfeiltasten zum Scrollen)
+// PC Tastatursteuerung (Pfeiltasten)
 window.addEventListener('keydown', (e) => {
     if (document.getElementById('view-feed').classList.contains('active')) {
         const container = document.getElementById('video-container');
-        // Scroll by half the screen height to trigger the next scroll-snap
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            container.scrollBy({ top: window.innerHeight / 2, behavior: 'smooth' });
+            container.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            container.scrollBy({ top: -window.innerHeight / 2, behavior: 'smooth' });
+            container.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
         }
     }
 });
@@ -301,7 +297,7 @@ window.addEventListener('keydown', (e) => {
 function attachFeedInteractions() {
     const videos = document.querySelectorAll('.video__player');
     videos.forEach(v => {
-        const container = v.closest('.video');
+        const container = v.closest('.video-inner');
         let lastTap = 0;
         v.addEventListener('click', (e) => {
             const tapLength = new Date().getTime() - lastTap;
@@ -344,7 +340,6 @@ function attachFeedInteractions() {
     }, { threshold: 0.6 });
     videos.forEach(v => observer.observe(v));
 
-    // SECURE LIKES
     document.querySelectorAll('.like-btn').forEach(btn => {
         btn.addEventListener('click', async() => {
             const id = btn.dataset.id;
@@ -367,13 +362,12 @@ function attachFeedInteractions() {
         });
     });
 
-    // GIFTING
     document.querySelectorAll('.gift-btn').forEach(btn => {
         btn.addEventListener('click', async() => {
             if (currentUser.coins < 10) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins zum Spenden.");
 
             const id = btn.dataset.id;
-            const container = btn.closest('.video');
+            const container = btn.closest('.video-inner');
 
             const anim = container.querySelector('.gift-animation');
             anim.style.animation = 'none';
@@ -692,7 +686,7 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     trendingSection.style.display = 'none';
     resultsGrid.style.display = 'grid';
     const results = allVideosData.filter(v => (v.authorName || "").toLowerCase().includes(query) || (v.description || "").toLowerCase().includes(query));
-    resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="switchView('feed')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
+    resultsGrid.innerHTML = results.length === 0 ? '<div style="grid-column: span 4; text-align: center; margin-top: 50px; color: #555;">Nichts gefunden 😔</div>' : results.map(v => `<div class="grid-item" onclick="switchView('feed')"><video src="${v.url}#t=0.5" muted playsinline></video><div class="grid-views">@${v.authorName}</div></div>`).join('');
 });
 
 // --- KOMMENTARE ---
