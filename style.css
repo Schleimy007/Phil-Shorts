@@ -1111,6 +1111,9 @@ body {
     border: 1px solid #ffd700;
 }
 
+
+/* --- HIER IST DER WICHTIGE MODAL FIX --- */
+
 .modal {
     position: absolute;
     bottom: -100%;
@@ -1125,10 +1128,14 @@ body {
     display: flex;
     flex-direction: column;
     border-top: 1px solid #333;
+    /* FIX: Klicks blockieren, wenn das Modal geschlossen ist */
+    pointer-events: none;
 }
 
 .modal.show {
     bottom: 0;
+    /* FIX: Modal wieder anklickbar machen, wenn es offen ist */
+    pointer-events: auto;
 }
 
 .modal-header {
