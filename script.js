@@ -25,7 +25,6 @@ if (currentUser) {
     currentUser.verified = false;
 }
 
-// --- DESKTOP BENACHRICHTIGUNGEN EINSTELLUNGEN ---
 let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || {
     master: false,
     likes: true,
@@ -137,7 +136,6 @@ function timeAgo(timestamp) {
     return date.toLocaleDateString('de-DE');
 }
 
-// --- DESKTOP NOTIFICATION LOGIK ---
 function sendDesktopNotification(title, body, type, iconUrl) {
     if (!document.hidden) return;
 
