@@ -1852,7 +1852,6 @@ input:checked+.slider:before {
 
 .draggable-text {
     position: absolute;
-    font-family: Arial, sans-serif;
     font-weight: bold;
     text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
     cursor: pointer;
@@ -1863,6 +1862,8 @@ input:checked+.slider:before {
     border: 2px dashed transparent;
     padding: 5px;
     z-index: 10;
+    /* FIX: HIERMIT KANN MAN DIE TEXTE WIEDER GREIFEN UND ZIEHEN! */
+    pointer-events: auto;
 }
 
 .draggable-text.active {

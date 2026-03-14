@@ -1382,6 +1382,7 @@ window.toggleVerify = async function(targetUid, currentStatus) {
     } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); }
 };
 
+// --- PROFIL & KOMMENTAR SYNC LOGIK ---
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
 
     const newDisplayName = document.getElementById('edit-displayname-input').value.trim();
@@ -1644,7 +1645,6 @@ function initInbox() {
 
                         showToast(toastMsg);
                         
-                        // DESKTOP BENACHRICHTIGUNG SENDEN
                         window.sendDesktopNotification("Phil Shorts", toastMsg, n.type);
                     }
                 }
@@ -1851,18 +1851,17 @@ document.getElementById('dm-input').addEventListener('keypress', (e) => {
 // --- UPLOAD LOGIK: ADVANCED EDITOR & VIDEO TRIMMEN ---
 
 let editorState = {
-    images: [], // Beinhaltet Base64 Strings der geladenen Bilder
-    edits: [],  // Beinhaltet Arrays von Text-Objekten pro Bild
+    images: [], 
+    edits: [],  
     currentIndex: 0,
     activeTextId: null
 };
 
-// Hilfsfunktion: Dragging Event Listener
 let activeDragId = null;
 let startX, startY, initialObjX, initialObjY;
 
 function startDrag(e, id) {
-    if(e.target.tagName.toLowerCase() === 'input') return; // Nicht draggen wenn man Text ändert
+    if(e.target.tagName.toLowerCase() === 'input') return; 
     e.preventDefault();
     activeDragId = id;
     selectText(id);
@@ -1931,6 +1930,7 @@ function createDOMTextElement(obj) {
     el.style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`;
     el.style.fontSize = obj.size + 'px';
     el.style.color = obj.color;
+    el.style.fontFamily = obj.font || 'Arial, sans-serif';
 
     el.addEventListener('mousedown', (e) => startDrag(e, obj.id));
     el.addEventListener('touchstart', (e) => startDrag(e, obj.id), {passive: false});
@@ -1947,12 +1947,21 @@ function selectText(id) {
     
     document.getElementById('drag-txt-' + id).classList.add('active');
     
-    // UI aktualisieren
     document.getElementById('text-controls').style.display = 'block';
     document.getElementById('text-ctrl-input').value = obj.text;
     document.getElementById('text-ctrl-size').value = obj.size;
     document.getElementById('text-ctrl-rot').value = obj.rotation;
+    document.getElementById('text-ctrl-font').value = obj.font || 'Arial, sans-serif';
 }
+
+// Hintergrund Klick (um Text abzuwählen)
+document.getElementById('editor-workspace').addEventListener('click', (e) => {
+    if(e.target.id === 'editor-bg' || e.target.id === 'editor-layer') {
+        editorState.activeTextId = null;
+        document.querySelectorAll('.draggable-text').forEach(el => el.classList.remove('active'));
+        document.getElementById('text-controls').style.display = 'none';
+    }
+});
 
 // Controls Events
 document.getElementById('text-ctrl-input').addEventListener('input', (e) => {
@@ -1974,6 +1983,13 @@ document.getElementById('text-ctrl-rot').addEventListener('input', (e) => {
     const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId);
     obj.rotation = e.target.value;
     document.getElementById('drag-txt-' + obj.id).style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`;
+});
+
+document.getElementById('text-ctrl-font').addEventListener('change', (e) => {
+    if(!editorState.activeTextId) return;
+    const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId);
+    obj.font = e.target.value;
+    document.getElementById('drag-txt-' + obj.id).style.fontFamily = obj.font;
 });
 
 document.querySelectorAll('.color-dot').forEach(dot => {
@@ -2003,7 +2019,8 @@ document.getElementById('btn-add-text').addEventListener('click', () => {
         y: workspace.clientHeight / 2,
         size: 24,
         rotation: 0,
-        color: '#ffffff'
+        color: '#ffffff',
+        font: 'Arial, sans-serif'
     };
     editorState.edits[editorState.currentIndex].push(newObj);
     createDOMTextElement(newObj);
@@ -2072,7 +2089,6 @@ document.getElementById('up-file').addEventListener('change', async function(e) 
         trimmerUi.style.display = 'none';
         advancedEditorUi.style.display = 'block';
         
-        // Bilder in Speicher laden für Editor
         editorState.images = [];
         editorState.edits = [];
         editorState.currentIndex = 0;
@@ -2089,11 +2105,21 @@ document.getElementById('up-file').addEventListener('change', async function(e) 
                 reader.readAsDataURL(files[i]);
             });
         }
+        
+        if (editorState.images.length === 0) {
+            showCustomAlert("Fehler", "Bilder konnten nicht geladen werden oder sind zu groß.");
+            txt.innerText = "Video oder Bilder auswählen";
+            icon.className = "fas fa-cloud-upload-alt";
+            icon.style.color = "#aaa";
+            trimmerUi.style.display = 'none';
+            advancedEditorUi.style.display = 'none';
+            return;
+        }
+
         renderEditorImage(0);
     }
 });
 
-// Slider Updates für Video Vorschau
 document.getElementById('trim-start').addEventListener('input', (e) => {
     const val = parseFloat(e.target.value);
     const endVal = parseFloat(document.getElementById('trim-end').value);
@@ -2127,17 +2153,14 @@ async function renderAndUploadImages() {
         canvas.width = Nw;
         canvas.height = Nh;
 
-        // Bild malen
         ctx.drawImage(img, 0, 0, Nw, Nh);
 
-        // Skalierung & Offset berechnen (object-fit: contain simulation)
         const scale = Math.min(Cw / Nw, Ch / Nh);
         const Dw = Nw * scale;
         const Dh = Nh * scale;
         const Ox = (Cw - Dw) / 2;
         const Oy = (Ch - Dh) / 2;
 
-        // Texte draufmalen
         editorState.edits[i].forEach(obj => {
             let nativeX = (obj.x - Ox) / scale;
             let nativeY = (obj.y - Oy) / scale;
@@ -2147,12 +2170,11 @@ async function renderAndUploadImages() {
             ctx.translate(nativeX, nativeY);
             ctx.rotate((obj.rotation * Math.PI) / 180);
             
-            ctx.font = `bold ${nativeSize}px Arial`;
+            ctx.font = `bold ${nativeSize}px ${obj.font || 'Arial, sans-serif'}`;
             ctx.fillStyle = obj.color;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             
-            // Text Outline für Lesbarkeit
             ctx.strokeStyle = 'rgba(0,0,0,0.8)';
             ctx.lineWidth = nativeSize * 0.1;
             ctx.strokeText(obj.text, 0, 0);
@@ -2161,10 +2183,8 @@ async function renderAndUploadImages() {
             ctx.restore();
         });
 
-        // Convert to Base64 (JPG um Platz zu sparen)
         const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
         
-        // Upload zu Cloudinary als Base64
         const formData = new FormData();
         formData.append('file', dataUrl);
         formData.append('upload_preset', UPLOAD_PRESET);
@@ -2197,7 +2217,6 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
     
     try {
         if (isVideo) {
-            // --- VIDEO UPLOAD (Mit Trimming) ---
             const formData = new FormData();
             formData.append('file', files[0]);
             formData.append('upload_preset', UPLOAD_PRESET);
@@ -2231,7 +2250,6 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
             });
 
         } else {
-            // --- BILDER RENDERN & UPLOAD ---
             const uploadedUrls = await renderAndUploadImages();
 
             if(uploadedUrls.length === 0) throw new Error("Keine Bilder hochgeladen.");
