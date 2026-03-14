@@ -34,7 +34,7 @@ window.switchView = function(viewId) {
     document.querySelectorAll('.nav__item').forEach(n => n.classList.remove('active'));
     if (viewId === 'feed') document.querySelectorAll('.nav__item')[0].classList.add('active');
     if (viewId === 'search') document.querySelectorAll('.nav__item')[1].classList.add('active');
-    if (viewId === 'inbox') document.querySelectorAll('.nav__item')[3].classList.add('active');
+    if (viewId === 'inbox' || viewId === 'dm') document.querySelectorAll('.nav__item')[3].classList.add('active');
     if (viewId === 'profile' && currentUser && document.getElementById('profile-name').innerText.includes(currentUser.displayName)) {
         document.querySelectorAll('.nav__item')[4].classList.add('active');
     }
@@ -149,6 +149,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
         initLiveDatabase();
         initLiveUser();
         initInbox();
+        initInboxChats();
     } catch (error) {
         showCustomAlert("Login Fehler", "Datenbank-Fehler beim Login.");
     }
@@ -162,6 +163,7 @@ window.onload = async function() {
         initLiveDatabase();
         initLiveUser();
         initInbox();
+        initInboxChats();
     }
 };
 
@@ -213,7 +215,7 @@ function applyAlgorithm(videos, mode) {
     }
 }
 
-// --- ABSOLUT ROBUSTE LIVE-DATENBANK ---
+// --- LIVE DATENBANK FÜR VIDEOS ---
 function initLiveDatabase() {
     document.getElementById('video-container').innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i><p>Lade Algorithmus...</p></div>';
 
@@ -246,10 +248,7 @@ function initLiveDatabase() {
                     }
                 }
 
-                // HIER WURDE DER FEHLER BEHOBEN: querySelectorAll stellt sicher, dass JEDER Button im HTML das Live-Update erhält.
                 if (change.type === "modified") {
-
-                    // 1. LIKES UPDATEN
                     document.querySelectorAll(`.like-btn[data-id="${vData.id}"] .like-count`).forEach(el => {
                         el.innerText = vData.likedBy ? vData.likedBy.length : 0;
                     });
@@ -261,17 +260,19 @@ function initLiveDatabase() {
                         }
                     });
 
-                    // 2. KOMMENTARE UPDATEN
                     document.querySelectorAll(`.comment-btn[data-id="${vData.id}"] .comment-count-txt`).forEach(el => {
                         el.innerText = vData.comments ? vData.comments.length : 0;
                     });
 
-                    // 3. COINS UPDATEN
                     document.querySelectorAll(`.gift-btn[data-id="${vData.id}"] .gift-count`).forEach(el => {
                         el.innerText = vData.gifts || 0;
                     });
 
-                    // Modalfenster-Update
+                    // Live Update der Beschreibung
+                    document.querySelectorAll(`.video[data-id="${vData.id}"] .video__footer p`).forEach(el => {
+                        el.innerText = vData.description || "";
+                    });
+
                     if (window.currentCommentVideoId === vData.id && document.getElementById('comment-modal').classList.contains('show')) {
                         renderComments(vData.id);
                     }
@@ -283,20 +284,9 @@ function initLiveDatabase() {
                 }
             });
 
-            // PROFIL LIVE STATS UPDATEN
             if (document.getElementById('view-profile').classList.contains('active')) {
                 const currentProfileUid = document.getElementById('profile-action-btn').dataset.uid;
-                if (currentProfileUid) {
-                    window.renderProfileGrid(currentProfileUid);
-
-                    let totalLikes = 0;
-                    const userVideos = allVideosData.filter(v => v.authorUid === currentProfileUid);
-                    userVideos.forEach(v => {
-                        totalLikes += (v.likedBy ? v.likedBy.length : 0);
-                    });
-                    const statLikesEl = document.getElementById('stat-likes');
-                    if (statLikesEl) statLikesEl.innerText = totalLikes;
-                }
+                if (currentProfileUid) window.renderProfileGrid(currentProfileUid);
             }
         }
     }, (error) => {
@@ -383,6 +373,9 @@ function createVideoElement(video) {
     const canDeleteVideo = currentUser && (video.authorUid === currentUser.uid || currentUser.email === "schleimyverteilung@gmail.com");
     const deleteVideoBtn = canDeleteVideo ? `<div class="videoSidebar__button" onclick="deleteVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-trash" style="color: #ff4444; font-size:24px;"></i></div>` : '';
 
+    // NEU: VIDEO BEARBEITEN BUTTON FÜR ERSTELLER
+    const editVideoBtn = isMe ? `<div class="videoSidebar__button" onclick="openEditVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-pen" style="font-size:24px;"></i></div>` : '';
+
     div.innerHTML = `
         <div class="video-inner">
             <video class="video__player" loop playsinline src="${video.url}"></video>
@@ -425,6 +418,7 @@ function createVideoElement(video) {
                     <i class="fas fa-share"></i>
                     <p>Teilen</p>
                 </div>
+                ${editVideoBtn}
                 ${deleteVideoBtn}
             </div>
         </div>`;
@@ -432,6 +426,37 @@ function createVideoElement(video) {
     attachInteractionsToVideo(div);
     return div;
 }
+
+// --- VIDEO BEARBEITEN ---
+window.openEditVideo = function(videoId) {
+    const video = allVideosData.find(v => v.id === videoId);
+    if (video) {
+        window.currentEditVideoId = videoId;
+        document.getElementById('edit-video-desc').value = video.description || "";
+        document.getElementById('edit-video-modal').classList.add('show');
+    }
+};
+
+document.getElementById('save-video-edit-btn').addEventListener('click', async() => {
+    const newDesc = document.getElementById('edit-video-desc').value.trim();
+    if (!window.currentEditVideoId || !newDesc) return;
+
+    try {
+        // Optimistic DOM Update
+        document.querySelectorAll(`.video[data-id="${window.currentEditVideoId}"] .video__footer p`).forEach(el => {
+            el.innerText = newDesc;
+        });
+
+        document.getElementById('edit-video-modal').classList.remove('show');
+        showToast("Video aktualisiert!");
+
+        await updateDoc(doc(db, "videos", window.currentEditVideoId), { description: newDesc });
+    } catch (e) {
+        showCustomAlert("Fehler", "Konnte nicht gespeichert werden.");
+    }
+});
+document.getElementById('close-edit-video').addEventListener('click', () => { document.getElementById('edit-video-modal').classList.remove('show'); });
+
 
 document.getElementById('tab-foryou').addEventListener('click', function() {
     document.getElementById('tab-following').classList.remove('active');
@@ -569,7 +594,6 @@ function attachInteractionsToVideo(videoContainerEl) {
 
     v.addEventListener('timeupdate', () => { container.querySelector('.player-progress-filled').style.width = (v.currentTime / v.duration * 100) + '%'; });
 
-    // OPTIMISTIC UI FÜR LIKES IM FEED
     container.querySelector('.like-btn').addEventListener('click', async(e) => {
         const btn = e.currentTarget;
         const id = btn.dataset.id;
@@ -597,7 +621,6 @@ function attachInteractionsToVideo(videoContainerEl) {
         }
     });
 
-    // OPTIMISTIC UI & TRANSFER FÜR COINS
     container.querySelector('.gift-btn').addEventListener('click', async(e) => {
         if (!currentUser) return;
         if (currentUser.coins < 10) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins zum Spenden.");
@@ -606,12 +629,10 @@ function attachInteractionsToVideo(videoContainerEl) {
         const targetVidData = allVideosData.find(vd => vd.id === id);
         if (!targetVidData || !targetVidData.authorUid) return showToast("Fehler beim Spenden!");
 
-        // Spender verliert 10 Coins lokal
         currentUser.coins -= 10;
         const myCoinsEl = document.getElementById('my-coins');
         if (myCoinsEl) myCoinsEl.innerText = currentUser.coins;
 
-        // Video-Anzeige wird sofort aktualisiert
         document.querySelectorAll(`.gift-btn[data-id="${id}"] .gift-count`).forEach(el => {
             let currentGifts = Number(el.innerText) || 0;
             el.innerText = currentGifts + 10;
@@ -619,18 +640,14 @@ function attachInteractionsToVideo(videoContainerEl) {
 
         const anim = container.querySelector('.gift-animation');
         anim.style.animation = 'none';
-        void anim.offsetWidth; // Reflow
+        void anim.offsetWidth;
         anim.style.animation = 'flyUpCoin 1s ease-out forwards';
 
         showToast("10 Coins gespendet! 🪙");
 
         try {
-            // 1. Dem Sender in der DB abziehen
             await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-10) });
-            // 2. Dem Video als Statistik hinzufügen
             await updateDoc(doc(db, "videos", id), { gifts: increment(10) });
-
-            // 3. WICHTIG: Das Geld dem Creator GANZ REAL ins Profil überweisen
             await updateDoc(doc(db, "users", targetVidData.authorUid), { coins: increment(10) });
             addNotification(targetVidData.authorUid, "gift", "hat dir 10 Coins gespendet!", id);
         } catch (err) {
@@ -786,6 +803,8 @@ window.openProfile = async function(targetUid) {
         document.getElementById('stat-following').innerText = targetUser.following ? targetUser.following.length : 0;
 
         const actionBtn = document.getElementById('profile-action-btn');
+        const msgBtn = document.getElementById('profile-message-btn');
+
         actionBtn.dataset.uid = targetUid;
         const settingsIcon = document.getElementById('open-settings');
         const adminDashboardBtn = document.getElementById('open-admin-dashboard');
@@ -799,6 +818,7 @@ window.openProfile = async function(targetUid) {
         }
 
         if (currentUser && targetUid === currentUser.uid) {
+            msgBtn.style.display = 'none'; // Nachricht an sich selbst ausblenden
             actionBtn.innerText = "Profil bearbeiten";
             actionBtn.classList.add('edit-btn');
             actionBtn.onclick = () => {
@@ -816,6 +836,12 @@ window.openProfile = async function(targetUid) {
         } else {
             adminDashboardBtn.style.display = 'none';
             privateStats.style.display = 'none';
+
+            // Profil-Nachrichten Button Logik
+            if (currentUser) {
+                msgBtn.style.display = 'block';
+                msgBtn.onclick = () => { window.openDM(targetUid, targetUser.displayName, targetUser.photoURL); };
+            }
 
             if (currentUser && currentUser.following && currentUser.following.includes(targetUid)) {
                 actionBtn.innerText = "Entfolgen";
@@ -932,8 +958,25 @@ window.giveCoins = async function(targetUid) {
     } catch (e) {}
 };
 
+
+// --- INBOX TAB LOGIC ---
+document.getElementById('tab-notifications').addEventListener('click', function() {
+    this.classList.add('active');
+    document.getElementById('tab-messages').classList.remove('active');
+    document.getElementById('inbox-notifications-box').style.display = 'flex';
+    document.getElementById('inbox-messages-box').style.display = 'none';
+});
+
+document.getElementById('tab-messages').addEventListener('click', function() {
+    this.classList.add('active');
+    document.getElementById('tab-notifications').classList.remove('active');
+    document.getElementById('inbox-notifications-box').style.display = 'none';
+    document.getElementById('inbox-messages-box').style.display = 'flex';
+});
+
+// --- INBOX NOTIFICATIONS (Aktivitäten) ---
 function initInbox() {
-    const inboxBox = document.getElementById('inbox-box');
+    const inboxBox = document.getElementById('inbox-notifications-box');
     if (!currentUser) return;
 
     onSnapshot(query(collection(db, "users", currentUser.uid, "notifications"), orderBy("timestamp", "desc")), (snapshot) => {
@@ -976,6 +1019,139 @@ function initInbox() {
         });
     });
 }
+
+// --- DM CHATS (Nachrichten) ---
+let inboxChatsUnsubscribe = null;
+
+function initInboxChats() {
+    if (!currentUser) return;
+    const msgBox = document.getElementById('inbox-messages-box');
+
+    if (inboxChatsUnsubscribe) inboxChatsUnsubscribe();
+
+    // Wir laden alle Chats bei denen der Nutzer im Array ist
+    inboxChatsUnsubscribe = onSnapshot(collection(db, "chats"), (snapshot) => {
+        let chats = [];
+        snapshot.forEach(doc => {
+            const chat = doc.data();
+            if (chat.participants && chat.participants.includes(currentUser.uid)) {
+                chats.push({ id: doc.id, ...chat });
+            }
+        });
+
+        chats.sort((a, b) => b.lastMessageTime - a.lastMessageTime); // Lokal sortieren
+
+        msgBox.innerHTML = '';
+        if (chats.length === 0) {
+            msgBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Keine Nachrichten vorhanden</p></div>';
+            return;
+        }
+
+        chats.forEach(chat => {
+            const partnerUid = chat.participants.find(uid => uid !== currentUser.uid);
+            const partner = chat.users[partnerUid];
+            if (!partner) return;
+
+            // Escapen der Parameter, falls der Name Hochkommas enthält
+            const safeName = partner.name.replace(/'/g, "\\'");
+
+            msgBox.innerHTML += `
+                <div class="inbox-msg" onclick="openDM('${partnerUid}', '${safeName}', '${partner.pic}')">
+                    <img src="${partner.pic}" class="chat-avatar">
+                    <div style="flex:1;">
+                        <span class="chat-username">@${partner.name}</span>
+                        <div class="chat-bubble" style="background: transparent; padding: 0; color: #888;">
+                            ${chat.lastMessage || 'Neuer Chat...'}
+                        </div>
+                    </div>
+                </div>`;
+        });
+    });
+}
+
+let currentDMSnapshot = null;
+window.currentChatId = null;
+window.currentChatPartner = null;
+
+window.openDM = async function(targetUid, targetName, targetPic) {
+    if (!currentUser) return;
+    window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic };
+
+    // Erzeugt eine eindeutige ChatID aus beiden UIDs (immer alphabetisch sortiert)
+    const uids = [currentUser.uid, targetUid].sort();
+    window.currentChatId = `${uids[0]}_${uids[1]}`;
+
+    document.getElementById('dm-title').innerText = '@' + targetName;
+    switchView('dm');
+
+    if (currentDMSnapshot) currentDMSnapshot();
+
+    const dmBox = document.getElementById('dm-box');
+    dmBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
+
+    // Wenn der Chat noch nicht existiert, erstellen wir das Basis-Dokument
+    const chatRef = doc(db, "chats", window.currentChatId);
+    const chatSnap = await getDoc(chatRef);
+    if (!chatSnap.exists()) {
+        await setDoc(chatRef, {
+            participants: [currentUser.uid, targetUid],
+            users: {
+                [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL },
+                [targetUid]: { name: targetName, pic: targetPic }
+            },
+            lastMessage: "",
+            lastMessageTime: Date.now()
+        });
+    }
+
+    currentDMSnapshot = onSnapshot(query(collection(db, `chats/${window.currentChatId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
+        dmBox.innerHTML = '';
+        if (snapshot.empty) {
+            dmBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Schreib die erste Nachricht!</p></div>';
+        } else {
+            snapshot.forEach(doc => {
+                const msg = doc.data();
+                const isMe = msg.senderUid === currentUser.uid ? 'me' : '';
+                const pic = isMe ? currentUser.photoURL : targetPic;
+                dmBox.innerHTML += `
+                    <div class="chat-msg ${isMe}">
+                        <img src="${pic}" class="chat-avatar">
+                        <div>
+                            <div class="chat-bubble">${msg.text}</div>
+                        </div>
+                    </div>`;
+            });
+        }
+        dmBox.scrollTop = dmBox.scrollHeight;
+    });
+};
+
+document.getElementById('send-dm-btn').addEventListener('click', async() => {
+    const input = document.getElementById('dm-input');
+    const text = input.value.trim();
+    if (!text || !window.currentChatId || !currentUser) return;
+    input.value = '';
+
+    await addDoc(collection(db, `chats/${window.currentChatId}/messages`), {
+        senderUid: currentUser.uid,
+        text: text,
+        timestamp: Date.now()
+    });
+
+    await updateDoc(doc(db, "chats", window.currentChatId), {
+        lastMessage: text,
+        lastMessageTime: Date.now(),
+        users: {
+            [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL },
+            [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic }
+        }
+    });
+});
+
+document.getElementById('dm-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') document.getElementById('send-dm-btn').click();
+});
+
 
 document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();

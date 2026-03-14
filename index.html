@@ -70,11 +70,31 @@
         </div>
 
         <div id="view-inbox" class="view">
-            <div class="top-bar glass-nav">
-                <h3>Posteingang</h3>
+            <div class="top-bar glass-nav" style="flex-direction: column; align-items: stretch; padding: 10px 15px 0;">
+                <h3 style="text-align: center; margin-bottom: 10px;">Posteingang</h3>
+                <div class="profile-tabs" style="border: none;">
+                    <div class="profile-tab active" id="tab-notifications" style="font-size: 15px; padding: 10px;">Aktivitäten</div>
+                    <div class="profile-tab" id="tab-messages" style="font-size: 15px; padding: 10px;">Nachrichten</div>
+                </div>
             </div>
-            <div class="chat-container" id="inbox-box">
+            <div class="chat-container" id="inbox-notifications-box">
                 <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>
+            </div>
+            <div class="chat-container" id="inbox-messages-box" style="display: none;">
+                <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>
+            </div>
+        </div>
+
+        <div id="view-dm" class="view">
+            <div class="top-bar glass-nav">
+                <i class="fas fa-chevron-left back-btn" onclick="switchView('inbox')"></i>
+                <h3 id="dm-title">Chat</h3>
+                <i class="fas fa-info-circle back-btn" style="opacity: 0; pointer-events: none;"></i>
+            </div>
+            <div class="chat-container" id="dm-box"></div>
+            <div class="chat-input-wrapper glass-nav-bottom">
+                <input type="text" id="dm-input" placeholder="Nachricht senden..." class="chat-input">
+                <button id="send-dm-btn" class="chat-send-btn"><i class="fas fa-paper-plane"></i></button>
             </div>
         </div>
 
@@ -96,7 +116,11 @@
                     <div class="stat-box"><strong id="stat-likes">0</strong><span>Likes</span></div>
                 </div>
 
-                <button id="profile-action-btn" class="profile-action-btn">Folgen</button>
+                <div style="display: flex; gap: 10px; align-items: center; justify-content: center; width: 100%;">
+                    <button id="profile-action-btn" class="profile-action-btn">Folgen</button>
+                    <button id="profile-message-btn" class="profile-action-btn edit-btn" style="display: none; padding: 12px 20px;"><i class="fas fa-paper-plane"></i></button>
+                </div>
+
                 <div id="admin-controls" style="width: 100%;"></div>
 
                 <button id="open-admin-dashboard" class="profile-action-btn" style="display:none; background:#ffd700; color:black; margin-top:10px; width:100%;">👑 Admin Dashboard</button>
@@ -171,6 +195,17 @@
             <div class="modal-footer">
                 <input type="text" id="new-comment-input" placeholder="Sag etwas Nettes..." class="comment-input">
                 <button id="submit-comment" class="comment-submit"><i class="fas fa-arrow-up"></i></button>
+            </div>
+        </div>
+
+        <div id="edit-video-modal" class="modal">
+            <div class="modal-header">
+                <h4>Video bearbeiten</h4><i class="fas fa-times close-modal" id="close-edit-video"></i>
+            </div>
+            <div class="modal-body upload-body">
+                <label style="color:#888; font-size:12px; margin-left:5px;">Beschreibung & Hashtags</label>
+                <textarea id="edit-video-desc" class="comment-input" placeholder="Beschreibe dein Video..." rows="4" style="resize:none; border-radius:15px;"></textarea>
+                <button id="save-video-edit-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; padding:15px; font-size:16px;">Speichern</button>
             </div>
         </div>
 
