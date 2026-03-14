@@ -87,9 +87,13 @@
 
         <div id="view-dm" class="view">
             <div class="top-bar glass-nav">
-                <i class="fas fa-chevron-left back-btn" onclick="switchView('inbox')"></i>
-                <h3 id="dm-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">Chat</h3>
-                <i class="fas fa-info-circle back-btn" style="opacity: 0; pointer-events: none;"></i>
+                <div style="flex: 1; display: flex; justify-content: flex-start;">
+                    <i class="fas fa-chevron-left back-btn" onclick="switchView('inbox')"></i>
+                </div>
+                <h3 id="dm-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; text-align: center;">Chat</h3>
+                <div style="flex: 1; display: flex; justify-content: flex-end;">
+                    <i class="fas fa-info-circle back-btn" style="opacity: 0; pointer-events: none;"></i>
+                </div>
             </div>
             <div class="chat-container" id="dm-box"></div>
             <div class="chat-input-wrapper glass-nav-bottom">
@@ -100,11 +104,12 @@
 
         <div id="view-profile" class="view">
             <div class="top-bar glass-nav">
-                <i class="fas fa-chevron-left back-btn" onclick="switchView('feed')"></i>
-                <h3 id="profile-title" style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%;">@username</h3>
-                <div style="display: flex; gap: 10px; align-items: center;">
+                <div style="flex: 1; display: flex; justify-content: flex-start;">
+                    <i class="fas fa-chevron-left back-btn" onclick="switchView('feed')"></i>
+                </div>
+                <h3 id="profile-title" style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 50%; text-align: center;">@username</h3>
+                <div style="flex: 1; display: flex; justify-content: flex-end;">
                     <i class="fas fa-cog back-btn" id="open-notif-settings" style="display:none; font-size: 20px;"></i>
-                    <i class="fas fa-bars back-btn" id="open-settings" style="display:none;"></i>
                 </div>
             </div>
             <div class="profile-header">
@@ -145,7 +150,7 @@
                 </div>
             </div>
             <div class="profile-tabs">
-                <div class="profile-tab active"><i class="fas fa-bars"></i></div>
+                <div class="profile-tab active"><i class="fas fa-th"></i></div>
                 <div class="profile-tab"><i class="fas fa-heart"></i></div>
             </div>
             <div class="grid-container" id="profile-grid"></div>
@@ -153,9 +158,13 @@
 
         <div id="view-admin" class="view">
             <div class="top-bar glass-nav">
-                <i class="fas fa-chevron-left back-btn" onclick="switchView('profile')"></i>
-                <h3 style="font-weight: 600;">👑 Admin Dashboard</h3>
-                <i class="fas fa-sync-alt back-btn" onclick="loadAdminDashboard()"></i>
+                <div style="flex: 1; display: flex; justify-content: flex-start;">
+                    <i class="fas fa-chevron-left back-btn" onclick="switchView('profile')"></i>
+                </div>
+                <h3 style="font-weight: 600; text-align: center;">👑 Admin Dashboard</h3>
+                <div style="flex: 1; display: flex; justify-content: flex-end;">
+                    <i class="fas fa-sync-alt back-btn" onclick="loadAdminDashboard()"></i>
+                </div>
             </div>
             <div class="admin-stats">
                 <div class="stat-card">

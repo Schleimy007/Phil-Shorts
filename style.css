@@ -745,41 +745,6 @@ body {
     border-bottom: 2px solid white;
 }
 
-.grid-container {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 2px;
-    align-content: start;
-    padding-bottom: 20px;
-}
-
-.grid-item {
-    aspect-ratio: 3/4;
-    /* Geändert von 9/16 auf 3/4, wie beim echten TikTok */
-    background: #222;
-    position: relative;
-    cursor: pointer;
-    overflow: hidden;
-}
-
-.grid-item video {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.grid-views {
-    position: absolute;
-    bottom: 5px;
-    left: 5px;
-    font-size: 13px;
-    font-weight: bold;
-    text-shadow: 1px 1px 3px black;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
-
 
 /* --- INBOX & DMs --- */
 
@@ -1396,140 +1361,22 @@ input:checked+.slider:before {
     font-weight: 600;
 }
 
-.app__bottom-nav {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    max-width: 100%;
-    height: calc(60px + env(safe-area-inset-bottom));
-    padding: 0 10px;
-    /* Etwas Puffer zum Rand */
-    padding-bottom: env(safe-area-inset-bottom);
-    display: flex;
-    justify-content: space-around;
-    align-items: center;
-    z-index: 100;
-}
-
-.nav__item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    color: #888;
-    cursor: pointer;
-    font-size: 10px;
-    gap: 5px;
-    transition: color 0.2s;
-    min-width: 0;
-    /* Schrumpft auf sehr kleinen Geräten */
-}
-
-.nav__item.active {
-    color: white;
-}
-
-.nav__item i {
-    font-size: 22px;
-}
-
-.add-btn {
-    color: black;
-}
-
-.plus-box {
-    background: white;
-    padding: 6px 16px;
-    border-radius: 10px;
-    border-left: 4px solid #00f2fe;
-    border-right: 4px solid #ff0050;
-    transition: transform 0.1s;
-}
-
-.plus-box:active {
-    transform: scale(0.9);
-}
-
-.plus-box i {
-    font-size: 16px;
-}
-
-.loading-screen,
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    color: white;
-    height: 100%;
-    width: 100%;
-    padding: 20px;
-}
-
-.loading-screen i {
-    font-size: 45px;
-    margin-bottom: 15px;
-    color: #ff0050;
-}
-
-.empty-state i {
-    font-size: 60px;
-    margin-bottom: 20px;
-    color: #333;
-}
-
-.empty-state h3 {
-    font-size: 18px;
-    margin-bottom: 10px;
-    font-weight: 600;
-}
-
-.empty-state p {
-    font-size: 14px;
-    color: #888;
-}
-
-.feed-end-loader {
-    position: relative;
-    height: 15%;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    background: #000;
-    color: #888;
-    font-size: 13px;
-    gap: 8px;
-    scroll-snap-align: none;
-}
-
-.feed-end-loader i {
-    font-size: 24px;
-    color: #555;
-}
-
-.feed-end-loader.no-more i {
-    color: #ff0050;
-}
-
 
 /* --- TIKTOK PC LAYOUT --- */
 
 @media (min-width: 769px) {
     /* --- PC LAYOUT FIXES FÜR PROFILE, SUCHE & INBOX --- */
     .top-bar {
-        max-width: 800px;
+        max-width: 900px;
         margin: 0 auto;
     }
     .profile-header {
-        max-width: 600px;
+        max-width: 900px;
         margin: 0 auto;
         padding-top: 40px;
     }
     .profile-tabs {
-        max-width: 600px;
+        max-width: 900px;
         margin: 0 auto;
         border-bottom: 1px solid #333;
         margin-bottom: 20px;
@@ -1545,11 +1392,11 @@ input:checked+.slider:before {
     .chat-container,
     .trending-section,
     #search-results {
-        max-width: 600px;
+        max-width: 900px;
         margin: 0 auto;
     }
     .chat-input-wrapper {
-        max-width: 600px;
+        max-width: 900px;
         left: 0;
         right: 0;
         margin: 0 auto;
@@ -1559,7 +1406,7 @@ input:checked+.slider:before {
     }
     .admin-stats,
     .admin-user-list {
-        max-width: 800px;
+        max-width: 900px;
         margin: 0 auto;
     }
     /* App Rahmen */
@@ -1739,5 +1586,79 @@ input:checked+.slider:before {
         transform: translate(-50%, -50%) scale(1);
         opacity: 1;
         pointer-events: auto;
+    }
+}
+
+
+/* --- HOVER EFFECTS FÜR PC & MOUSE --- */
+
+@media (hover: hover) {
+    .inbox-msg:hover {
+        background: #222;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+    }
+    .trend-item:hover {
+        background: #222;
+        border-radius: 15px;
+    }
+    .profile-action-btn:hover {
+        filter: brightness(1.15);
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(255, 0, 80, 0.4);
+    }
+    .profile-action-btn.edit-btn:hover {
+        box-shadow: 0 5px 15px rgba(255, 255, 255, 0.1);
+    }
+    .chat-send-btn:hover {
+        transform: scale(1.1);
+        background: #ff0050;
+    }
+    .videoSidebar__button:hover {
+        transform: scale(1.1);
+    }
+    .nav__item:hover {
+        color: white;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+    }
+    .header__link:hover {
+        color: white;
+    }
+    .back-btn:hover {
+        color: #fff;
+        transform: scale(1.1);
+    }
+    .mute-btn:hover {
+        transform: scale(1.1);
+        background: rgba(0, 0, 0, 0.8);
+    }
+    .close-modal:hover {
+        color: white;
+        transform: rotate(90deg);
+    }
+    .file-upload-design:hover {
+        border-color: #ff0050;
+        background: #222;
+    }
+    .admin-btn:hover {
+        filter: brightness(1.2);
+        transform: scale(1.05);
+    }
+    .grid-item video {
+        transition: transform 0.4s ease;
+    }
+    .grid-item:hover video {
+        transform: scale(1.1);
+    }
+    .search-icon:hover {
+        color: #fff;
+        transform: translateY(-50%) scale(1.1);
+    }
+    .chat-msg .chat-bubble:hover {
+        filter: brightness(1.1);
+    }
+    .plus-box:hover {
+        transform: scale(1.1);
     }
 }

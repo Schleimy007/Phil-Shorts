@@ -1216,7 +1216,6 @@ window.openProfile = async function(targetUid) {
                 document.getElementById('edit-bio-input').value = currentUser.bio;
                 document.getElementById('settings-modal').classList.add('show');
             };
-            settingsIcon.style.display = 'block';
             notifSettingsIcon.style.display = 'block';
             adminDashboardBtn.style.display = currentUser.email === "schleimyverteilung@gmail.com" ? 'block' : 'none';
             privateStats.style.display = 'block';
@@ -1240,7 +1239,6 @@ window.openProfile = async function(targetUid) {
                 actionBtn.classList.remove('edit-btn');
             }
             actionBtn.onclick = () => toggleFollow(targetUid);
-            settingsIcon.style.display = 'none';
             notifSettingsIcon.style.display = 'none';
         }
 
@@ -1532,7 +1530,6 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     resultsGrid.innerHTML = html;
 });
 
-// --- INBOX TAB LOGIC ---
 document.getElementById('tab-notifications').addEventListener('click', function() {
     this.classList.add('active');
     document.getElementById('tab-messages').classList.remove('active');
@@ -1640,7 +1637,6 @@ function initInbox() {
     });
 }
 
-// --- DM CHATS (Nachrichten) ---
 let inboxChatsUnsubscribe = null;
 
 function initInboxChats() {
@@ -1783,6 +1779,7 @@ document.getElementById('up-file').addEventListener('change', function() {
     document.querySelector('.file-upload-design i').className = "fas fa-check-circle";
     document.querySelector('.file-upload-design i').style.color = "#ff0050";
 });
+
 document.getElementById('submit-upload').addEventListener('click', async() => {
     const file = document.getElementById('up-file').files[0];
     const titleVal = document.getElementById('up-title').value.trim();
