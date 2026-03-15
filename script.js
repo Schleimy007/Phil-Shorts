@@ -14,6 +14,7 @@ const firebaseConfig = {
 
 const CLOUDINARY_NAME = "dyzhyd2x8";
 const UPLOAD_PRESET = "phil_upload";
+const GIPHY_API_KEY = "Vj2uCqfOmAT1sXEKQgQvneGy60VIxgCk";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -112,7 +113,7 @@ window.switchView = function(viewId) {
     document.querySelectorAll('.nav__item').forEach(n => n.classList.remove('active'));
     if (viewId === 'feed') document.querySelectorAll('.nav__item')[0].classList.add('active');
     if (viewId === 'search') document.querySelectorAll('.nav__item')[1].classList.add('active');
-    if (viewId === 'inbox' || viewId === 'dm') document.querySelectorAll('.nav__item')[3].classList.add('active');
+    if (viewId === 'inbox' || viewId === 'dm' || viewId === 'ticket') document.querySelectorAll('.nav__item')[3].classList.add('active');
     if (viewId === 'profile' && currentUser && document.getElementById('profile-name').innerText.includes(currentUser.displayName)) {
         document.querySelectorAll('.nav__item')[4].classList.add('active');
     }
@@ -339,15 +340,10 @@ function initLiveUser() {
                 applyAppTheme('default');
             }
 
-            // Check for Admin Support Tab
-            if (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) {
-                const supportTab = document.getElementById('tab-support');
-                if (supportTab) supportTab.style.display = 'block';
-                if (window.initSupportTickets) window.initSupportTickets();
-            } else {
-                const supportTab = document.getElementById('tab-support');
-                if (supportTab) supportTab.style.display = 'none';
-            }
+            // Ticket / Support Tab anzeigen und laden
+            const supportTab = document.getElementById('tab-support');
+            if (supportTab) supportTab.style.display = 'block';
+            if (window.initSupportTickets) window.initSupportTickets();
 
             const coinEl = document.getElementById('my-coins');
             if (coinEl) coinEl.innerText = currentUser.coins;
@@ -485,12 +481,6 @@ window.onload = async function() {
         if (currentUser) {
             updateDoc(doc(db, "users", currentUser.uid), { appTheme: e.target.value });
         }
-    });
-
-    // GIF Button click
-    document.getElementById('btn-gif-comment').addEventListener('click', () => {
-        if (!checkPhilPlusStatus()) return showCustomAlert("Phil Shorts+", "GIFs in Kommentaren sind exklusiv für Phil Shorts+ Mitglieder!");
-        showCustomAlert("GIFs", "Das GIF-Menü öffnet sich hier. (UI Vorstufe)");
     });
 };
 
@@ -1151,6 +1141,11 @@ function renderComments(id) {
             if (c.creatorHeart) cCreatorHeartHtml = `<div class="creator-heart-wrap" onclick="toggleCreatorHeart('${id}', '${commentId}')" style="cursor:${isCreator?'pointer':'default'};" title="Vom Creator geliket"><div class="creator-heart-img" style="background-image: url('${creatorPic}')"></div><i class="fas fa-heart creator-heart-badge"></i></div>`;
             else if (isCreator) cCreatorHeartHtml = `<div class="creator-heart-wrap creator-heart-inactive" onclick="toggleCreatorHeart('${id}', '${commentId}')" title="Creator Herz geben"><i class="far fa-heart creator-heart-badge-outline"></i></div>`;
 
+            let renderedGif = '';
+            if(c.gifUrl) {
+                renderedGif = `<img src="${c.gifUrl}" class="comment-gif" alt="GIF">`;
+            }
+
             let repliesHtml = '';
             if (c.replies && c.replies.length > 0) {
                 repliesHtml = `<div class="reply-container">` + c.replies.map(r => {
@@ -1198,6 +1193,7 @@ function renderComments(id) {
                                 <span class="comment-time">${timeString}</span>
                             </strong>
                             <p style="word-break: break-word;">${formatText(c.text)}</p>
+                            ${renderedGif}
                             <div class="comment-actions"><span onclick="toggleReplyBox('${commentId}')">Antworten</span><span class="${hasLiked}" onclick="likeComment('${id}', '${commentId}')"><i class="fas fa-heart"></i> ${likeCount}</span>${cCreatorHeartHtml}</div>
                         </div>
                         ${deleteBtn}
@@ -1209,12 +1205,93 @@ function renderComments(id) {
     } else { list.innerHTML = '<div class="no-comments">Sei der Erste, der kommentiert!</div>'; }
 }
 
+// --- GIPHY API LOGIK ---
+let currentPendingGifUrl = null;
+
+// Giphy Modal öffnen (Nur für Phil Shorts+ Nutzer)
+document.getElementById('btn-gif-comment').addEventListener('click', () => {
+    if(!checkPhilPlusStatus()) return showCustomAlert("Phil Shorts+", "GIFs in Kommentaren sind exklusiv für Phil Shorts+ Mitglieder!");
+    document.getElementById('giphy-modal').classList.add('show');
+    fetchGiphyTrending();
+});
+
+document.getElementById('close-giphy-modal').addEventListener('click', () => {
+    document.getElementById('giphy-modal').classList.remove('show');
+});
+
+document.getElementById('remove-pending-gif').addEventListener('click', () => {
+    currentPendingGifUrl = null;
+    document.getElementById('pending-gif-preview').style.display = 'none';
+});
+
+async function fetchGiphyTrending() {
+    const resultsDiv = document.getElementById('giphy-results');
+    resultsDiv.innerHTML = '<div style="grid-column: span 2; text-align: center;"><i class="fas fa-spinner fa-spin"></i></div>';
+    try {
+        const response = await fetch(`https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=20&rating=g`);
+        const json = await response.json();
+        renderGiphyResults(json.data);
+    } catch(e) {
+        resultsDiv.innerHTML = '<div style="grid-column: span 2; text-align: center; color: #888;">Fehler beim Laden von Giphy. (API Key geprüft?)</div>';
+    }
+}
+
+document.getElementById('giphy-search-input').addEventListener('input', async (e) => {
+    const q = e.target.value.trim();
+    if(q.length < 2) return fetchGiphyTrending();
+    
+    const resultsDiv = document.getElementById('giphy-results');
+    try {
+        const response = await fetch(`https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(q)}&limit=20&rating=g`);
+        const json = await response.json();
+        renderGiphyResults(json.data);
+    } catch(e) {}
+});
+
+function renderGiphyResults(gifs) {
+    const resultsDiv = document.getElementById('giphy-results');
+    resultsDiv.innerHTML = '';
+    if(!gifs || gifs.length === 0) {
+        resultsDiv.innerHTML = '<div style="grid-column: span 2; text-align: center; color: #888;">Keine GIFs gefunden.</div>';
+        return;
+    }
+    
+    gifs.forEach(gif => {
+        const url = gif.images.fixed_height.url;
+        resultsDiv.innerHTML += `
+        <div class="gif-item" onclick="selectGifForComment('${url}')">
+            <img src="${url}" alt="GIF">
+        </div>`;
+    });
+}
+
+window.selectGifForComment = function(url) {
+    currentPendingGifUrl = url;
+    document.getElementById('pending-gif-img').src = url;
+    document.getElementById('pending-gif-preview').style.display = 'block';
+    document.getElementById('giphy-modal').classList.remove('show');
+}
+
+
 document.getElementById('submit-comment').addEventListener('click', async() => {
-    const input = document.getElementById('new-comment-input'); const text = input.value.trim();
-    if (!text || !window.currentCommentVideoId || !currentUser) return;
+    const input = document.getElementById('new-comment-input'); 
+    const text = input.value.trim();
+    if ((!text && !currentPendingGifUrl) || !window.currentCommentVideoId || !currentUser) return;
 
     const commentId = Date.now().toString();
-    const comment = { cId: commentId, uid: currentUser.uid, name: currentUser.displayName, username: currentUser.username, pic: currentUser.photoURL, verified: currentUser.verified || false, text: text, likes: [], replies: [], creatorHeart: false };
+    const comment = { 
+        cId: commentId, 
+        uid: currentUser.uid, 
+        name: currentUser.displayName, 
+        username: currentUser.username, 
+        pic: currentUser.photoURL, 
+        verified: currentUser.verified || false, 
+        text: text, 
+        gifUrl: currentPendingGifUrl || null,
+        likes: [], 
+        replies: [], 
+        creatorHeart: false 
+    };
 
     const videoIndex = allVideosData.findIndex(v => v.id === window.currentCommentVideoId);
     if (videoIndex > -1) {
@@ -1223,9 +1300,14 @@ document.getElementById('submit-comment').addEventListener('click', async() => {
         document.querySelectorAll(`.comment-btn[data-id="${window.currentCommentVideoId}"] .comment-count-txt`).forEach(el => el.innerText = allVideosData[videoIndex].comments.length);
     }
     input.value = '';
+    
+    // reset pending GIF
+    currentPendingGifUrl = null;
+    document.getElementById('pending-gif-preview').style.display = 'none';
+
     await updateDoc(doc(db, "videos", window.currentCommentVideoId), { comments: arrayUnion(comment) });
     const targetVidData = allVideosData.find(vd => vd.id === window.currentCommentVideoId);
-    if (targetVidData) addNotification(targetVidData.authorUid, "comment", `hat kommentiert: "${text}"`, window.currentCommentVideoId);
+    if (targetVidData) addNotification(targetVidData.authorUid, "comment", `hat kommentiert${text ? ': "'+text+'"' : ' mit einem GIF'}`, window.currentCommentVideoId);
 });
 
 window.toggleFollow = async function(targetUid, element, event) {
@@ -1608,17 +1690,29 @@ window.closeStoryViewer = function() {
 
 // Support & Admin
 window.sendSupport = async function() {
-    const msg = document.getElementById('support-msg').value;
+    const msg = document.getElementById('support-msg').value.trim();
     if(!msg || !currentUser) return;
-    await addDoc(collection(db, "reports"), {
+    
+    const ticketRef = await addDoc(collection(db, "reports"), {
         uid: currentUser.uid,
         name: currentUser.displayName,
-        msg: msg,
         hasPlus: checkPhilPlusStatus(),
+        status: 'open',
         timestamp: Date.now()
     });
-    showToast("Support-Anfrage gesendet!");
+    
+    // Erstelle erste Nachricht im Ticket
+    await addDoc(collection(db, `reports/${ticketRef.id}/messages`), {
+        senderUid: currentUser.uid,
+        text: msg,
+        timestamp: Date.now()
+    });
+    
+    showToast("Support-Ticket erstellt!");
     document.getElementById('support-msg').value = '';
+    document.getElementById('app-settings-modal').classList.remove('show');
+    switchView('inbox');
+    document.getElementById('tab-support').click();
 }
 
 window.toggleVerify = async function(targetUid, currentStatus) { try { await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus }); showToast(!currentStatus ? "Blauer Haken vergeben! 🔵" : "Blauer Haken entfernt."); } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); } };
@@ -1879,54 +1973,142 @@ function initInboxChats() {
     });
 }
 
-// --- ADMIN SUPPORT TICKETS ---
+// --- ADMIN SUPPORT TICKETS LESE-LOGIK ---
 let supportUnsubscribe = null;
 window.initSupportTickets = function() {
-    if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return;
+    if (!currentUser) return;
     const supportBox = document.getElementById('inbox-support-box');
+    const isAdmin = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
 
     if (supportUnsubscribe) supportUnsubscribe();
-    supportUnsubscribe = onSnapshot(query(collection(db, "reports"), orderBy("timestamp", "desc")), (snapshot) => {
+    
+    let reportQuery = query(collection(db, "reports"), orderBy("timestamp", "desc"));
+    
+    supportUnsubscribe = onSnapshot(reportQuery, (snapshot) => {
         supportBox.innerHTML = '';
-        if (snapshot.empty) {
-            supportBox.innerHTML = '<div class="empty-state" style="height:100%;"><i class="fas fa-check-circle" style="color:#00f2fe; font-size:40px; margin-bottom:10px;"></i><p>Keine offenen Support-Tickets!</p></div>';
-            return;
-        }
+        let foundAny = false;
+        
         snapshot.forEach(docSnap => {
             const ticket = docSnap.data();
+            // JS Filter für normale Nutzer
+            if (!isAdmin && ticket.uid !== currentUser.uid) return;
+            
+            foundAny = true;
             const ticketId = docSnap.id;
             const isVip = ticket.hasPlus ? 'vip' : '';
             const vipBadge = ticket.hasPlus ? '<span class="phil-plus-badge" style="font-size:9px; margin-left:5px;">PLUS</span>' : '';
             
             const uData = getUserData(ticket.uid, ticket.name, ticket.name, 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback', false);
-            const safeName = uData.username.replace(/'/g, "\\'");
 
             supportBox.innerHTML += `
-            <div class="support-ticket ${isVip}">
+            <div class="support-ticket ${isVip}" onclick="openTicketChat('${ticketId}', '${uData.username}')" style="cursor:pointer;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:10px; align-items:center;">
-                    <strong style="color:white; font-size:14px; cursor:pointer;" onclick="openProfile('${ticket.uid}')">@${uData.username} ${vipBadge}</strong>
+                    <strong style="color:white; font-size:14px;">@${uData.username} ${vipBadge}</strong>
                     <span style="color:#888; font-size:11px;">${timeAgo(ticket.timestamp)}</span>
                 </div>
-                <p style="font-size:14px; color:#ddd; margin-bottom:15px; background:rgba(0,0,0,0.3); padding:10px; border-radius:8px;">${formatText(ticket.msg)}</p>
-                <div style="display:flex; gap:10px;">
-                    <button class="profile-action-btn" onclick="openDM('${ticket.uid}', '${safeName}', '${uData.pic}')" style="flex:1; min-height:30px; font-size:12px; background:#00f2fe; color:black;"><i class="fas fa-reply"></i> Antworten</button>
-                    <button class="profile-action-btn edit-btn" onclick="resolveTicket('${ticketId}')" style="flex:1; min-height:30px; font-size:12px; background:transparent; border:1px solid #ff4444; color:#ff4444;"><i class="fas fa-check"></i> Schließen</button>
-                </div>
+                <div style="font-size:12px; color:#aaa; margin-bottom:5px;"><i class="fas fa-ticket-alt"></i> Ticket Status: <span style="color:${ticket.status === 'closed' ? '#ff4444' : '#39ff14'}; font-weight:bold;">${ticket.status === 'closed' ? 'Geschlossen' : 'Offen'}</span></div>
+                <p style="font-size:14px; color:#ddd; background:rgba(0,0,0,0.3); padding:10px; border-radius:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Klicken um Chat zu öffnen</p>
             </div>`;
         });
+        
+        if (!foundAny) {
+            supportBox.innerHTML = '<div class="empty-state" style="height:100%;"><i class="fas fa-check-circle" style="color:#00f2fe; font-size:40px; margin-bottom:10px;"></i><p>Keine Support-Tickets gefunden!</p></div>';
+        }
     });
 }
 
-window.resolveTicket = async function(ticketId) {
-    if(confirm("Ticket als erledigt markieren und schließen?")) {
-        try {
-            await deleteDoc(doc(db, "reports", ticketId));
-            showToast("Ticket geschlossen.");
-        } catch(e) {
-            showCustomAlert("Fehler", "Ticket konnte nicht gelöscht werden.");
+// --- DEDICATED TICKET CHAT LOGIK ---
+let currentTicketSnapshot = null; 
+window.currentActiveTicketId = null;
+
+window.openTicketChat = async function(ticketId, username) {
+    if (!currentUser) return;
+    window.currentActiveTicketId = ticketId;
+    
+    document.getElementById('ticket-title').innerText = "Ticket: @" + username; 
+    switchView('ticket');
+    
+    const ticketBox = document.getElementById('ticket-box'); 
+    ticketBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
+    
+    const isAdmin = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
+    if(isAdmin) {
+        document.getElementById('admin-close-ticket-btn').style.display = 'block';
+    } else {
+        document.getElementById('admin-close-ticket-btn').style.display = 'none';
+    }
+
+    if (currentTicketSnapshot) currentTicketSnapshot();
+    
+    currentTicketSnapshot = onSnapshot(query(collection(db, `reports/${ticketId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
+        ticketBox.innerHTML = '';
+        if (snapshot.empty) { ticketBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Keine Nachrichten</p></div>'; } 
+        else {
+            snapshot.forEach(docSnap => {
+                const msg = docSnap.data(); 
+                const isMe = msg.senderUid === currentUser.uid ? 'me' : ''; 
+                const pic = msg.senderUid === currentUser.uid ? currentUser.photoURL : 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin';
+                
+                let bg = isMe ? '#ff0050' : '#333';
+                let adminLabel = !isMe && msg.senderUid !== currentUser.uid ? '<div style="font-size:10px; color:#ffd700; margin-bottom:4px;"><i class="fas fa-shield-alt"></i> Support Team</div>' : '';
+
+                ticketBox.innerHTML += `
+                    <div class="chat-msg ${isMe}">
+                        <img src="${pic}" class="chat-avatar" style="flex-shrink:0;">
+                        <div style="min-width:0; max-width: 100%;">
+                            <div class="chat-bubble" style="background:${bg}; border-color:${bg};">${adminLabel}${formatText(msg.text)}</div>
+                            <div class="chat-time" style="font-size: 10px; color: #666; margin-top: 4px; text-align: ${isMe ? 'right' : 'left'};">${timeAgo(msg.timestamp)}</div>
+                        </div>
+                    </div>`;
+            });
+        }
+        ticketBox.scrollTop = ticketBox.scrollHeight;
+    });
+
+    const tRef = doc(db, "reports", ticketId);
+    const tSnap = await getDoc(tRef);
+    if(tSnap.exists()) {
+        const tData = tSnap.data();
+        const statEl = document.getElementById('ticket-status');
+        if(tData.status === 'closed') {
+            statEl.innerText = "Geschlossen";
+            statEl.style.background = "#ff4444";
+            document.getElementById('ticket-input-area').style.display = 'none';
+            document.getElementById('admin-close-ticket-btn').style.display = 'none';
+        } else {
+            statEl.innerText = "Offen";
+            statEl.style.background = "#39ff14";
+            statEl.style.color = "black";
+            document.getElementById('ticket-input-area').style.display = 'flex';
         }
     }
 };
+
+document.getElementById('send-ticket-btn').addEventListener('click', async() => {
+    const input = document.getElementById('ticket-input'); 
+    const text = input.value.trim(); 
+    if (!text || !window.currentActiveTicketId || !currentUser) return; 
+    input.value = '';
+    
+    await addDoc(collection(db, `reports/${window.currentActiveTicketId}/messages`), { 
+        senderUid: currentUser.uid, 
+        text: text, 
+        timestamp: Date.now() 
+    });
+});
+
+document.getElementById('ticket-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-ticket-btn').click(); });
+
+document.getElementById('admin-close-ticket-btn').addEventListener('click', async() => {
+    if(!window.currentActiveTicketId) return;
+    if(confirm("Support Ticket schließen? (Nutzer kann nicht mehr antworten)")) {
+        await updateDoc(doc(db, "reports", window.currentActiveTicketId), { status: 'closed' });
+        showToast("Ticket geschlossen.");
+        switchView('inbox');
+        document.getElementById('tab-support').click();
+    }
+});
+
 
 let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
 window.openDM = async function(targetUid, targetName, targetPic) {

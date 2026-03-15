@@ -90,9 +90,9 @@
             <div class="top-bar glass-nav" style="flex-direction: column; align-items: stretch; padding: 10px 15px 0;">
                 <h3 style="text-align: center; margin-bottom: 10px;">Posteingang</h3>
                 <div class="profile-tabs" style="border: none;">
-                    <div class="profile-tab active" id="tab-notifications" style="font-size: 15px; padding: 10px;">Aktivitäten</div>
-                    <div class="profile-tab" id="tab-messages" style="font-size: 15px; padding: 10px;">Nachrichten</div>
-                    <div class="profile-tab" id="tab-support" style="display:none; font-size: 15px; padding: 10px; color: #ffd700;"><i class="fas fa-ticket-alt"></i> Support</div>
+                    <div class="profile-tab active" id="tab-notifications" style="font-size: 14px; padding: 10px;">Aktivitäten</div>
+                    <div class="profile-tab" id="tab-messages" style="font-size: 14px; padding: 10px;">Nachrichten</div>
+                    <div class="profile-tab" id="tab-support" style="font-size: 14px; padding: 10px; color: #ffd700;"><i class="fas fa-ticket-alt"></i> Support</div>
                 </div>
             </div>
             <div class="chat-container" id="inbox-notifications-box">
@@ -116,6 +116,22 @@
             <div class="chat-input-wrapper glass-nav-bottom">
                 <input type="text" id="dm-input" placeholder="Nachricht senden..." class="chat-input">
                 <button id="send-dm-btn" class="chat-send-btn"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
+
+        <div id="view-ticket" class="view">
+            <div class="top-bar glass-nav" style="background: rgba(26, 26, 26, 0.95); border-bottom: 1px solid #ffd700;">
+                <i class="fas fa-chevron-left back-btn" onclick="switchView('inbox'); document.getElementById('tab-support').click();"></i>
+                <div style="text-align: center; flex: 1;">
+                    <h3 id="ticket-title" style="font-size: 16px; margin-bottom: 2px;">Support Ticket</h3>
+                    <span id="ticket-status" style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: #333; color: white;">Status</span>
+                </div>
+                <i class="fas fa-check-circle back-btn" id="admin-close-ticket-btn" style="display:none; color: #39ff14;" title="Ticket schließen"></i>
+            </div>
+            <div class="chat-container" id="ticket-box" style="background: #0a0a0a;"></div>
+            <div class="chat-input-wrapper glass-nav-bottom" id="ticket-input-area">
+                <input type="text" id="ticket-input" placeholder="Antwort schreiben..." class="chat-input" style="border-color: #ffd700;">
+                <button id="send-ticket-btn" class="chat-send-btn" style="background: #ffd700; color: black;"><i class="fas fa-paper-plane"></i></button>
             </div>
         </div>
 
@@ -215,6 +231,18 @@
             </div>
         </div>
 
+        <div id="giphy-modal" class="modal" style="height: 60%; z-index: 300;">
+            <div class="modal-header">
+                <h4>GIF Auswählen</h4>
+                <i class="fas fa-times close-modal" id="close-giphy-modal"></i>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column;">
+                <input type="text" id="giphy-search-input" class="comment-input" placeholder="GIF Suchen (Giphy)..." style="width: 100%; margin-bottom: 15px;">
+                <div id="giphy-results" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                </div>
+            </div>
+        </div>
+
         <div id="gift-modal" class="modal">
             <div class="modal-header">
                 <h4>Geschenk senden</h4>
@@ -266,11 +294,11 @@
                         <li><i class="fas fa-check"></i> 100 MB Video-Upload (statt 30 MB)</li>
                         <li><i class="fas fa-check"></i> Premium App-Themes (Deep Blue, Neon)</li>
                         <li><i class="fas fa-check"></i> Exklusiver RGB Chroma Rahmen</li>
-                        <li><i class="fas fa-check"></i> GIFs in Kommentaren nutzen</li>
+                        <li><i class="fas fa-check"></i> GIFs (Giphy) in Kommentaren nutzen</li>
                         <li><i class="fas fa-check"></i> 48h Stories (statt 24h)</li>
                         <li><i class="fas fa-check"></i> 100% Werbefrei</li>
                         <li><i class="fas fa-check"></i> Priorisierter Feed (Boost Algorithmus)</li>
-                        <li><i class="fas fa-check"></i> Priority VIP Support</li>
+                        <li><i class="fas fa-check"></i> Priority VIP Support Tickets</li>
                     </ul>
 
                     <div class="plus-plan-card" onclick="buyPhilPlus(5, 10000)">
@@ -356,11 +384,19 @@
             <div class="modal-header">
                 <h4 style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Kommentare</h4><i class="fas fa-times close-modal" id="close-comments"></i>
             </div>
-            <div class="modal-body" id="comment-list"></div>
-            <div class="modal-footer">
-                <input type="text" id="new-comment-input" placeholder="Sag etwas Nettes... (@mention)" class="comment-input">
-                <button id="btn-gif-comment" class="comment-submit" style="background:#333; margin-right:5px; color: #fff;"><i class="fas fa-image"></i></button>
-                <button id="submit-comment" class="comment-submit"><i class="fas fa-arrow-up"></i></button>
+            <div class="modal-body" id="comment-list" style="padding-bottom: 0;"></div>
+
+            <div class="modal-footer" style="flex-direction: column; align-items: stretch; padding-top: 5px;">
+                <div id="pending-gif-preview" style="display:none; position: relative; max-width: 120px; margin-bottom: 10px;">
+                    <img id="pending-gif-img" src="" style="width: 100%; border-radius: 8px; border: 1px solid #444;">
+                    <i class="fas fa-times-circle" id="remove-pending-gif" style="position: absolute; top: -5px; right: -5px; color: #ff4444; font-size: 20px; cursor: pointer; background: black; border-radius: 50%;"></i>
+                </div>
+
+                <div style="display: flex; gap: 10px; align-items: center; width: 100%;">
+                    <input type="text" id="new-comment-input" placeholder="Sag etwas Nettes... (@mention)" class="comment-input">
+                    <button id="btn-gif-comment" class="comment-submit" style="background:#333; margin-right:5px; color: #fff;"><i class="fas fa-photo-video"></i></button>
+                    <button id="submit-comment" class="comment-submit"><i class="fas fa-arrow-up"></i></button>
+                </div>
             </div>
         </div>
 
@@ -522,9 +558,9 @@
 
                 <hr style="border:0; border-top:1px solid #222; margin: 25px 0;">
                 <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
-                    <h5 style="margin-bottom: 10px; color: #888;">Support / Hilfe</h5>
-                    <textarea id="support-msg" class="comment-input" placeholder="Wie können wir dir helfen?" rows="3" style="resize:none; width:100%; margin-bottom:10px;"></textarea>
-                    <button class="profile-action-btn edit-btn" onclick="sendSupport()" style="width:100%;">Nachricht senden</button>
+                    <h5 style="margin-bottom: 10px; color: #888;">Support-Ticket eröffnen</h5>
+                    <textarea id="support-msg" class="comment-input" placeholder="Beschreibe dein Problem..." rows="3" style="resize:none; width:100%; margin-bottom:10px; border-color: #ffd700;"></textarea>
+                    <button class="profile-action-btn" onclick="sendSupport()" style="width:100%; background: #ffd700; color: black;"><i class="fas fa-ticket-alt"></i> Ticket erstellen</button>
                 </div>
 
                 <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050; min-height: 56px; font-size: 17px;">Abmelden / Account wechseln</button>
