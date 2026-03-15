@@ -788,11 +788,11 @@ videoContainer.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 
-// --- VERBESSERTE OBSERVER LOGIK MIT FALLBACK FÜR AUTOPLAY ---
+// --- PERFEKTE OBSERVER LOGIK - ÜBERWACHT DEN CONTAINER, NICHT DAS VIDEO ---
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
-        const el = e.target;
-        const vidId = el.dataset.vid;
+        const el = e.target; // Hier wird jetzt der `.video` Container überwacht, NICHT das <video>
+        const vidId = el.dataset.id; // Holt die ID aus dem Container
 
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
             if (vidId && !viewedVideos.has(vidId)) {
@@ -800,29 +800,26 @@ const videoObserver = new IntersectionObserver(entries => {
                 updateDoc(doc(db, "videos", vidId), { views: increment(1) }).catch(() => {});
             }
 
-            if (el.tagName === 'VIDEO') {
+            const videoPlayer = el.querySelector('.video__player');
+            if (videoPlayer) {
                 // Alle vorherigen pausieren
                 document.querySelectorAll('.video__player').forEach(otherVid => {
-                    if (otherVid !== el && !otherVid.paused) {
+                    if (otherVid !== videoPlayer && !otherVid.paused) {
                         otherVid.pause();
                         otherVid.currentTime = 0;
                     }
                 });
 
-                el.muted = window.globalMuted;
-                const playPromise = el.play();
+                videoPlayer.muted = window.globalMuted;
+                const playPromise = videoPlayer.play();
 
                 if (playPromise !== undefined) {
                     playPromise.catch(error => { 
                         console.log("Autoplay blockiert (vermutlich Browser Policy bei Videos ohne Ton):", error);
                         
-                        // FALLBACK: Nur dieses EINE blockierte Video stummschalten und abspielen.
-                        // Wichtig: Wir ändern window.globalMuted NICHT auf true!
-                        // Dadurch wird das nächste Video wieder ganz normal mit Ton starten.
-                        el.muted = true;
-                        el.play().then(() => {
-                            // UI für dieses spezifische Video auf "Mute" setzen
-                            const container = el.closest('.video-inner');
+                        videoPlayer.muted = true;
+                        videoPlayer.play().then(() => {
+                            const container = videoPlayer.closest('.video-inner');
                             if(container) {
                                 const muteBtn = container.querySelector('.mute-btn');
                                 const volumeSlider = container.querySelector('.volume-slider');
@@ -837,19 +834,24 @@ const videoObserver = new IntersectionObserver(entries => {
                 }
             }
         } else {
-            if (el.tagName === 'VIDEO') {
-                el.pause();
-                el.currentTime = 0;
+            const videoPlayer = el.querySelector('.video__player');
+            if (videoPlayer) {
+                videoPlayer.pause();
+                videoPlayer.currentTime = 0;
             }
         }
     });
-}, { threshold: 0.4 }); // Schwelle auf 0.4 (40%) gesenkt für bessere Erkennung auf allen Displays
+}, { threshold: 0.4 }); // Reagiert sauber, wenn das Video zu 40% gescrollt ist
 
 
 function attachInteractionsToVideo(videoContainerEl) {
     const v = videoContainerEl.querySelector('.video__player');
     const c = videoContainerEl.querySelector('.carousel-container');
     const container = videoContainerEl.querySelector('.video-inner');
+    
+    // WICHTIG: Wir überwachen jetzt den gesamten Container-Block, nicht das Video-Element!
+    videoObserver.observe(videoContainerEl); 
+    
     let lastTap = 0;
 
     const handleDoubleTap = (e) => {
@@ -870,8 +872,6 @@ function attachInteractionsToVideo(videoContainerEl) {
 
 
     if (v) {
-        videoObserver.observe(v);
-
         v.addEventListener('play', () => container.classList.remove('is-paused'));
         v.addEventListener('pause', () => container.classList.add('is-paused'));
 
@@ -925,7 +925,6 @@ function attachInteractionsToVideo(videoContainerEl) {
         }
 
     } else if (c) {
-        videoObserver.observe(c);
         container.classList.remove('is-paused');
 
         c.addEventListener('click', (e) => {
