@@ -787,6 +787,8 @@ videoContainer.addEventListener('wheel', (e) => {
     scrollTimeout = setTimeout(() => { scrollTimeout = null; }, 600);
 }, { passive: false });
 
+
+// --- VERBESSERTE OBSERVER LOGIK MIT FALLBACK FÜR AUTOPLAY ---
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         const el = e.target;
@@ -799,9 +801,11 @@ const videoObserver = new IntersectionObserver(entries => {
             }
 
             if (el.tagName === 'VIDEO') {
+                // Alle vorherigen pausieren
                 document.querySelectorAll('.video__player').forEach(otherVid => {
                     if (otherVid !== el && !otherVid.paused) {
                         otherVid.pause();
+                        otherVid.currentTime = 0;
                     }
                 });
 
@@ -809,16 +813,37 @@ const videoObserver = new IntersectionObserver(entries => {
                 const playPromise = el.play();
 
                 if (playPromise !== undefined) {
-                    playPromise.catch(error => { console.log("Autoplay blockiert:", error); });
+                    playPromise.catch(error => { 
+                        console.log("Autoplay blockiert (vermutlich Browser Policy bei Videos ohne Ton):", error);
+                        
+                        // FALLBACK: Nur dieses EINE blockierte Video stummschalten und abspielen.
+                        // Wichtig: Wir ändern window.globalMuted NICHT auf true!
+                        // Dadurch wird das nächste Video wieder ganz normal mit Ton starten.
+                        el.muted = true;
+                        el.play().then(() => {
+                            // UI für dieses spezifische Video auf "Mute" setzen
+                            const container = el.closest('.video-inner');
+                            if(container) {
+                                const muteBtn = container.querySelector('.mute-btn');
+                                const volumeSlider = container.querySelector('.volume-slider');
+                                if(muteBtn) muteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+                                if(volumeSlider) {
+                                    volumeSlider.value = 0;
+                                    volumeSlider.style.background = `linear-gradient(to right, #fff 0%, rgba(255, 255, 255, 0.3) 0%)`;
+                                }
+                            }
+                        }).catch(err => console.log("Autoplay trotz stumm komplett blockiert:", err));
+                    });
                 }
             }
         } else {
             if (el.tagName === 'VIDEO') {
                 el.pause();
+                el.currentTime = 0;
             }
         }
     });
-}, { threshold: 0.6 });
+}, { threshold: 0.4 }); // Schwelle auf 0.4 (40%) gesenkt für bessere Erkennung auf allen Displays
 
 
 function attachInteractionsToVideo(videoContainerEl) {
