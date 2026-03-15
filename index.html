@@ -22,7 +22,7 @@
 <body>
     <div id="mention-suggestions" class="mention-dropdown"></div>
 
-    <div class="app">
+    <div class="app" id="main-app">
         <div id="toast" class="toast">Nachricht hier</div>
 
         <div id="login-screen" class="full-screen-overlay">
@@ -143,13 +143,13 @@
                 <div style="display: flex; gap: 10px; align-items: center; justify-content: center; width: 100%; flex-wrap: wrap;">
                     <button id="profile-action-btn" class="profile-action-btn" style="flex: 1; min-width: 120px;">Folgen</button>
                     <button id="profile-message-btn" class="profile-action-btn edit-btn" style="display: none; width: 46px; padding: 0;"><i class="fas fa-paper-plane"></i></button>
-                    <button id="profile-shop-btn" class="profile-action-btn shop-btn" style="display: none; flex: 1; min-width: 120px; background: #ffd700; color: black;"><i class="fas fa-store"></i> Shop</button>
+                    <button id="profile-shop-btn" class="profile-action-btn shop-btn" style="display: none; flex: 1; min-width: 120px; background: #ffd700; color: black;"><i class="fas fa-store"></i> Shop & Plus</button>
                 </div>
 
                 <div id="admin-controls" style="width: 100%;"></div>
                 <button id="open-admin-dashboard" class="profile-action-btn" style="display:none; background:#ffd700; color:black; margin-top:10px; width:100%;">👑 Admin Dashboard</button>
 
-                <div id="private-stats" style="display: none; width: 100%; margin-top: 20px; background: #111; border-radius: 15px; padding: 15px; border: 1px solid #333;">
+                <div id="private-stats" style="display: none; width: 100%; margin-top: 20px; background: var(--bg-card); border-radius: 15px; padding: 15px; border: 1px solid var(--border-color);">
                     <div style="display: flex; justify-content: space-around; text-align: center;">
                         <div>
                             <i class="fas fa-coins" style="color: #ffd700; font-size: 20px; margin-bottom: 5px;"></i>
@@ -217,24 +217,24 @@
                 <div style="font-size: 14px; color: #ffd700; font-weight: bold;"><i class="fas fa-coins"></i> <span id="gift-modal-coins">0</span></div>
                 <i class="fas fa-times close-modal" id="close-gift-modal"></i>
             </div>
-            <div class="modal-body" style="background: #0a0a0a;">
+            <div class="modal-body" style="background: var(--bg-darker);">
                 <div class="gift-grid" id="gift-grid">
                 </div>
             </div>
         </div>
 
-        <div id="shop-modal" class="modal" style="height: 85%;">
+        <div id="shop-modal" class="modal" style="height: 88%;">
             <div class="modal-header">
-                <h4><i class="fas fa-store" style="color: #ffd700;"></i> Shop</h4>
+                <h4><i class="fas fa-store" style="color: #ffd700;"></i> Shop & Abo</h4>
                 <div style="font-size: 14px; color: #ffd700; font-weight: bold;"><i class="fas fa-coins"></i> <span id="shop-modal-coins">0</span></div>
                 <i class="fas fa-times close-modal" id="close-shop-modal"></i>
             </div>
             <div class="shop-tabs">
                 <div class="shop-tab active" data-tab="shop-borders">Rahmen</div>
                 <div class="shop-tab" data-tab="shop-stories">Stories</div>
-                <div class="shop-tab" data-tab="shop-plus">Phil Shorts+</div>
+                <div class="shop-tab" data-tab="shop-plus"><i class="fas fa-star" style="color:#ff0050;"></i> Plus</div>
             </div>
-            <div class="modal-body" style="background: #0a0a0a; padding: 15px;">
+            <div class="modal-body" style="background: var(--bg-darker); padding: 15px;">
 
                 <div id="shop-borders" class="shop-content-section active">
                     <h4 style="margin-bottom: 15px; color: #aaa; font-size: 14px; text-transform: uppercase;">Profilrahmen</h4>
@@ -245,7 +245,7 @@
                     <div class="story-shop-card">
                         <i class="fas fa-camera-retro" style="font-size: 50px; color: #00f2fe; margin-bottom: 15px;"></i>
                         <h3 style="margin-bottom: 10px;">Story posten</h3>
-                        <p style="color: #888; font-size: 14px; margin-bottom: 20px;">Lade ein Bild für 24 Stunden in deine Story hoch. Alle Follower können es sehen!</p>
+                        <p style="color: #888; font-size: 14px; margin-bottom: 20px;">Lade ein Bild für 24 Stunden (48h mit Plus) in deine Story hoch. Alle Follower können es sehen!</p>
                         <button class="profile-action-btn" onclick="openStoryUpload()" style="width: 100%; font-size: 16px;"><i class="fas fa-coins" style="color: #ffd700;"></i> 1000 Coins</button>
                     </div>
                 </div>
@@ -253,9 +253,25 @@
                 <div id="shop-plus" class="shop-content-section" style="display: none;">
                     <div class="phil-plus-banner">
                         <i class="fas fa-star"></i> Phil Shorts+
+                        <p id="plus-status-text" style="font-size: 12px; margin-top: 5px; font-weight: normal;">Status: Inaktiv</p>
                     </div>
-                    <p style="color: #888; font-size: 13px; margin-bottom: 20px; text-align: center;">Schalte das exklusive Plus-Abzeichen frei, erhalte einen rot-blauen Namen in Kommentaren und unterstütze die App!</p>
 
+                    <div class="phil-plus-features-list">
+                        <ul>
+                            <li><i class="fas fa-star" style="color:#ff0050;"></i> <strong>Exklusives Plus-Abzeichen</strong> auf Profil & in Kommentaren</li>
+                            <li><i class="fas fa-palette" style="color:#00f2fe;"></i> <strong>Leuchtender Name</strong> in allen Bereichen</li>
+                            <li><i class="fas fa-upload" style="color:#ffd700;"></i> <strong>100 MB Uploads</strong> (statt 30 MB Limit)</li>
+                            <li><i class="fas fa-paint-brush" style="color:#e91e63;"></i> <strong>Custom App-Themes</strong> (Deep Blue, Neon Pink)</li>
+                            <li><i class="fas fa-border-all" style="color:#9c27b0;"></i> <strong>Animierter Profilrahmen</strong> (RGB Chroma)</li>
+                            <li><i class="fas fa-images" style="color:#4caf50;"></i> <strong>GIFs in Kommentaren</strong> freigeschaltet</li>
+                            <li><i class="fas fa-clock" style="color:#ff9800;"></i> <strong>Längere Stories</strong> (48h online statt 24h)</li>
+                            <li><i class="fas fa-rocket" style="color:#2196f3;"></i> <strong>Algorithmus-Boost</strong> für deine Videos</li>
+                            <li><i class="fas fa-ban" style="color:#f44336;"></i> <strong>100% Werbefrei</strong> durch die App scrollen</li>
+                            <li><i class="fas fa-headset" style="color:#00bcd4;"></i> <strong>Priority Support</strong> bei Reports</li>
+                        </ul>
+                    </div>
+
+                    <h4 style="margin: 20px 0 10px; color: white;">Abo-Modelle (Tage stapelbar)</h4>
                     <div class="plus-plan-card" onclick="buyPhilPlus(5, 10000)">
                         <div>
                             <h4>5 Tage Pass</h4>
@@ -298,7 +314,7 @@
                         <p style="word-break: break-all; padding: 0 10px;">Bild für Story auswählen</p>
                     </div>
                 </div>
-                <img id="story-preview-img" style="width: 100%; height: 200px; object-fit: contain; border-radius: 10px; display: none; margin-bottom: 15px; border: 1px solid #333;">
+                <img id="story-preview-img" style="width: 100%; height: 200px; object-fit: contain; border-radius: 10px; display: none; margin-bottom: 15px; border: 1px solid var(--border-color);">
                 <p id="story-upload-status" style="text-align: center; font-size: 14px; font-weight: bold; color: #ff0050;"></p>
                 <button id="submit-story-upload" class="profile-action-btn" style="width:100%; min-height: 56px; font-size:16px;">Story posten</button>
             </div>
@@ -340,7 +356,8 @@
                 <h4 style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Kommentare</h4><i class="fas fa-times close-modal" id="close-comments"></i>
             </div>
             <div class="modal-body" id="comment-list"></div>
-            <div class="modal-footer">
+            <div class="modal-footer" style="gap: 5px;">
+                <button class="chat-send-btn" style="background:#333; width:40px; height:40px;" onclick="openGifMenu()"><i class="fas fa-file-image"></i></button>
                 <input type="text" id="new-comment-input" placeholder="Sag etwas Nettes... (@mention)" class="comment-input">
                 <button id="submit-comment" class="comment-submit"><i class="fas fa-arrow-up"></i></button>
             </div>
@@ -363,6 +380,11 @@
                 <h4>Post Erstellen</h4><i class="fas fa-times close-modal" id="close-upload"></i>
             </div>
             <div class="modal-body upload-body">
+
+                <div id="plus-upload-banner" style="display:none; background: linear-gradient(45deg, #111, #222); padding: 10px; border-radius: 10px; border: 1px solid #ff0050; text-align: center; margin-bottom: 10px;">
+                    <i class="fas fa-star" style="color:#ff0050;"></i> <span style="font-size: 13px; font-weight: bold;">Plus-Vorteil aktiv: Max Upload 100 MB</span>
+                </div>
+
                 <div class="file-upload-wrapper">
                     <input type="file" id="up-file" class="file-input-hidden" accept="video/*, image/*" multiple required>
                     <div class="file-upload-design" id="up-file-btn" onclick="document.getElementById('up-file').click()">
@@ -371,7 +393,7 @@
                     </div>
                 </div>
 
-                <div id="trimmer-ui" style="display:none; background:#1a1a1a; padding:15px; border-radius:15px; border:1px solid #333;">
+                <div id="trimmer-ui" style="display:none; background:var(--bg-card); padding:15px; border-radius:15px; border:1px solid var(--border-color);">
                     <label style="color:#888; font-size:12px; margin-bottom:10px; display:block;">Video zuschneiden</label>
                     <video id="trim-preview" style="width:100%; height:120px; object-fit:contain; background:#000; border-radius:10px; margin-bottom:10px;" muted playsinline></video>
                     <div style="display:flex; justify-content:space-between; font-size:12px; color:#aaa; margin-bottom:5px;">
@@ -382,7 +404,7 @@
                     <input type="range" id="trim-end" min="0" value="0" step="0.1" class="trim-slider slider-red" style="width:100%;">
                 </div>
 
-                <div id="image-advanced-editor" style="display:none; background:#1a1a1a; padding:10px; border-radius:15px; border:1px solid #333;">
+                <div id="image-advanced-editor" style="display:none; background:var(--bg-card); padding:10px; border-radius:15px; border:1px solid var(--border-color);">
 
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                         <label style="color:#888; font-size:12px;">Bild Editor</label>
@@ -473,6 +495,17 @@
             </div>
             <div class="modal-body upload-body">
 
+                <div id="theme-settings-container" style="display:none; margin-bottom: 20px;">
+                    <h4 style="margin-bottom: 5px; font-size: 15px;"><i class="fas fa-paint-brush" style="color:#ff0050;"></i> App-Design (Plus Feature)</h4>
+                    <p style="font-size: 12px; color: #888; margin-bottom: 10px;">Wähle dein exklusives App-Theme.</p>
+                    <select id="app-theme-selector" class="comment-input" style="width: 100%; padding: 10px; border-radius: 10px;">
+                        <option value="default">Standard (Dunkel)</option>
+                        <option value="theme-deepblue">Deep Blue</option>
+                        <option value="theme-neonpink">Neon Pink</option>
+                        <option value="theme-hacker">Hacker Green</option>
+                    </select>
+                </div>
+
                 <h4 style="margin-bottom: 5px; font-size: 15px;">Desktop Benachrichtigungen</h4>
                 <p style="font-size: 12px; color: #888; margin-bottom: 15px;">Erhalte Push-Meldungen auf dem PC.</p>
 
@@ -499,7 +532,7 @@
                     </div>
                 </div>
 
-                <hr style="border:0; border-top:1px solid #222; margin: 25px 0;">
+                <hr style="border:0; border-top:1px solid var(--border-color); margin: 25px 0;">
                 <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050; min-height: 56px; font-size: 17px;">Abmelden / Account wechseln</button>
             </div>
         </div>

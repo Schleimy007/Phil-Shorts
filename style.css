@@ -1,4 +1,4 @@
-/* --- GLOBALE TEXTAUSWAHL VERBIETEN (TIKTOK STYLE) --- */
+/* --- GLOBALE TEXTAUSWAHL VERBIETEN --- */
 
 *,
 *::before,
@@ -11,6 +11,47 @@
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
+}
+
+
+/* --- THEME VARIABLEN (STANDARD) --- */
+
+:root {
+    --bg-main: #000;
+    --bg-card: #111;
+    --bg-darker: #0a0a0a;
+    --border-color: #222;
+    --border-light: #333;
+    --text-main: white;
+    --text-muted: #888;
+}
+
+
+/* PLUS THEMES */
+
+.theme-deepblue {
+    --bg-main: #000a14;
+    --bg-card: #001f3f;
+    --bg-darker: #001122;
+    --border-color: #003366;
+    --border-light: #004080;
+}
+
+.theme-neonpink {
+    --bg-main: #14000a;
+    --bg-card: #30001a;
+    --bg-darker: #1a000d;
+    --border-color: #4d0026;
+    --border-light: #660033;
+}
+
+.theme-hacker {
+    --bg-main: #000d00;
+    --bg-card: #001a00;
+    --bg-darker: #000500;
+    --border-color: #003300;
+    --border-light: #004d00;
+    --text-main: #39ff14;
 }
 
 input,
@@ -28,8 +69,8 @@ textarea,
 
 html,
 body {
-    background: #000;
-    color: white;
+    background: var(--bg-main);
+    color: var(--text-main);
     height: 100dvh;
     width: 100%;
     max-width: 100%;
@@ -38,15 +79,12 @@ body {
     display: block;
 }
 
-
-/* --- RESPONSIVE APP CONTAINER --- */
-
 .app {
     height: 100dvh;
     width: 100%;
     max-width: 100%;
     position: relative;
-    background-color: #000;
+    background-color: var(--bg-main);
     overflow: hidden;
 }
 
@@ -127,11 +165,11 @@ body {
 }
 
 .gift-card {
-    background: #1a1a1a;
+    background: var(--bg-card);
     border-radius: 12px;
     padding: 10px 5px;
     text-align: center;
-    border: 1px solid #333;
+    border: 1px solid var(--border-light);
     cursor: pointer;
     transition: all 0.2s;
 }
@@ -149,7 +187,7 @@ body {
 
 .gift-name {
     font-size: 11px;
-    color: #aaa;
+    color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -168,8 +206,8 @@ body {
 
 .shop-tabs {
     display: flex;
-    background: #111;
-    border-bottom: 1px solid #222;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .shop-tab {
@@ -178,9 +216,10 @@ body {
     padding: 12px 0;
     font-size: 14px;
     font-weight: bold;
-    color: #888;
+    color: var(--text-muted);
     cursor: pointer;
     border-bottom: 2px solid transparent;
+    transition: 0.2s;
 }
 
 .shop-tab.active {
@@ -195,8 +234,8 @@ body {
 }
 
 .shop-item-card {
-    background: #1a1a1a;
-    border: 1px solid #333;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
     border-radius: 15px;
     padding: 15px;
     text-align: center;
@@ -211,7 +250,7 @@ body {
 }
 
 
-/* BORDER CLASSES */
+/* BORDER CLASSES (INKL. RGB ANIMIERT) */
 
 .border-none {
     border: 2px solid transparent;
@@ -241,6 +280,31 @@ body {
     padding: 2px;
 }
 
+@keyframes rgbBorderAnim {
+    0% {
+        border-color: #ff0000;
+        box-shadow: 0 0 15px #ff0000;
+    }
+    33% {
+        border-color: #00ff00;
+        box-shadow: 0 0 15px #00ff00;
+    }
+    66% {
+        border-color: #0000ff;
+        box-shadow: 0 0 15px #0000ff;
+    }
+    100% {
+        border-color: #ff0000;
+        box-shadow: 0 0 15px #ff0000;
+    }
+}
+
+.border-rgb {
+    border: 3px solid #ff0000;
+    padding: 2px;
+    animation: rgbBorderAnim 2s linear infinite;
+}
+
 
 /* PHIL SHORTS PLUS */
 
@@ -258,8 +322,8 @@ body {
 }
 
 .plus-plan-card {
-    background: #1a1a1a;
-    border: 1px solid #333;
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
     border-radius: 12px;
     padding: 15px;
     margin-bottom: 12px;
@@ -294,13 +358,41 @@ body {
 
 .plus-plan-card p {
     font-size: 12px;
-    color: #888;
+    color: var(--text-muted);
 }
 
 .plus-price {
     font-weight: bold;
     font-size: 16px;
     color: #ffd700;
+}
+
+.phil-plus-features-list {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+.phil-plus-features-list ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.phil-plus-features-list li {
+    font-size: 13px;
+    color: #ccc;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.phil-plus-features-list li i {
+    width: 20px;
+    text-align: center;
+    font-size: 16px;
 }
 
 .phil-plus-badge {
@@ -331,7 +423,7 @@ body {
 
 .story-ring {
     border: 3px solid transparent;
-    background: linear-gradient(white, white) padding-box, linear-gradient(45deg, #ff0050, #ffd700) border-box;
+    background: linear-gradient(var(--bg-main), var(--bg-main)) padding-box, linear-gradient(45deg, #ff0050, #ffd700) border-box;
     padding: 3px;
 }
 
@@ -371,9 +463,6 @@ body {
     transition: width 0.1s linear;
 }
 
-
-/* RESTLICHE STYLES (Unverändert) */
-
 .creator-level {
     background: linear-gradient(45deg, #ff0050, #00f2fe);
     padding: 5px 15px;
@@ -406,7 +495,7 @@ body {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease;
-    background: #000;
+    background: var(--bg-main);
     z-index: 1;
     overflow-y: auto;
     overflow-x: hidden;
@@ -440,13 +529,13 @@ body {
 }
 
 .login-box {
-    background: #111;
+    background: var(--bg-card);
     padding: 40px 30px;
     border-radius: 24px;
     text-align: center;
     width: 85%;
     max-width: 400px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-color);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
@@ -1041,7 +1130,7 @@ body {
     font-size: 14px;
     text-align: center;
     margin: 10px 20px;
-    color: #ccc;
+    color: var(--text-muted);
     line-height: 1.4;
     white-space: pre-wrap;
 }
@@ -1061,7 +1150,7 @@ body {
 
 .stat-box span {
     font-size: 13px;
-    color: #888;
+    color: var(--text-muted);
 }
 
 .profile-action-btn {
@@ -1091,14 +1180,14 @@ body {
 
 .profile-tabs {
     display: flex;
-    border-bottom: 1px solid #222;
+    border-bottom: 1px solid var(--border-color);
 }
 
 .profile-tab {
     flex: 1;
     text-align: center;
     padding: 15px;
-    color: #888;
+    color: var(--text-muted);
     cursor: pointer;
     font-size: 20px;
 }
@@ -1148,7 +1237,7 @@ body {
     display: flex;
     flex-direction: column;
     height: calc(100% - 60px - env(safe-area-inset-bottom));
-    background: #000;
+    background: var(--bg-main);
 }
 
 .chat-container {
@@ -1165,16 +1254,16 @@ body {
     display: flex;
     gap: 15px;
     align-items: center;
-    background: #111;
+    background: var(--bg-card);
     padding: 15px;
     border-radius: 15px;
     cursor: pointer;
     transition: background 0.2s;
-    border: 1px solid #222;
+    border: 1px solid var(--border-color);
 }
 
 .inbox-msg:active {
-    background: #222;
+    background: var(--border-light);
 }
 
 .chat-avatar {
@@ -1211,7 +1300,7 @@ body {
 }
 
 .chat-msg .chat-bubble {
-    background: #222;
+    background: var(--bg-card);
     padding: 12px 16px;
     border-radius: 20px;
     border-top-left-radius: 4px;
@@ -1243,8 +1332,8 @@ body {
     min-width: 0;
     padding: 14px 20px;
     border-radius: 30px;
-    border: 1px solid #333;
-    background: #111;
+    border: 1px solid var(--border-light);
+    background: var(--bg-card);
     color: white;
     outline: none;
     font-size: 16px;
@@ -1275,7 +1364,7 @@ body {
     min-width: 0;
     display: flex;
     align-items: center;
-    background: #222;
+    background: var(--bg-card);
     border-radius: 10px;
     padding: 0 15px;
 }
@@ -1297,7 +1386,7 @@ body {
 
 .trending-section {
     padding: 10px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .trend-item {
@@ -1345,11 +1434,11 @@ body {
 
 .stat-card {
     flex: 1;
-    background: #111;
+    background: var(--bg-card);
     padding: 15px;
     border-radius: 15px;
     text-align: center;
-    border: 1px solid #333;
+    border: 1px solid var(--border-light);
 }
 
 .stat-card h5 {
@@ -1370,10 +1459,10 @@ body {
 }
 
 .admin-user-card {
-    background: #111;
+    background: var(--bg-card);
     padding: 15px;
     border-radius: 15px;
-    border: 1px solid #333;
+    border: 1px solid var(--border-light);
     margin-bottom: 10px;
     display: flex;
     flex-direction: column;
@@ -1453,14 +1542,14 @@ body {
     left: 0;
     width: 100%;
     height: 75%;
-    background: #111;
+    background: var(--bg-card);
     color: white;
     z-index: 200;
     border-radius: 20px 20px 0 0;
     transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), visibility 0.3s;
     display: flex;
     flex-direction: column;
-    border-top: 1px solid #333;
+    border-top: 1px solid var(--border-light);
     pointer-events: none;
     visibility: hidden;
 }
@@ -1475,7 +1564,7 @@ body {
     padding: 20px;
     display: flex;
     justify-content: space-between;
-    border-bottom: 1px solid #222;
+    border-bottom: 1px solid var(--border-color);
     align-items: center;
 }
 
@@ -1505,8 +1594,8 @@ body {
     padding-bottom: calc(15px + env(safe-area-inset-bottom));
     display: flex;
     gap: 10px;
-    border-top: 1px solid #222;
-    background: #111;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-card);
     align-items: center;
 }
 
@@ -1635,8 +1724,8 @@ body {
     min-width: 0;
     padding: 14px 20px;
     border-radius: 30px;
-    border: 1px solid #333;
-    background: #222;
+    border: 1px solid var(--border-light);
+    background: var(--bg-darker);
     color: white;
     outline: none;
     font-size: 16px;
@@ -1678,7 +1767,7 @@ body {
     border-radius: 15px;
     padding: 40px 20px;
     cursor: pointer;
-    background: #1a1a1a;
+    background: var(--bg-darker);
     transition: border 0.2s;
 }
 
@@ -1823,13 +1912,13 @@ body {
         border: none;
         display: flex;
         flex-direction: row;
-        background-color: #000;
+        background-color: var(--bg-main);
     }
     #pc-nav-sidebar {
         width: 250px;
         height: 100%;
-        background: #000;
-        border-right: 1px solid #222;
+        background: var(--bg-main);
+        border-right: 1px solid var(--border-color);
         display: flex;
         flex-direction: column;
         z-index: 200;
