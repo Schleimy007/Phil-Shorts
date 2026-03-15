@@ -299,6 +299,16 @@
                         <li><i class="fas fa-check"></i> 100% Werbefrei</li>
                         <li><i class="fas fa-check"></i> Priorisierter Feed (Boost Algorithmus)</li>
                         <li><i class="fas fa-check"></i> Priority VIP Support Tickets</li>
+                        <li><i class="fas fa-check"></i> Eigene Custom-Sticker in Kommentaren</li>
+                        <li><i class="fas fa-check"></i> Animierte Profilbilder (GIFs)</li>
+                        <li><i class="fas fa-check"></i> Längere Videos (bis zu 3 Minuten)</li>
+                        <li><i class="fas fa-check"></i> Erweiterte Video-Analytics & Insights</li>
+                        <li><i class="fas fa-check"></i> Spezielle "Plus"-Geschenke im Shop</li>
+                        <li><i class="fas fa-check"></i> Goldenes Chat-Design in DMs</li>
+                        <li><i class="fas fa-check"></i> Lesebestätigungen in Nachrichten (DMs)</li>
+                        <li><i class="fas fa-check"></i> Unsichtbar-Modus (Ghost Mode)</li>
+                        <li><i class="fas fa-check"></i> Pinned Comments (Kommentare anheften)</li>
+                        <li><i class="fas fa-check"></i> 2x XP / Coins Multiplikator</li>
                     </ul>
 
                     <div class="plus-plan-card" onclick="buyPhilPlus(5, 10000)">
@@ -350,18 +360,19 @@
         </div>
 
         <div id="story-viewer" class="full-screen-overlay" style="background: rgba(0,0,0,0.95); z-index: 4000; flex-direction: column;">
-            <div style="width: 100%; padding: 20px; display: flex; justify-content: space-between; align-items: center; position: absolute; top: 0; z-index: 4001;">
+            <div style="width: 100%; padding: 20px; display: flex; justify-content: space-between; align-items: center; position: absolute; top: 0; z-index: 4006;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <img id="sv-pic" src="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
                     <span id="sv-name" style="font-weight: bold; color: white;"></span>
                     <span id="sv-time" style="color: #aaa; font-size: 12px;"></span>
+                    <span id="sv-counter" style="color: #888; font-size: 12px; font-weight: bold; margin-left: 5px;"></span>
                 </div>
                 <i class="fas fa-times" style="color: white; font-size: 24px; cursor: pointer;" onclick="closeStoryViewer()"></i>
             </div>
-            <div class="story-progress-container">
-                <div class="story-progress-bar" id="sv-progress"></div>
-            </div>
-            <img id="sv-img" src="" style="width: 100%; height: 80%; object-fit: contain; margin-top: 60px;">
+            <div class="story-progress-container" id="sv-progress-container"></div>
+            <div style="position: absolute; top: 0; left: 0; width: 30%; height: 100%; z-index: 4002;" onclick="prevStory()"></div>
+            <div style="position: absolute; top: 0; right: 0; width: 70%; height: 100%; z-index: 4002;" onclick="nextStory()"></div>
+            <img id="sv-img" src="" style="width: 100%; height: 80%; object-fit: contain; margin-top: 60px; position: relative; z-index: 4001;">
         </div>
 
 
@@ -579,4 +590,4 @@
     <script type="module" src="script.js"></script>
 </body>
 
-</html>S
+</html>

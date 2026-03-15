@@ -61,12 +61,12 @@ function updateNotifUI() {
 document.getElementById('notif-master').addEventListener('change', async(e) => {
     if (e.target.checked) {
         if (!("Notification" in window)) {
-            showCustomAlert("Nicht unterstützt", "Dein Browser unterstützt keine Desktop-Benachrichtigungen.");
+            showCustomAlert("Nicht unterstützt", "Browser unterstützt keine Desktop-Benachrichtigungen.");
             e.target.checked = false;
             return;
         }
         if (Notification.permission === "denied") {
-            showCustomAlert("Blockiert!", "Du hast Benachrichtigungen für diese Seite im Browser blockiert. Bitte in den Browsereinstellungen ändern.");
+            showCustomAlert("Blockiert!", "Du hast Benachrichtigungen blockiert.");
             e.target.checked = false;
             notifSettings.master = false;
             updateNotifUI();
@@ -79,17 +79,6 @@ document.getElementById('notif-master').addEventListener('change', async(e) => {
                 notifSettings.master = false;
                 updateNotifUI();
                 return;
-            }
-        }
-
-        // Sende eine Test-Benachrichtigung, wenn erfolgreich gewährt
-        if (Notification.permission === "granted") {
-            try {
-                new Notification("Phil Shorts", {
-                    body: "Test erfolgreich! Benachrichtigungen sind jetzt aktiv. 🎉",
-                });
-            } catch (err) {
-                console.error("Test Notification Error:", err);
             }
         }
     }
@@ -793,7 +782,28 @@ function renderShopBorders() {
 
 window.buyDecoration = async function(id, cost) { if(!currentUser) return; if(currentUser.coins < cost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins dafür!"); try { currentUser.coins -= cost; if(!currentUser.decorations) currentUser.decorations = []; currentUser.decorations.push(id); await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-cost), decorations: arrayUnion(id) }); document.getElementById('shop-modal-coins').innerText = currentUser.coins; document.getElementById('my-coins').innerText = currentUser.coins; renderShopBorders(); showToast("Erfolgreich gekauft!"); } catch(e) { showCustomAlert("Fehler", "Kauf fehlgeschlagen."); } }
 window.equipDecoration = async function(id, cssClass) { if(!currentUser) return; try { let finalClass = cssClass === 'none' ? "" : cssClass; currentUser.activeBorder = finalClass; await updateDoc(doc(db, "users", currentUser.uid), { activeBorder: finalClass }); renderShopBorders(); showToast("Ausgerüstet!"); } catch(e) {} }
-window.buyPhilPlus = async function(days, cost) { if(!currentUser) return; if(currentUser.coins < cost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins für Phil Shorts+."); if(confirm(`Möchtest du Phil Shorts+ für ${days} Tage kaufen? Kosten: ${cost} Coins.`)) { try { currentUser.coins -= cost; let currentUntil = currentUser.philPlusUntil && currentUser.philPlusUntil > Date.now() ? currentUser.philPlusUntil : Date.now(); let newUntil = currentUntil + (days * 86400000); currentUser.philPlusUntil = newUntil; await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-cost), philPlusUntil: newUntil }); document.getElementById('shop-modal-coins').innerText = currentUser.coins; document.getElementById('my-coins').innerText = currentUser.coins; showToast(`Phil Shorts+ aktiviert! 🎉`); document.getElementById('shop-modal').classList.remove('show'); initLiveUser(); } catch(e) { showCustomAlert("Fehler", "Kauf fehlgeschlagen."); } } }
+
+window.buyPhilPlus = async function(days, cost) { 
+    if(!currentUser) return; 
+    // SCHUTZ: Wenn der Nutzer Phil Shorts+ bereits hat, wird der Kauf gestoppt und eine Warnung gezeigt.
+    if(checkPhilPlusStatus()) return showCustomAlert("Bereits aktiv", "Du besitzt bereits Phil Shorts+! Ein erneuter Kauf ist aktuell nicht nötig.");
+
+    if(currentUser.coins < cost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins für Phil Shorts+."); 
+    if(confirm(`Möchtest du Phil Shorts+ für ${days} Tage kaufen? Kosten: ${cost} Coins.`)) { 
+        try { 
+            currentUser.coins -= cost; 
+            let currentUntil = currentUser.philPlusUntil && currentUser.philPlusUntil > Date.now() ? currentUser.philPlusUntil : Date.now(); 
+            let newUntil = currentUntil + (days * 86400000); 
+            currentUser.philPlusUntil = newUntil; 
+            await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-cost), philPlusUntil: newUntil }); 
+            document.getElementById('shop-modal-coins').innerText = currentUser.coins; 
+            document.getElementById('my-coins').innerText = currentUser.coins; 
+            showToast(`Phil Shorts+ aktiviert! 🎉`); 
+            document.getElementById('shop-modal').classList.remove('show'); 
+            initLiveUser(); 
+        } catch(e) { showCustomAlert("Fehler", "Kauf fehlgeschlagen."); } 
+    } 
+}
 
 window.openStoryUpload = function() { if(!currentUser) return; document.getElementById('shop-modal').classList.remove('show'); document.getElementById('story-upload-modal').classList.add('show'); }
 document.getElementById('close-story-upload').addEventListener('click', () => document.getElementById('story-upload-modal').classList.remove('show'));
@@ -801,13 +811,54 @@ document.getElementById('up-story-file').addEventListener('change', function(e) 
 document.getElementById('submit-story-upload').addEventListener('click', async() => { const file = document.getElementById('up-story-file').files[0]; if(!file) return showCustomAlert("Fehler", "Bitte wähle ein Bild aus."); if(!currentUser) return; if(currentUser.coins < 1000) return showCustomAlert("Zu wenig Coins", "Eine Story kostet 1000 Coins."); const btn = document.getElementById('submit-story-upload'); const status = document.getElementById('story-upload-status'); btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!"; try { const formData = new FormData(); formData.append('file', file); formData.append('upload_preset', UPLOAD_PRESET); const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`, { method: 'POST', body: formData }); const data = await res.json(); if (!data.secure_url) throw new Error("Upload fehlgeschlagen."); const storyObj = { id: Date.now().toString(), url: data.secure_url, timestamp: Date.now() }; currentUser.coins -= 1000; await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-1000), stories: arrayUnion(storyObj) }); document.getElementById('my-coins').innerText = currentUser.coins; showToast("Story gepostet! 📸"); document.getElementById('story-upload-modal').classList.remove('show'); document.getElementById('up-story-file').value = ''; document.getElementById('story-preview-img').style.display = 'none'; document.querySelector('#up-story-btn p').innerText = "Bild für Story auswählen"; document.querySelector('#up-story-btn i').style.color = "#aaa"; } catch(e) { showCustomAlert("Upload Fehler", "Story konnte nicht hochgeladen werden."); } finally { btn.disabled = false; status.innerText = ""; } });
 
 let storyViewerTimer = null;
-window.viewUserStory = function() {
-    if(profileUserStories.length === 0) { if(currentUser && document.getElementById('profile-action-btn').dataset.uid === currentUser.uid) { openStoryUpload(); } return; }
-    const story = profileUserStories[0]; const uid = document.getElementById('profile-action-btn').dataset.uid; const authorData = getUserData(uid, "User", "user", "", false);
-    document.getElementById('sv-pic').src = authorData.pic || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'; document.getElementById('sv-name').innerText = authorData.displayName; document.getElementById('sv-time').innerText = timeAgo(story.timestamp); document.getElementById('sv-img').src = story.url; document.getElementById('story-viewer').classList.add('show');
-    const prog = document.getElementById('sv-progress'); prog.style.width = '0%'; prog.style.transition = 'none'; setTimeout(() => { prog.style.transition = 'width 5s linear'; prog.style.width = '100%'; }, 50);
-    storyViewerTimer = setTimeout(() => { closeStoryViewer(); }, 5000);
+window.currentStoryIndex = 0;
+
+window.viewUserStory = function(index = 0) {
+    if(profileUserStories.length === 0) { 
+        if(currentUser && document.getElementById('profile-action-btn').dataset.uid === currentUser.uid) { openStoryUpload(); } 
+        return; 
+    }
+    
+    // Falls außerhalb der Grenzen -> Schließen oder Start begrenzen
+    if(index >= profileUserStories.length) { closeStoryViewer(); return; }
+    if(index < 0) index = 0;
+    
+    window.currentStoryIndex = index;
+    const story = profileUserStories[index]; 
+    const uid = document.getElementById('profile-action-btn').dataset.uid; 
+    const authorData = getUserData(uid, "User", "user", "", false);
+    
+    document.getElementById('sv-pic').src = authorData.pic || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'; 
+    document.getElementById('sv-name').innerText = authorData.displayName; 
+    document.getElementById('sv-time').innerText = timeAgo(story.timestamp); 
+    document.getElementById('sv-counter').innerText = `${index + 1}/${profileUserStories.length}`;
+    document.getElementById('sv-img').src = story.url; 
+    document.getElementById('story-viewer').classList.add('show');
+    
+    // Mehrere Fortschrittsbalken rendern
+    const container = document.getElementById('sv-progress-container');
+    container.innerHTML = '';
+    for(let i=0; i < profileUserStories.length; i++){
+        let width = (i < index) ? '100%' : '0%';
+        container.innerHTML += `<div style="flex:1; height:100%; background:rgba(255,255,255,0.3); border-radius:2px; overflow:hidden;"><div id="sv-prog-${i}" style="height:100%; width:${width}; background:white; transition:${i === index ? 'width 5s linear' : 'none'};"></div></div>`;
+    }
+
+    setTimeout(() => {
+        const currentProg = document.getElementById(`sv-prog-${index}`);
+        if(currentProg) currentProg.style.width = '100%';
+    }, 50);
+
+    clearTimeout(storyViewerTimer);
+    storyViewerTimer = setTimeout(() => { nextStory(); }, 5000);
 }
+
+window.nextStory = function() {
+    viewUserStory(window.currentStoryIndex + 1);
+}
+window.prevStory = function() {
+    viewUserStory(window.currentStoryIndex - 1);
+}
+
 window.closeStoryViewer = function() { clearTimeout(storyViewerTimer); document.getElementById('story-viewer').classList.remove('show'); }
 
 window.sendSupport = async function() { const msg = document.getElementById('support-msg').value.trim(); if(!msg || !currentUser) return; const ticketRef = await addDoc(collection(db, "reports"), { uid: currentUser.uid, name: currentUser.displayName, hasPlus: checkPhilPlusStatus(), status: 'open', timestamp: Date.now() }); await addDoc(collection(db, `reports/${ticketRef.id}/messages`), { senderUid: currentUser.uid, text: msg, timestamp: Date.now() }); showToast("Support-Ticket erstellt!"); document.getElementById('support-msg').value = ''; document.getElementById('app-settings-modal').classList.remove('show'); switchView('inbox'); document.getElementById('tab-support').click(); }
