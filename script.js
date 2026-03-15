@@ -339,6 +339,16 @@ function initLiveUser() {
                 applyAppTheme('default');
             }
 
+            // Check for Admin Support Tab
+            if (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) {
+                const supportTab = document.getElementById('tab-support');
+                if (supportTab) supportTab.style.display = 'block';
+                if (window.initSupportTickets) window.initSupportTickets();
+            } else {
+                const supportTab = document.getElementById('tab-support');
+                if (supportTab) supportTab.style.display = 'none';
+            }
+
             const coinEl = document.getElementById('my-coins');
             if (coinEl) coinEl.innerText = currentUser.coins;
 
@@ -1747,8 +1757,32 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     resultsGrid.innerHTML = html;
 });
 
-document.getElementById('tab-notifications').addEventListener('click', function() { this.classList.add('active'); document.getElementById('tab-messages').classList.remove('active'); document.getElementById('inbox-notifications-box').style.display = 'flex'; document.getElementById('inbox-messages-box').style.display = 'none'; });
-document.getElementById('tab-messages').addEventListener('click', function() { this.classList.add('active'); document.getElementById('tab-notifications').classList.remove('active'); document.getElementById('inbox-notifications-box').style.display = 'none'; document.getElementById('inbox-messages-box').style.display = 'flex'; });
+// TABS FÜR INBOX UND SUPPORT
+document.getElementById('tab-notifications').addEventListener('click', function() { 
+    this.classList.add('active'); 
+    document.getElementById('tab-messages').classList.remove('active'); 
+    document.getElementById('tab-support').classList.remove('active'); 
+    document.getElementById('inbox-notifications-box').style.display = 'flex'; 
+    document.getElementById('inbox-messages-box').style.display = 'none'; 
+    document.getElementById('inbox-support-box').style.display = 'none'; 
+});
+document.getElementById('tab-messages').addEventListener('click', function() { 
+    this.classList.add('active'); 
+    document.getElementById('tab-notifications').classList.remove('active'); 
+    document.getElementById('tab-support').classList.remove('active'); 
+    document.getElementById('inbox-notifications-box').style.display = 'none'; 
+    document.getElementById('inbox-messages-box').style.display = 'flex'; 
+    document.getElementById('inbox-support-box').style.display = 'none'; 
+});
+document.getElementById('tab-support').addEventListener('click', function() { 
+    this.classList.add('active'); 
+    document.getElementById('tab-notifications').classList.remove('active'); 
+    document.getElementById('tab-messages').classList.remove('active'); 
+    document.getElementById('inbox-notifications-box').style.display = 'none'; 
+    document.getElementById('inbox-messages-box').style.display = 'none'; 
+    document.getElementById('inbox-support-box').style.display = 'flex'; 
+});
+
 
 let inboxUnsubscribe = null; let isInitialNotifLoad = true;
 function initInbox() {
@@ -1844,6 +1878,55 @@ function initInboxChats() {
         });
     });
 }
+
+// --- ADMIN SUPPORT TICKETS ---
+let supportUnsubscribe = null;
+window.initSupportTickets = function() {
+    if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return;
+    const supportBox = document.getElementById('inbox-support-box');
+
+    if (supportUnsubscribe) supportUnsubscribe();
+    supportUnsubscribe = onSnapshot(query(collection(db, "reports"), orderBy("timestamp", "desc")), (snapshot) => {
+        supportBox.innerHTML = '';
+        if (snapshot.empty) {
+            supportBox.innerHTML = '<div class="empty-state" style="height:100%;"><i class="fas fa-check-circle" style="color:#00f2fe; font-size:40px; margin-bottom:10px;"></i><p>Keine offenen Support-Tickets!</p></div>';
+            return;
+        }
+        snapshot.forEach(docSnap => {
+            const ticket = docSnap.data();
+            const ticketId = docSnap.id;
+            const isVip = ticket.hasPlus ? 'vip' : '';
+            const vipBadge = ticket.hasPlus ? '<span class="phil-plus-badge" style="font-size:9px; margin-left:5px;">PLUS</span>' : '';
+            
+            const uData = getUserData(ticket.uid, ticket.name, ticket.name, 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback', false);
+            const safeName = uData.username.replace(/'/g, "\\'");
+
+            supportBox.innerHTML += `
+            <div class="support-ticket ${isVip}">
+                <div style="display:flex; justify-content:space-between; margin-bottom:10px; align-items:center;">
+                    <strong style="color:white; font-size:14px; cursor:pointer;" onclick="openProfile('${ticket.uid}')">@${uData.username} ${vipBadge}</strong>
+                    <span style="color:#888; font-size:11px;">${timeAgo(ticket.timestamp)}</span>
+                </div>
+                <p style="font-size:14px; color:#ddd; margin-bottom:15px; background:rgba(0,0,0,0.3); padding:10px; border-radius:8px;">${formatText(ticket.msg)}</p>
+                <div style="display:flex; gap:10px;">
+                    <button class="profile-action-btn" onclick="openDM('${ticket.uid}', '${safeName}', '${uData.pic}')" style="flex:1; min-height:30px; font-size:12px; background:#00f2fe; color:black;"><i class="fas fa-reply"></i> Antworten</button>
+                    <button class="profile-action-btn edit-btn" onclick="resolveTicket('${ticketId}')" style="flex:1; min-height:30px; font-size:12px; background:transparent; border:1px solid #ff4444; color:#ff4444;"><i class="fas fa-check"></i> Schließen</button>
+                </div>
+            </div>`;
+        });
+    });
+}
+
+window.resolveTicket = async function(ticketId) {
+    if(confirm("Ticket als erledigt markieren und schließen?")) {
+        try {
+            await deleteDoc(doc(db, "reports", ticketId));
+            showToast("Ticket geschlossen.");
+        } catch(e) {
+            showCustomAlert("Fehler", "Ticket konnte nicht gelöscht werden.");
+        }
+    }
+};
 
 let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
 window.openDM = async function(targetUid, targetName, targetPic) {

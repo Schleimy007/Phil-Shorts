@@ -2339,3 +2339,20 @@ input:checked+.slider:before {
 .hashtag:hover {
     text-decoration: underline;
 }
+
+
+/* ADMIN SUPPORT TICKET STYLES */
+
+.support-ticket {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid #333;
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 15px;
+    animation: fadeIn 0.3s ease;
+}
+
+.support-ticket.vip {
+    border-color: #ffd700;
+    background: rgba(255, 215, 0, 0.05);
+}
