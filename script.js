@@ -61,12 +61,12 @@ function updateNotifUI() {
 document.getElementById('notif-master').addEventListener('change', async(e) => {
     if (e.target.checked) {
         if (!("Notification" in window)) {
-            showCustomAlert("Nicht unterstützt", "Browser unterstützt keine Desktop-Benachrichtigungen.");
+            showCustomAlert("Nicht unterstützt", "Dein Browser unterstützt keine Desktop-Benachrichtigungen.");
             e.target.checked = false;
             return;
         }
         if (Notification.permission === "denied") {
-            showCustomAlert("Blockiert!", "Du hast Benachrichtigungen blockiert.");
+            showCustomAlert("Blockiert!", "Du hast Benachrichtigungen für diese Seite im Browser blockiert. Bitte in den Browsereinstellungen ändern.");
             e.target.checked = false;
             notifSettings.master = false;
             updateNotifUI();
@@ -79,6 +79,17 @@ document.getElementById('notif-master').addEventListener('change', async(e) => {
                 notifSettings.master = false;
                 updateNotifUI();
                 return;
+            }
+        }
+
+        // Sende eine Test-Benachrichtigung, wenn erfolgreich gewährt
+        if (Notification.permission === "granted") {
+            try {
+                new Notification("Phil Shorts", {
+                    body: "Test erfolgreich! Benachrichtigungen sind jetzt aktiv. 🎉",
+                });
+            } catch (err) {
+                console.error("Test Notification Error:", err);
             }
         }
     }

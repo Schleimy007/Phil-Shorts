@@ -2381,8 +2381,10 @@ input:checked+.slider:before {
 }
 
 .comment-gif {
-    max-width: 200px;
-    border-radius: 8px;
-    margin-top: 8px;
+    max-width: 85%;
+    width: 300px;
+    border-radius: 12px;
+    margin-top: 10px;
     border: 1px solid #444;
+    object-fit: contain;
 }
