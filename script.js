@@ -225,6 +225,7 @@ function initLiveUser() {
         if (docSnap.exists()) {
             const data = docSnap.data();
 
+            // --- BANNED CHECK ---
             if (data.banned) {
                 localStorage.removeItem('phil_session');
                 alert("Dein Account wurde durch einen Administrator gesperrt.");
@@ -316,6 +317,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
         } else {
             currentUser = userSnap.data();
 
+            // BANNED CHECK BEIM LOGIN
             if (currentUser.banned) {
                 showCustomAlert("Gesperrt", "Dein Account wurde dauerhaft gesperrt.");
                 localStorage.removeItem('phil_session');
@@ -721,6 +723,7 @@ document.getElementById('save-video-edit-btn').addEventListener('click', async()
     }
 });
 document.getElementById('close-edit-video').addEventListener('click', () => { document.getElementById('edit-video-modal').classList.remove('show'); });
+
 
 document.getElementById('tab-foryou').addEventListener('click', function() {
     document.getElementById('tab-following').classList.remove('active');
@@ -1494,7 +1497,6 @@ window.toggleVerify = async function(targetUid, currentStatus) {
     } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); }
 };
 
-// --- PROFIL & KOMMENTAR SYNC LOGIK ---
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
 
     const newDisplayName = document.getElementById('edit-displayname-input').value.trim();
@@ -1686,7 +1688,6 @@ window.giveCoins = async function(targetUid) {
     } catch (e) {}
 };
 
-// --- SUCHFUNKTION ---
 document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     const resultsGrid = document.getElementById('search-results');
