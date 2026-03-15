@@ -791,8 +791,8 @@ videoContainer.addEventListener('wheel', (e) => {
 // --- PERFEKTE OBSERVER LOGIK - ÜBERWACHT DEN CONTAINER, NICHT DAS VIDEO ---
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
-        const el = e.target; // Hier wird jetzt der `.video` Container überwacht, NICHT das <video>
-        const vidId = el.dataset.id; // Holt die ID aus dem Container
+        const el = e.target; 
+        const vidId = el.dataset.id; 
 
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
             if (vidId && !viewedVideos.has(vidId)) {
@@ -802,7 +802,7 @@ const videoObserver = new IntersectionObserver(entries => {
 
             const videoPlayer = el.querySelector('.video__player');
             if (videoPlayer) {
-                // Alle vorherigen pausieren
+                
                 document.querySelectorAll('.video__player').forEach(otherVid => {
                     if (otherVid !== videoPlayer && !otherVid.paused) {
                         otherVid.pause();
@@ -815,21 +815,10 @@ const videoObserver = new IntersectionObserver(entries => {
 
                 if (playPromise !== undefined) {
                     playPromise.catch(error => { 
-                        console.log("Autoplay blockiert (vermutlich Browser Policy bei Videos ohne Ton):", error);
-                        
-                        videoPlayer.muted = true;
-                        videoPlayer.play().then(() => {
-                            const container = videoPlayer.closest('.video-inner');
-                            if(container) {
-                                const muteBtn = container.querySelector('.mute-btn');
-                                const volumeSlider = container.querySelector('.volume-slider');
-                                if(muteBtn) muteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
-                                if(volumeSlider) {
-                                    volumeSlider.value = 0;
-                                    volumeSlider.style.background = `linear-gradient(to right, #fff 0%, rgba(255, 255, 255, 0.3) 0%)`;
-                                }
-                            }
-                        }).catch(err => console.log("Autoplay trotz stumm komplett blockiert:", err));
+                        console.log("Autoplay blockiert (Browser erfordert Interaktion):", error);
+                        // KEIN AUTOMATISCHER MUTE MEHR! Das Video bleibt pausiert, bis der Nutzer interagiert.
+                        const container = videoPlayer.closest('.video-inner');
+                        if(container) container.classList.add('is-paused');
                     });
                 }
             }
@@ -841,7 +830,7 @@ const videoObserver = new IntersectionObserver(entries => {
             }
         }
     });
-}, { threshold: 0.4 }); // Reagiert sauber, wenn das Video zu 40% gescrollt ist
+}, { threshold: 0.4 });
 
 
 function attachInteractionsToVideo(videoContainerEl) {
@@ -849,7 +838,6 @@ function attachInteractionsToVideo(videoContainerEl) {
     const c = videoContainerEl.querySelector('.carousel-container');
     const container = videoContainerEl.querySelector('.video-inner');
     
-    // WICHTIG: Wir überwachen jetzt den gesamten Container-Block, nicht das Video-Element!
     videoObserver.observe(videoContainerEl); 
     
     let lastTap = 0;
