@@ -15,9 +15,6 @@ const firebaseConfig = {
 const CLOUDINARY_NAME = "dyzhyd2x8";
 const UPLOAD_PRESET = "phil_upload";
 
-// !!! AGORA APP ID FÜR LIVE STREAMING (HIER EINTRAGEN) !!!
-const AGORA_APP_ID = "e7f6e9aeecf14b2ba10e3f40be9f56e7";
-
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
@@ -128,35 +125,11 @@ window.switchView = function(viewId) {
     document.getElementById('view-' + viewId).classList.add('active');
 
     document.querySelectorAll('.nav__item').forEach(n => n.classList.remove('active'));
-
-    const bottomNav = document.getElementById('bottom-navigation');
-
-    if (viewId === 'feed') {
-        document.querySelectorAll('.nav__item')[0].classList.add('active');
-        bottomNav.style.display = 'flex';
-    }
-    if (viewId === 'search') {
-        document.querySelectorAll('.nav__item')[1].classList.add('active');
-        bottomNav.style.display = 'flex';
-    }
-    if (viewId === 'inbox' || viewId === 'dm') {
-        document.querySelectorAll('.nav__item')[3].classList.add('active');
-        bottomNav.style.display = 'flex';
-    }
+    if (viewId === 'feed') document.querySelectorAll('.nav__item')[0].classList.add('active');
+    if (viewId === 'search') document.querySelectorAll('.nav__item')[1].classList.add('active');
+    if (viewId === 'inbox' || viewId === 'dm') document.querySelectorAll('.nav__item')[3].classList.add('active');
     if (viewId === 'profile' && currentUser && document.getElementById('profile-name').innerText.includes(currentUser.displayName)) {
         document.querySelectorAll('.nav__item')[4].classList.add('active');
-        bottomNav.style.display = 'flex';
-    }
-
-    if (viewId === 'live-feed') {
-        document.getElementById('tab-foryou').classList.remove('active');
-        document.getElementById('tab-following').classList.remove('active');
-        document.getElementById('tab-live').classList.add('active');
-        bottomNav.style.display = 'flex';
-    }
-
-    if (viewId === 'stream') {
-        bottomNav.style.display = 'none'; // Blendet Nav aus für Vollbild
     }
 
     if (viewId !== 'feed') {
@@ -363,7 +336,6 @@ window.addEventListener('googleLoginSuccess', async(event) => {
         initInbox();
         initInboxChats();
         initSearchUsers();
-        initLiveFeedListener(); // Start listening to active streams
     } catch (error) {
         showCustomAlert("Login Fehler", "Datenbank-Fehler beim Login.");
     }
@@ -380,7 +352,6 @@ window.onload = async function() {
         initInbox();
         initInboxChats();
         initSearchUsers();
-        initLiveFeedListener(); // Start listening to active streams
     }
 };
 
@@ -433,7 +404,6 @@ function applyAlgorithm(videos, mode) {
     }
 }
 
-// --- LIVE DATENBANK FÜR VIDEOS ---
 function initLiveDatabase() {
     document.getElementById('video-container').innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i><p>Lade Algorithmus...</p></div>';
 
@@ -752,14 +722,8 @@ document.getElementById('save-video-edit-btn').addEventListener('click', async()
 });
 document.getElementById('close-edit-video').addEventListener('click', () => { document.getElementById('edit-video-modal').classList.remove('show'); });
 
-// --- NEU: LIVE TAB CLICK ---
-document.getElementById('tab-live').addEventListener('click', function() {
-    switchView('live-feed');
-});
-
 document.getElementById('tab-foryou').addEventListener('click', function() {
     document.getElementById('tab-following').classList.remove('active');
-    document.getElementById('tab-live').classList.remove('active');
     this.classList.add('active');
     currentFeedMode = 'foryou';
     renderFeed(true);
@@ -767,7 +731,6 @@ document.getElementById('tab-foryou').addEventListener('click', function() {
 
 document.getElementById('tab-following').addEventListener('click', function() {
     document.getElementById('tab-foryou').classList.remove('active');
-    document.getElementById('tab-live').classList.remove('active');
     this.classList.add('active');
     currentFeedMode = 'following';
     renderFeed(true);
@@ -1782,196 +1745,254 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     resultsGrid.innerHTML = html;
 });
 
+// --- INBOX TAB LOGIC ---
+document.getElementById('tab-notifications').addEventListener('click', function() {
+    this.classList.add('active');
+    document.getElementById('tab-messages').classList.remove('active');
+    document.getElementById('inbox-notifications-box').style.display = 'flex';
+    document.getElementById('inbox-messages-box').style.display = 'none';
+});
 
-// --- LIVE STREAMING (AGORA) ---
-let rtc = {
-    localAudioTrack: null,
-    localVideoTrack: null,
-    client: null
-};
-let currentLiveChannel = null;
-let isHost = false;
-let streamChatUnsubscribe = null;
+document.getElementById('tab-messages').addEventListener('click', function() {
+    this.classList.add('active');
+    document.getElementById('tab-notifications').classList.remove('active');
+    document.getElementById('inbox-notifications-box').style.display = 'none';
+    document.getElementById('inbox-messages-box').style.display = 'flex';
+});
 
-function initLiveFeedListener() {
-    const list = document.getElementById('live-streams-list');
-    if (!list) return;
+// --- INBOX NOTIFICATIONS (Aktivitäten) & TOAST SYSTEM ---
+let inboxUnsubscribe = null;
+let isInitialNotifLoad = true;
 
-    onSnapshot(collection(db, "live_streams"), (snapshot) => {
-        list.innerHTML = '';
-        if (snapshot.empty) {
-            list.innerHTML = '<div class="empty-state"><p>Gerade ist niemand live.</p></div>';
+function initInbox() {
+    const inboxBox = document.getElementById('inbox-notifications-box');
+    if (!currentUser) return;
+
+    if (inboxUnsubscribe) inboxUnsubscribe();
+    isInitialNotifLoad = true;
+
+    inboxUnsubscribe = onSnapshot(query(collection(db, "users", currentUser.uid, "notifications"), orderBy("timestamp", "desc")), (snapshot) => {
+
+        if (!isInitialNotifLoad) {
+            snapshot.docChanges().forEach((change) => {
+                if (change.type === "added") {
+                    const n = change.doc.data();
+
+                    const isCurrentlyChatting = document.getElementById('view-dm').classList.contains('active') && window.currentChatPartner && window.currentChatPartner.uid === n.fromUid;
+
+                    if (!isCurrentlyChatting) {
+                        const nUser = getUserData(n.fromUid, n.fromName, n.fromUsername, n.fromPic, false);
+                        let toastMsg = `🔔 Aktivität von @${nUser.username}`;
+                        if (n.type === 'message') toastMsg = `💬 Nachricht von @${nUser.username}`;
+                        else if (n.type === 'like') toastMsg = `❤️ @${nUser.username} mag dein Post`;
+                        else if (n.type === 'follow') toastMsg = `👤 @${nUser.username} folgt dir`;
+                        else if (n.type === 'gift') toastMsg = `🎁 @${nUser.username} hat gespendet!`;
+                        else if (n.type === 'comment') toastMsg = `💬 @${nUser.username} hat kommentiert`;
+
+                        showToast(toastMsg);
+                        
+                        window.sendDesktopNotification("Phil Shorts", toastMsg, n.type);
+                    }
+                }
+            });
+        }
+        isInitialNotifLoad = false;
+
+        inboxBox.innerHTML = '';
+        if (snapshot.empty) { inboxBox.innerHTML = '<div class="empty-state" style="height: 100%;"><p>Keine neuen Benachrichtigungen</p></div>'; return; }
+
+        snapshot.forEach((doc) => {
+            const n = doc.data();
+            let icon = 'fa-bell';
+            let color = '#aaa';
+            if (n.type === 'like') {
+                icon = 'fa-heart';
+                color = '#ff0050';
+            }
+            if (n.type === 'follow') {
+                icon = 'fa-user-plus';
+                color = '#00f2fe';
+            }
+            if (n.type === 'comment') {
+                icon = 'fa-comment-dots';
+                color = '#fff';
+            }
+            if (n.type === 'gift') {
+                icon = 'fa-gift';
+                color = '#ffd700';
+            }
+            if (n.type === 'message') {
+                icon = 'fa-envelope';
+                color = '#00f2fe';
+            }
+
+            const nUser = getUserData(n.fromUid, n.fromName, n.fromUsername, n.fromPic, false);
+
+            let clickAction = `openProfile('${n.fromUid}')`;
+            if (n.type === 'message') {
+                clickAction = `openDM('${n.fromUid}', '${nUser.username.replace(/'/g, "\\'")}', '${nUser.pic}')`;
+            } else if (n.videoId) {
+                clickAction = `jumpToVideo('${n.videoId}')`;
+            }
+
+            const isVerif = getVerifiedBadge(nUser.verified);
+
+            inboxBox.innerHTML += `
+                <div class="inbox-msg" onclick="${clickAction}">
+                    <img src="${nUser.pic}" class="chat-avatar live-pic-${n.fromUid}" style="flex-shrink:0;">
+                    <div style="flex:1; min-width:0;">
+                        <span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            <span class="live-name-${n.fromUid}">${nUser.displayName}${isVerif}</span> 
+                            <span class="live-username-${n.fromUid}" style="color:#888; font-weight:normal; font-size:12px;">@${nUser.username}</span>
+                        </span>
+                        <div class="chat-bubble" style="background: transparent; padding: 0; word-break: break-word;">
+                            <i class="fas ${icon}" style="color:${color}; margin-right:5px;"></i> ${n.text}
+                        </div>
+                        <div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(n.timestamp)}</div>
+                    </div>
+                </div>`;
+        });
+    });
+}
+
+// --- DM CHATS (Nachrichten) ---
+let inboxChatsUnsubscribe = null;
+
+function initInboxChats() {
+    if (!currentUser) return;
+    const msgBox = document.getElementById('inbox-messages-box');
+
+    if (inboxChatsUnsubscribe) inboxChatsUnsubscribe();
+
+    inboxChatsUnsubscribe = onSnapshot(collection(db, "chats"), (snapshot) => {
+        let chats = [];
+        snapshot.forEach(doc => {
+            const chat = doc.data();
+            if (chat.participants && chat.participants.includes(currentUser.uid)) {
+                chats.push({ id: doc.id, ...chat });
+            }
+        });
+
+        chats.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+
+        msgBox.innerHTML = '';
+        if (chats.length === 0) {
+            msgBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Keine Nachrichten vorhanden</p></div>';
             return;
         }
 
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            list.innerHTML += `
-                <div class="admin-user-card" onclick="joinLiveStream('${data.hostUid}', '${data.hostName}', '${data.hostPic}')" style="cursor:pointer; display:flex; flex-direction:row; align-items:center;">
-                    <div style="position:relative;">
-                        <img src="${data.hostPic}" style="width: 50px; height: 50px; border-radius: 50%; border: 2px solid #ff0050;">
-                        <span class="live-badge" style="position:absolute; bottom:-5px; left:50%; transform:translateX(-50%); font-size:8px;">LIVE</span>
+        chats.forEach(chat => {
+            const partnerUid = chat.participants.find(uid => uid !== currentUser.uid);
+            const partner = chat.users[partnerUid];
+            if (!partner) return;
+
+            const nUser = getUserData(partnerUid, partner.name, partner.name, partner.pic, false);
+            const safeName = nUser.username.replace(/'/g, "\\'");
+            const isVerif = getVerifiedBadge(nUser.verified);
+
+            msgBox.innerHTML += `
+                <div class="inbox-msg" onclick="openDM('${partnerUid}', '${safeName}', '${nUser.pic}')">
+                    <img src="${nUser.pic}" class="chat-avatar live-pic-${partnerUid}" style="flex-shrink:0;">
+                    <div style="flex:1; min-width:0;">
+                        <span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            <span class="live-name-${partnerUid}">${nUser.displayName}${isVerif}</span> 
+                            <span class="live-username-${partnerUid}" style="color:#888; font-weight:normal; font-size:12px;">@${nUser.username}</span>
+                        </span>
+                        <div class="chat-bubble" style="background: transparent; padding: 0; color: #888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                            ${chat.lastMessage || 'Neuer Chat...'}
+                        </div>
+                        <div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(chat.lastMessageTime)}</div>
                     </div>
-                    <div style="margin-left: 15px;">
-                        <strong style="display:block;">${data.hostName}</strong>
-                        <span style="font-size:12px; color:#aaa;">Tippe zum Zuschauen</span>
-                    </div>
-                </div>
-            `;
+                </div>`;
         });
     });
 }
 
-window.startLiveStream = async function() {
+let currentDMSnapshot = null;
+window.currentChatId = null;
+window.currentChatPartner = null;
+
+window.openDM = async function(targetUid, targetName, targetPic) {
     if (!currentUser) return;
-    if (!AGORA_APP_ID || AGORA_APP_ID === "HIER_EINTRAGEN") {
-        showCustomAlert("Agora App ID fehlt", "Trage deine Agora App ID im JavaScript-Code (Zeile 16) ein, um live zu gehen!");
-        return;
-    }
+    window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic };
 
-    switchView('stream');
-    isHost = true;
-    currentLiveChannel = currentUser.uid;
+    const uids = [currentUser.uid, targetUid].sort();
+    window.currentChatId = `${uids[0]}_${uids[1]}`;
 
-    document.getElementById('stream-host-name').innerText = currentUser.displayName;
-    document.getElementById('stream-host-pic').src = currentUser.photoURL;
+    const nUser = getUserData(targetUid, targetName, targetName, targetPic, false);
+    const isVerif = getVerifiedBadge(nUser.verified);
+    
+    document.getElementById('dm-title').innerHTML = '@' + targetName + ' ' + isVerif;
+    switchView('dm');
 
-    // Agora Client initialisieren
-    rtc.client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+    if (currentDMSnapshot) currentDMSnapshot();
 
-    try {
-        await rtc.client.join(AGORA_APP_ID, currentLiveChannel, null, currentUser.uid);
-        
-        rtc.localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-        rtc.localVideoTrack = await AgoraRTC.createCameraVideoTrack();
-        
-        rtc.localVideoTrack.play("stream-video-container");
-        
-        await rtc.client.publish([rtc.localAudioTrack, rtc.localVideoTrack]);
-        
-        // In Firebase als 'Live' markieren
-        await setDoc(doc(db, "live_streams", currentUser.uid), {
-            hostUid: currentUser.uid,
-            hostName: currentUser.displayName,
-            hostPic: currentUser.photoURL,
-            startedAt: Date.now()
+    const dmBox = document.getElementById('dm-box');
+    dmBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
+
+    const chatRef = doc(db, "chats", window.currentChatId);
+    const chatSnap = await getDoc(chatRef);
+    if (!chatSnap.exists()) {
+        await setDoc(chatRef, {
+            participants: [currentUser.uid, targetUid],
+            users: {
+                [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL },
+                [targetUid]: { name: targetName, pic: targetPic }
+            },
+            lastMessage: "",
+            lastMessageTime: Date.now()
         });
-
-        startStreamChat();
-    } catch(e) {
-        console.error(e);
-        showCustomAlert("Kamera-Fehler", "Zugriff auf Kamera/Mikrofon wurde verweigert.");
-        leaveLiveStream();
     }
+
+    currentDMSnapshot = onSnapshot(query(collection(db, `chats/${window.currentChatId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
+        dmBox.innerHTML = '';
+        if (snapshot.empty) {
+            dmBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Schreib die erste Nachricht!</p></div>';
+        } else {
+            snapshot.forEach(doc => {
+                const msg = doc.data();
+                const isMe = msg.senderUid === currentUser.uid ? 'me' : '';
+                const pic = isMe ? currentUser.photoURL : targetPic;
+                dmBox.innerHTML += `
+                    <div class="chat-msg ${isMe}">
+                        <img src="${pic}" class="chat-avatar" style="flex-shrink:0;">
+                        <div style="min-width:0; max-width: 100%;">
+                            <div class="chat-bubble">${msg.text}</div>
+                            <div class="chat-time" style="font-size: 10px; color: #666; margin-top: 4px; text-align: ${isMe ? 'right' : 'left'};">${timeAgo(msg.timestamp)}</div>
+                        </div>
+                    </div>`;
+            });
+        }
+        dmBox.scrollTop = dmBox.scrollHeight;
+    });
 };
 
-document.getElementById('btn-start-live').addEventListener('click', startLiveStream);
-
-window.joinLiveStream = async function(hostUid, hostName, hostPic) {
-    if (!currentUser) return;
-    if (!AGORA_APP_ID || AGORA_APP_ID === "HIER_EINTRAGEN") return showCustomAlert("Fehler", "Agora App ID fehlt.");
-
-    switchView('stream');
-    isHost = false;
-    currentLiveChannel = hostUid;
-
-    document.getElementById('stream-host-name').innerText = hostName;
-    document.getElementById('stream-host-pic').src = hostPic;
-
-    rtc.client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
-
-    rtc.client.on("user-published", async (user, mediaType) => {
-        await rtc.client.subscribe(user, mediaType);
-        if (mediaType === "video") {
-            user.videoTrack.play("stream-video-container");
-        }
-        if (mediaType === "audio") {
-            user.audioTrack.play();
-        }
-    });
-
-    rtc.client.on("user-unpublished", (user) => {
-        if(user.uid === hostUid) {
-            showToast("Der Stream wurde beendet.");
-            leaveLiveStream();
-        }
-    });
-
-    try {
-        await rtc.client.join(AGORA_APP_ID, currentLiveChannel, null, currentUser.uid);
-        startStreamChat();
-    } catch(e) {
-        console.error(e);
-        leaveLiveStream();
-    }
-};
-
-window.leaveLiveStream = async function() {
-    if (rtc.localAudioTrack) { rtc.localAudioTrack.close(); rtc.localAudioTrack = null; }
-    if (rtc.localVideoTrack) { rtc.localVideoTrack.close(); rtc.localVideoTrack = null; }
-    
-    if (rtc.client) {
-        await rtc.client.leave();
-        rtc.client = null;
-    }
-    
-    document.getElementById('stream-video-container').innerHTML = '';
-    
-    if (isHost && currentLiveChannel) {
-        try { await deleteDoc(doc(db, "live_streams", currentLiveChannel)); } catch(e) {}
-    }
-    
-    if (streamChatUnsubscribe) {
-        streamChatUnsubscribe();
-        streamChatUnsubscribe = null;
-    }
-    
-    currentLiveChannel = null;
-    isHost = false;
-    switchView('live-feed');
-};
-
-document.getElementById('btn-leave-stream').addEventListener('click', leaveLiveStream);
-
-function startStreamChat() {
-    const chatContainer = document.getElementById('stream-chat-container');
-    chatContainer.innerHTML = '';
-    
-    if(streamChatUnsubscribe) streamChatUnsubscribe();
-
-    streamChatUnsubscribe = onSnapshot(query(collection(db, `live_streams/${currentLiveChannel}/chat`), orderBy("timestamp", "asc")), (snapshot) => {
-        snapshot.docChanges().forEach((change) => {
-            if (change.type === "added") {
-                const msg = change.doc.data();
-                chatContainer.innerHTML += `
-                    <div style="margin-bottom: 8px; animation: fadeIn 0.3s ease;">
-                        <span style="font-weight: bold; color: #ddd; font-size: 13px;">${msg.senderName}: </span>
-                        <span style="color: white; font-size: 14px; text-shadow: 1px 1px 2px black;">${msg.text}</span>
-                    </div>
-                `;
-            }
-        });
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-    });
-}
-
-document.getElementById('btn-send-stream-chat').addEventListener('click', async () => {
-    const input = document.getElementById('stream-chat-input');
+document.getElementById('send-dm-btn').addEventListener('click', async() => {
+    const input = document.getElementById('dm-input');
     const text = input.value.trim();
-    if (!text || !currentLiveChannel || !currentUser) return;
-    
+    if (!text || !window.currentChatId || !currentUser) return;
     input.value = '';
-    
-    await addDoc(collection(db, `live_streams/${currentLiveChannel}/chat`), {
+
+    await addDoc(collection(db, `chats/${window.currentChatId}/messages`), {
         senderUid: currentUser.uid,
-        senderName: currentUser.displayName,
         text: text,
         timestamp: Date.now()
     });
+
+    await updateDoc(doc(db, "chats", window.currentChatId), {
+        lastMessage: text,
+        lastMessageTime: Date.now(),
+        users: {
+            [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL },
+            [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic }
+        }
+    });
+
+    addNotification(window.currentChatPartner.uid, "message", `hat geschrieben: "${text}"`);
 });
 
-document.getElementById('stream-chat-input').addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') document.getElementById('btn-send-stream-chat').click();
+document.getElementById('dm-input').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') document.getElementById('send-dm-btn').click();
 });
 
 
