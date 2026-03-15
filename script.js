@@ -267,7 +267,10 @@ function initLiveUser() {
                 document.getElementById('app-theme-select').value = currentUser.appTheme;
             } else { applyAppTheme('default'); }
 
-            if (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) { const supportTab = document.getElementById('tab-support'); if (supportTab) supportTab.style.display = 'block'; if (window.initSupportTickets) window.initSupportTickets(); } else { const supportTab = document.getElementById('tab-support'); if (supportTab) supportTab.style.display = 'none'; }
+            // JEDER Nutzer darf den Support-Reiter sehen (Admins alle Tickets, Nutzer die eigenen)
+            const supportTab = document.getElementById('tab-support');
+            if (supportTab) supportTab.style.display = 'block';
+            if (window.initSupportTickets) window.initSupportTickets();
 
             const coinEl = document.getElementById('my-coins');
             if (coinEl) coinEl.innerText = currentUser.coins;
@@ -897,16 +900,31 @@ function initInboxChats() {
 
 let supportUnsubscribe = null;
 window.initSupportTickets = function() {
-    if (!currentUser) return; const supportBox = document.getElementById('inbox-support-box'); const isAdmin = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
+    if (!currentUser) return; 
+    const supportBox = document.getElementById('inbox-support-box'); 
+    const isAdmin = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
+    
     if (supportUnsubscribe) supportUnsubscribe();
+    
     let reportQuery = query(collection(db, "reports"), orderBy("timestamp", "desc"));
+    
     supportUnsubscribe = onSnapshot(reportQuery, (snapshot) => {
-        supportBox.innerHTML = ''; let foundAny = false;
+        supportBox.innerHTML = ''; 
+        let foundAny = false;
+        
         snapshot.forEach(docSnap => {
-            const ticket = docSnap.data(); if (!isAdmin && ticket.uid !== currentUser.uid) return; foundAny = true;
-            const ticketId = docSnap.id; const isVip = ticket.hasPlus ? 'vip' : ''; const vipBadge = ticket.hasPlus ? '<span class="phil-plus-badge" style="font-size:9px; margin-left:5px;">PLUS</span>' : ''; const uData = getUserData(ticket.uid, ticket.name, ticket.name, 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback', false);
-            // WICHTIG: ticket.uid wird an openTicketChat weitergegeben
-            supportBox.innerHTML += `<div class="support-ticket ${isVip}" onclick="openTicketChat('${ticketId}', '${uData.username}', '${ticket.uid}')" style="cursor:pointer;"><div style="display:flex; justify-content:space-between; margin-bottom:10px; align-items:center;"><strong style="color:white; font-size:14px;">@${uData.username} ${vipBadge}</strong><span style="color:#888; font-size:11px;">${timeAgo(ticket.timestamp)}</span></div><div style="font-size:12px; color:#aaa; margin-bottom:5px;"><i class="fas fa-ticket-alt"></i> Ticket Status: <span style="color:${ticket.status === 'closed' ? '#ff4444' : '#39ff14'}; font-weight:bold;">${ticket.status === 'closed' ? 'Geschlossen' : 'Offen'}</span></div><p style="font-size:14px; color:#ddd; background:rgba(0,0,0,0.3); padding:10px; border-radius:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Klicken um Chat zu öffnen</p></div>`;
+            const ticket = docSnap.data(); 
+            // JS Filter für normale Nutzer
+            if (!isAdmin && ticket.uid !== currentUser.uid) return; 
+            
+            foundAny = true;
+            const ticketId = docSnap.id; 
+            const isVip = ticket.hasPlus ? 'vip' : ''; 
+            const vipBadge = ticket.hasPlus ? '<span class="phil-plus-badge" style="font-size:9px; margin-left:5px;">PLUS</span>' : ''; 
+            const uData = getUserData(ticket.uid, ticket.name, ticket.name, 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback', false);
+            const safeName = uData.username.replace(/'/g, "\\'");
+            
+            supportBox.innerHTML += `<div class="support-ticket ${isVip}" onclick="openTicketChat('${ticketId}', '${safeName}', '${ticket.uid}')" style="cursor:pointer;"><div style="display:flex; justify-content:space-between; margin-bottom:10px; align-items:center;"><strong style="color:white; font-size:14px;">@${uData.username} ${vipBadge}</strong><span style="color:#888; font-size:11px;">${timeAgo(ticket.timestamp)}</span></div><div style="font-size:12px; color:#aaa; margin-bottom:5px;"><i class="fas fa-ticket-alt"></i> Ticket Status: <span style="color:${ticket.status === 'closed' ? '#ff4444' : '#39ff14'}; font-weight:bold;">${ticket.status === 'closed' ? 'Geschlossen' : 'Offen'}</span></div><p style="font-size:14px; color:#ddd; background:rgba(0,0,0,0.3); padding:10px; border-radius:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Klicken um Chat zu öffnen</p></div>`;
         });
         if (!foundAny) { supportBox.innerHTML = '<div class="empty-state" style="height:100%;"><i class="fas fa-check-circle" style="color:#00f2fe; font-size:40px; margin-bottom:10px;"></i><p>Keine Support-Tickets gefunden!</p></div>'; }
     });
@@ -918,7 +936,6 @@ window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
     const ticketBox = document.getElementById('ticket-box'); ticketBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
     const isAdmin = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
     if(isAdmin) { document.getElementById('admin-close-ticket-btn').style.display = 'block'; } else { document.getElementById('admin-close-ticket-btn').style.display = 'none'; }
-    
     if (currentTicketSnapshot) currentTicketSnapshot();
     
     currentTicketSnapshot = onSnapshot(query(collection(db, `reports/${ticketId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
@@ -929,7 +946,7 @@ window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
                 const msg = docSnap.data(); 
                 const isMe = msg.senderUid === currentUser.uid ? 'me' : ''; 
                 
-                // Prüfen ob die Nachricht vom Support-Team (also NICHT vom Ticket-Ersteller) stammt
+                // Prüfen, ob die Nachricht vom Support-Team stammt
                 const isSupportSender = msg.senderUid !== ticketOwnerUid;
                 const pic = isSupportSender ? 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin' : (msg.senderUid === currentUser.uid ? currentUser.photoURL : `https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.senderUid}`);
                 
@@ -941,7 +958,6 @@ window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
         }
         ticketBox.scrollTop = ticketBox.scrollHeight;
     });
-    
     const tRef = doc(db, "reports", ticketId); const tSnap = await getDoc(tRef);
     if(tSnap.exists()) {
         const tData = tSnap.data(); const statEl = document.getElementById('ticket-status');
@@ -952,7 +968,7 @@ window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
 
 document.getElementById('send-ticket-btn').addEventListener('click', async() => { const input = document.getElementById('ticket-input'); const text = input.value.trim(); if (!text || !window.currentActiveTicketId || !currentUser) return; input.value = ''; await addDoc(collection(db, `reports/${window.currentActiveTicketId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); });
 document.getElementById('ticket-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-ticket-btn').click(); });
-document.getElementById('admin-close-ticket-btn').addEventListener('click', async() => { if(!window.currentActiveTicketId) return; if(confirm("Support Ticket schließen?")) { await updateDoc(doc(db, "reports", window.currentActiveTicketId), { status: 'closed' }); showToast("Ticket geschlossen."); switchView('inbox'); document.getElementById('tab-support').click(); } });
+document.getElementById('admin-close-ticket-btn').addEventListener('click', async() => { if(!window.currentActiveTicketId) return; if(confirm("Support Ticket schließen? (Nutzer kann nicht mehr antworten)")) { await updateDoc(doc(db, "reports", window.currentActiveTicketId), { status: 'closed' }); showToast("Ticket geschlossen."); switchView('inbox'); document.getElementById('tab-support').click(); } });
 
 let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
 window.openDM = async function(targetUid, targetName, targetPic) {
