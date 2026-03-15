@@ -6,16 +6,12 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    /* 100% Wichtig für Handy-Layout: Padding bläht Container nicht mehr auf */
     -webkit-tap-highlight-color: transparent;
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
 }
-
-
-/* Ausnahmen: Nur Texte, die man wirklich markieren/kopieren darf */
 
 input,
 textarea,
@@ -36,13 +32,10 @@ body {
     color: white;
     height: 100dvh;
     width: 100%;
-    /* Niemals 100vw nutzen, das verursacht oft horizontales scrollen */
     max-width: 100%;
     overflow-x: hidden;
-    /* Verhindert das Rausbuggen komplett */
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, sans-serif;
     display: block;
-    /* Block für Handy, um Flexbox Blowouts zu verhindern */
 }
 
 
@@ -50,13 +43,11 @@ body {
 
 .app {
     height: 100dvh;
-    /* Mobile First: 100% Bildschirm */
     width: 100%;
     max-width: 100%;
     position: relative;
     background-color: #000;
     overflow: hidden;
-    /* App darf nicht über Bildschirmrand wachsen */
 }
 
 @media (min-width: 769px) {
@@ -66,7 +57,6 @@ body {
         justify-content: center;
         align-items: center;
         background: #111;
-        /* Dunklerer Hintergrund am PC für Kontrast */
     }
     .app {
         height: 92vh;
@@ -85,33 +75,304 @@ body {
     filter: drop-shadow(0 0 3px rgba(0, 242, 254, 0.4));
 }
 
+
+/* GIFTS ANIMATION & STYLES */
+
 .gift-animation {
     position: absolute;
     top: 60%;
     left: 50%;
     transform: translate(-50%, -50%);
-    color: #ffd700;
-    font-size: 80px;
+    font-size: 100px;
     opacity: 0;
     pointer-events: none;
     z-index: 30;
-    filter: drop-shadow(0 4px 15px rgba(255, 215, 0, 0.6));
+    filter: drop-shadow(0 4px 15px rgba(0, 0, 0, 0.6));
+    text-align: center;
 }
 
-@keyframes flyUpCoin {
+.gift-animation-name {
+    font-size: 20px;
+    font-weight: bold;
+    color: white;
+    text-shadow: 0 2px 4px black;
+    margin-top: 10px;
+    display: block;
+}
+
+@keyframes flyUpGift {
     0% {
         transform: translate(-50%, -50%) scale(0.5);
+        opacity: 0;
+    }
+    20% {
+        transform: translate(-50%, -100%) scale(1.2);
         opacity: 1;
     }
-    50% {
-        transform: translate(-50%, -150%) scale(1.2);
+    80% {
+        transform: translate(-50%, -150%) scale(1);
         opacity: 1;
     }
     100% {
-        transform: translate(-50%, -250%) scale(1);
+        transform: translate(-50%, -250%) scale(0.8);
         opacity: 0;
     }
 }
+
+.gift-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    padding-bottom: 20px;
+}
+
+.gift-card {
+    background: #1a1a1a;
+    border-radius: 12px;
+    padding: 10px 5px;
+    text-align: center;
+    border: 1px solid #333;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.gift-card:active {
+    transform: scale(0.9);
+    border-color: #ffd700;
+}
+
+.gift-emoji {
+    font-size: 32px;
+    margin-bottom: 5px;
+    display: block;
+}
+
+.gift-name {
+    font-size: 11px;
+    color: #aaa;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    margin-bottom: 5px;
+}
+
+.gift-price {
+    font-size: 12px;
+    font-weight: bold;
+    color: #ffd700;
+}
+
+
+/* SHOP & DECORATIONS */
+
+.shop-tabs {
+    display: flex;
+    background: #111;
+    border-bottom: 1px solid #222;
+}
+
+.shop-tab {
+    flex: 1;
+    text-align: center;
+    padding: 12px 0;
+    font-size: 14px;
+    font-weight: bold;
+    color: #888;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+}
+
+.shop-tab.active {
+    color: #ffd700;
+    border-bottom: 2px solid #ffd700;
+}
+
+.shop-items-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+}
+
+.shop-item-card {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 15px;
+    padding: 15px;
+    text-align: center;
+}
+
+.shop-item-preview {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    margin: 0 auto 10px;
+    background: #333;
+}
+
+
+/* BORDER CLASSES */
+
+.border-none {
+    border: 2px solid transparent;
+}
+
+.border-neon {
+    border: 3px solid #00f2fe;
+    box-shadow: 0 0 10px #00f2fe, inset 0 0 5px #00f2fe;
+    padding: 2px;
+}
+
+.border-gold {
+    border: 3px solid #ffd700;
+    box-shadow: 0 0 10px #ffd700, inset 0 0 5px #ffd700;
+    padding: 2px;
+}
+
+.border-3663 {
+    border: 3px solid #ff0050;
+    box-shadow: 0 0 15px #ff0050, 0 0 5px #00f2fe;
+    padding: 2px;
+}
+
+.border-diamond {
+    border: 3px dashed #b9f2ff;
+    box-shadow: 0 0 15px rgba(185, 242, 255, 0.8);
+    padding: 2px;
+}
+
+
+/* PHIL SHORTS PLUS */
+
+.phil-plus-banner {
+    background: linear-gradient(45deg, #111, #222);
+    border: 1px solid #ff0050;
+    border-radius: 15px;
+    padding: 20px;
+    text-align: center;
+    font-size: 24px;
+    font-weight: bold;
+    color: white;
+    margin-bottom: 20px;
+    box-shadow: 0 5px 15px rgba(255, 0, 80, 0.3);
+}
+
+.plus-plan-card {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.plus-plan-card.popular {
+    border-color: #ffd700;
+}
+
+.popular-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: #ffd700;
+    color: black;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 2px 10px;
+    border-bottom-left-radius: 8px;
+}
+
+.plus-plan-card h4 {
+    font-size: 15px;
+    margin-bottom: 3px;
+}
+
+.plus-plan-card p {
+    font-size: 12px;
+    color: #888;
+}
+
+.plus-price {
+    font-weight: bold;
+    font-size: 16px;
+    color: #ffd700;
+}
+
+.phil-plus-badge {
+    background: linear-gradient(45deg, #ff0050, #00f2fe);
+    color: white;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-weight: bold;
+    display: inline-block;
+}
+
+.name-phil-plus {
+    background: -webkit-linear-gradient(45deg, #ff0050, #00f2fe);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 800;
+}
+
+
+/* STORIES UI */
+
+.profile-pic-container {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.story-ring {
+    border: 3px solid transparent;
+    background: linear-gradient(white, white) padding-box, linear-gradient(45deg, #ff0050, #ffd700) border-box;
+    padding: 3px;
+}
+
+.story-badge {
+    position: absolute;
+    bottom: 15px;
+    right: 0;
+    background: #00f2fe;
+    color: black;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 12px;
+    font-weight: bold;
+    border: 2px solid #000;
+}
+
+.story-progress-container {
+    position: absolute;
+    top: 40px;
+    left: 10px;
+    width: calc(100% - 20px);
+    height: 3px;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 2px;
+    z-index: 4001;
+}
+
+.story-progress-bar {
+    height: 100%;
+    background: white;
+    width: 0%;
+    border-radius: 2px;
+    transition: width 0.1s linear;
+}
+
+
+/* RESTLICHE STYLES (Unverändert) */
 
 .creator-level {
     background: linear-gradient(45deg, #ff0050, #00f2fe);
@@ -141,7 +402,6 @@ body {
     left: 0;
     width: 100%;
     max-width: 100%;
-    /* Verhindert Rausbuggen der Ansicht */
     height: calc(100% - 60px - env(safe-area-inset-bottom));
     opacity: 0;
     pointer-events: none;
@@ -303,7 +563,6 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    /* Wichtig fürs Handy */
     gap: 25px;
     padding: 20px;
     z-index: 100;
@@ -337,7 +596,6 @@ body {
     position: absolute;
     right: 20px;
     top: 50%;
-    /* Positionierung korrigiert */
     transform: translateY(-50%);
     font-size: 22px;
     cursor: pointer;
@@ -355,7 +613,6 @@ body {
     width: 100%;
     max-width: 100%;
     gap: 10px;
-    /* Besser als feste Margins für Handys */
     padding: 15px;
     position: sticky;
     top: 0;
@@ -391,7 +648,6 @@ body {
     scroll-snap-align: start;
     background: #000;
     overflow: hidden;
-    /* STRICT clipping */
 }
 
 .video-inner {
@@ -401,7 +657,6 @@ body {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    /* STRICT clipping */
 }
 
 .video-wrapper {
@@ -419,11 +674,7 @@ body {
     height: 100%;
     cursor: pointer;
     display: block;
-    /* Wichtig gegen Lücken */
 }
-
-
-/* --- TIKTOK BILDER SLIDESHOW --- */
 
 .carousel-container {
     position: absolute;
@@ -435,12 +686,10 @@ body {
     overflow-x: auto;
     scroll-snap-type: x mandatory;
     scrollbar-width: none;
-    /* Firefox */
 }
 
 .carousel-container::-webkit-scrollbar {
     display: none;
-    /* Chrome/Safari */
 }
 
 .carousel-item {
@@ -457,13 +706,11 @@ body {
     width: 100%;
     height: 100%;
     object-fit: contain;
-    /* Bild wird nicht abgeschnitten */
 }
 
 .carousel-dots {
     position: absolute;
     bottom: 130px;
-    /* Über dem Text */
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -482,9 +729,6 @@ body {
 .carousel-dots .dot.active {
     background: white;
 }
-
-
-/* Carousel Arrows */
 
 .carousel-arrow {
     position: absolute;
@@ -665,9 +909,6 @@ body {
     border-radius: 0 2px 2px 0;
 }
 
-
-/* --- NEU: TITEL UND BESCHREIBUNG IM FEED --- */
-
 .video__footer {
     position: absolute;
     bottom: 20px;
@@ -794,8 +1035,6 @@ body {
     border-radius: 50%;
     object-fit: cover;
     margin-bottom: 15px;
-    padding: 3px;
-    border: 1px solid #333;
 }
 
 .profile-bio {
@@ -824,9 +1063,6 @@ body {
     font-size: 13px;
     color: #888;
 }
-
-
-/* --- NEUES BUTTON STYLING (FÜR ZENTRIERTEN TEXT) --- */
 
 .profile-action-btn {
     background: #ff0050;
@@ -907,9 +1143,6 @@ body {
     gap: 5px;
 }
 
-
-/* --- INBOX & DMs --- */
-
 #view-inbox,
 #view-dm {
     display: flex;
@@ -965,9 +1198,6 @@ body {
     font-weight: bold;
 }
 
-
-/* DM Chat Bubbles */
-
 .chat-msg {
     display: flex;
     gap: 10px;
@@ -1011,7 +1241,6 @@ body {
 .chat-input {
     flex: 1;
     min-width: 0;
-    /* Wichtig für Flex-Inputs */
     padding: 14px 20px;
     border-radius: 30px;
     border: 1px solid #333;
@@ -1019,7 +1248,6 @@ body {
     color: white;
     outline: none;
     font-size: 16px;
-    /* 16px blockiert Auto-Zoom auf iPhones */
 }
 
 .chat-send-btn {
@@ -1045,7 +1273,6 @@ body {
 .search-input-box {
     flex: 1;
     min-width: 0;
-    /* Essentiell, damit die Suchleiste nicht nach rechts buggt */
     display: flex;
     align-items: center;
     background: #222;
@@ -1066,7 +1293,6 @@ body {
     color: white;
     outline: none;
     font-size: 16px;
-    /* iOS Auto-Zoom Block */
 }
 
 .trending-section {
@@ -1110,9 +1336,6 @@ body {
     font-size: 13px;
     color: #888;
 }
-
-
-/* ADMIN DASHBOARD CSS */
 
 .admin-stats {
     display: flex;
@@ -1261,6 +1484,7 @@ body {
     font-weight: 600;
     text-align: center;
     flex: 1;
+    margin: 0;
 }
 
 .close-modal {
@@ -1300,9 +1524,6 @@ body {
     opacity: 1;
 }
 
-
-/* NEUES KOMMENTAR-SYSTEM (THREADED) */
-
 .comment-wrapper {
     margin-bottom: 25px;
 }
@@ -1327,9 +1548,6 @@ body {
     display: block;
     margin-bottom: 5px;
 }
-
-
-/* Zeitstempel für Kommentare und Replies */
 
 .comment-time {
     font-size: 11px;
@@ -1415,7 +1633,6 @@ body {
 .comment-input {
     flex: 1;
     min-width: 0;
-    /* Verhindert Überlauf */
     padding: 14px 20px;
     border-radius: 30px;
     border: 1px solid #333;
@@ -1423,7 +1640,6 @@ body {
     color: white;
     outline: none;
     font-size: 16px;
-    /* 16px blockiert Auto-Zoom auf iPhones */
 }
 
 .comment-submit {
@@ -1490,7 +1706,6 @@ body {
     max-width: 100%;
     height: calc(60px + env(safe-area-inset-bottom));
     padding: 0 10px;
-    /* Etwas Puffer zum Rand */
     padding-bottom: env(safe-area-inset-bottom);
     display: flex;
     justify-content: space-around;
@@ -1508,7 +1723,6 @@ body {
     gap: 5px;
     transition: color 0.2s;
     min-width: 0;
-    /* Schrumpft auf sehr kleinen Geräten */
 }
 
 .nav__item.active {
@@ -1600,9 +1814,6 @@ body {
     color: #ff0050;
 }
 
-
-/* --- TIKTOK PC LAYOUT --- */
-
 @media (min-width: 769px) {
     .app {
         max-width: 100vw;
@@ -1681,7 +1892,6 @@ body {
         display: flex;
         flex-direction: row;
         position: relative;
-        /* Wichtig für die Buttons auf PC */
         width: 100%;
         max-width: 900px;
         margin: 0 auto;
@@ -1691,7 +1901,6 @@ body {
         gap: 30px;
         margin-top: 40px;
     }
-    /* FIX: HIER WURDE DIE BREITE GEPATCHT, DAMIT BILDER NICHT SCHWARZ SIND */
     .video-wrapper {
         position: relative;
         width: auto;
@@ -1789,9 +1998,6 @@ body {
     }
 }
 
-
-/* --- TOGGLE SWITCHES --- */
-
 .setting-toggle-row {
     display: flex;
     justify-content: space-between;
@@ -1863,9 +2069,6 @@ input:checked+.slider:before {
     border-radius: 50%;
 }
 
-
-/* TRIM SLIDERS STYLING */
-
 .trim-slider {
     -webkit-appearance: none;
     background: #333;
@@ -1890,9 +2093,6 @@ input:checked+.slider:before {
     background: #ff0050;
 }
 
-
-/* NEUER EDITOR STYLING (DRAG & RESIZE) */
-
 .color-dot {
     width: 25px;
     height: 25px;
@@ -1913,7 +2113,6 @@ input:checked+.slider:before {
     pointer-events: auto;
     border: 2px dashed transparent;
     padding: 10px;
-    /* Verhindert Markierung auf Handys */
     -webkit-user-select: none;
     user-select: none;
 }
@@ -1922,9 +2121,6 @@ input:checked+.slider:before {
     border-color: #00f2fe;
     z-index: 20;
 }
-
-
-/* BUGFIX QUADRAT: Kein Zeilenumbruch beim Skalieren! */
 
 .draggable-text .text-content {
     font-weight: bold;
@@ -1950,9 +2146,6 @@ input:checked+.slider:before {
     display: block;
 }
 
-
-/* Positionen der 4 Ecken */
-
 .handle-tl {
     top: -8px;
     left: -8px;
@@ -1977,9 +2170,6 @@ input:checked+.slider:before {
     cursor: nwse-resize;
 }
 
-
-/* NEUES CREATOR HERZ (WIE BEI YOUTUBE) */
-
 .creator-heart-wrap {
     position: relative;
     display: inline-flex;
@@ -1997,7 +2187,6 @@ input:checked+.slider:before {
     height: 18px;
     background-size: cover;
     background-position: center;
-    /* SVG Mask für eine absolute Herz-Form! */
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'/%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'/%3E%3C/svg%3E");
     -webkit-mask-repeat: no-repeat;
@@ -2032,9 +2221,6 @@ input:checked+.slider:before {
     color: #666;
     pointer-events: none;
 }
-
-
-/* --- MENTIONS UND HASHTAGS DESIGN --- */
 
 .mention-dropdown {
     position: fixed;

@@ -67,6 +67,12 @@
                         <p>Trending in deiner Region</p>
                     </div>
                 </div>
+                <div class="trend-item" onclick="openHashtag('3663')">
+                    <div class="trend-icon"><i class="fas fa-crown"></i></div>
+                    <div class="trend-info"><strong>#3663</strong>
+                        <p>Offizieller 3663 Hashtag</p>
+                    </div>
+                </div>
             </div>
             <div id="search-results" style="display: none; padding-top: 10px; padding-bottom: 80px;"></div>
         </div>
@@ -116,9 +122,15 @@
                 <i class="fas fa-cog back-btn" id="open-settings" style="display:none;"></i>
             </div>
             <div class="profile-header">
-                <img src="" id="profile-pic" class="profile-image">
+                <div class="profile-pic-container" id="profile-pic-container" onclick="viewUserStory()">
+                    <img src="" id="profile-pic" class="profile-image">
+                    <div class="story-badge" id="story-badge" style="display:none;"><i class="fas fa-plus"></i></div>
+                </div>
                 <h2 id="profile-name" style="word-break: break-word; text-align: center;">Anzeigename</h2>
-                <p id="profile-username" style="color: #aaa; font-weight: bold; font-size: 15px; margin-bottom: 10px;">@username</p>
+                <div id="phil-plus-badge-container" style="display:none; margin-top: 5px;">
+                    <span class="phil-plus-badge"><i class="fas fa-star"></i> Phil Shorts+</span>
+                </div>
+                <p id="profile-username" style="color: #aaa; font-weight: bold; font-size: 15px; margin-bottom: 10px; margin-top: 5px;">@username</p>
                 <div id="profile-level" class="creator-level">Level 1 Creator 🌟</div>
                 <p id="profile-bio" class="profile-bio">Hier könnte deine coole Bio stehen.</p>
 
@@ -128,13 +140,13 @@
                     <div class="stat-box"><strong id="stat-likes">0</strong><span>Likes</span></div>
                 </div>
 
-                <div style="display: flex; gap: 10px; align-items: center; justify-content: center; width: 100%;">
-                    <button id="profile-action-btn" class="profile-action-btn" style="flex: 1;">Folgen</button>
+                <div style="display: flex; gap: 10px; align-items: center; justify-content: center; width: 100%; flex-wrap: wrap;">
+                    <button id="profile-action-btn" class="profile-action-btn" style="flex: 1; min-width: 120px;">Folgen</button>
                     <button id="profile-message-btn" class="profile-action-btn edit-btn" style="display: none; width: 46px; padding: 0;"><i class="fas fa-paper-plane"></i></button>
+                    <button id="profile-shop-btn" class="profile-action-btn shop-btn" style="display: none; flex: 1; min-width: 120px; background: #ffd700; color: black;"><i class="fas fa-store"></i> Shop</button>
                 </div>
 
                 <div id="admin-controls" style="width: 100%;"></div>
-
                 <button id="open-admin-dashboard" class="profile-action-btn" style="display:none; background:#ffd700; color:black; margin-top:10px; width:100%;">👑 Admin Dashboard</button>
 
                 <div id="private-stats" style="display: none; width: 100%; margin-top: 20px; background: #111; border-radius: 15px; padding: 15px; border: 1px solid #333;">
@@ -198,6 +210,115 @@
                 <i class="fas fa-user"></i><span>Profil</span>
             </div>
         </div>
+
+        <div id="gift-modal" class="modal">
+            <div class="modal-header">
+                <h4>Geschenk senden</h4>
+                <div style="font-size: 14px; color: #ffd700; font-weight: bold;"><i class="fas fa-coins"></i> <span id="gift-modal-coins">0</span></div>
+                <i class="fas fa-times close-modal" id="close-gift-modal"></i>
+            </div>
+            <div class="modal-body" style="background: #0a0a0a;">
+                <div class="gift-grid" id="gift-grid">
+                </div>
+            </div>
+        </div>
+
+        <div id="shop-modal" class="modal" style="height: 85%;">
+            <div class="modal-header">
+                <h4><i class="fas fa-store" style="color: #ffd700;"></i> Shop</h4>
+                <div style="font-size: 14px; color: #ffd700; font-weight: bold;"><i class="fas fa-coins"></i> <span id="shop-modal-coins">0</span></div>
+                <i class="fas fa-times close-modal" id="close-shop-modal"></i>
+            </div>
+            <div class="shop-tabs">
+                <div class="shop-tab active" data-tab="shop-borders">Rahmen</div>
+                <div class="shop-tab" data-tab="shop-stories">Stories</div>
+                <div class="shop-tab" data-tab="shop-plus">Phil Shorts+</div>
+            </div>
+            <div class="modal-body" style="background: #0a0a0a; padding: 15px;">
+
+                <div id="shop-borders" class="shop-content-section active">
+                    <h4 style="margin-bottom: 15px; color: #aaa; font-size: 14px; text-transform: uppercase;">Profilrahmen</h4>
+                    <div class="shop-items-grid" id="shop-borders-grid"></div>
+                </div>
+
+                <div id="shop-stories" class="shop-content-section" style="display: none; text-align: center;">
+                    <div class="story-shop-card">
+                        <i class="fas fa-camera-retro" style="font-size: 50px; color: #00f2fe; margin-bottom: 15px;"></i>
+                        <h3 style="margin-bottom: 10px;">Story posten</h3>
+                        <p style="color: #888; font-size: 14px; margin-bottom: 20px;">Lade ein Bild für 24 Stunden in deine Story hoch. Alle Follower können es sehen!</p>
+                        <button class="profile-action-btn" onclick="openStoryUpload()" style="width: 100%; font-size: 16px;"><i class="fas fa-coins" style="color: #ffd700;"></i> 1000 Coins</button>
+                    </div>
+                </div>
+
+                <div id="shop-plus" class="shop-content-section" style="display: none;">
+                    <div class="phil-plus-banner">
+                        <i class="fas fa-star"></i> Phil Shorts+
+                    </div>
+                    <p style="color: #888; font-size: 13px; margin-bottom: 20px; text-align: center;">Schalte das exklusive Plus-Abzeichen frei, erhalte einen rot-blauen Namen in Kommentaren und unterstütze die App!</p>
+
+                    <div class="plus-plan-card" onclick="buyPhilPlus(5, 10000)">
+                        <div>
+                            <h4>5 Tage Pass</h4>
+                            <p>Kurzzeit-Boost</p>
+                        </div>
+                        <div class="plus-price"><i class="fas fa-coins"></i> 10.000</div>
+                    </div>
+
+                    <div class="plus-plan-card popular" onclick="buyPhilPlus(14, 20000)">
+                        <div class="popular-badge">Beliebt</div>
+                        <div>
+                            <h4>14 Tage Pass</h4>
+                            <p>Der Klassiker</p>
+                        </div>
+                        <div class="plus-price"><i class="fas fa-coins"></i> 20.000</div>
+                    </div>
+
+                    <div class="plus-plan-card" onclick="buyPhilPlus(30, 50000)">
+                        <div>
+                            <h4>30 Tage Pass</h4>
+                            <p>Für wahre Legenden</p>
+                        </div>
+                        <div class="plus-price"><i class="fas fa-coins"></i> 50.000</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div id="story-upload-modal" class="modal" style="height: 60%;">
+            <div class="modal-header">
+                <h4>Story erstellen (1000 Coins)</h4>
+                <i class="fas fa-times close-modal" id="close-story-upload"></i>
+            </div>
+            <div class="modal-body upload-body">
+                <div class="file-upload-wrapper">
+                    <input type="file" id="up-story-file" class="file-input-hidden" accept="image/*">
+                    <div class="file-upload-design" id="up-story-btn" onclick="document.getElementById('up-story-file').click()">
+                        <i class="fas fa-image"></i>
+                        <p style="word-break: break-all; padding: 0 10px;">Bild für Story auswählen</p>
+                    </div>
+                </div>
+                <img id="story-preview-img" style="width: 100%; height: 200px; object-fit: contain; border-radius: 10px; display: none; margin-bottom: 15px; border: 1px solid #333;">
+                <p id="story-upload-status" style="text-align: center; font-size: 14px; font-weight: bold; color: #ff0050;"></p>
+                <button id="submit-story-upload" class="profile-action-btn" style="width:100%; min-height: 56px; font-size:16px;">Story posten</button>
+            </div>
+        </div>
+
+        <div id="story-viewer" class="full-screen-overlay" style="background: rgba(0,0,0,0.95); z-index: 4000; flex-direction: column;">
+            <div style="width: 100%; padding: 20px; display: flex; justify-content: space-between; align-items: center; position: absolute; top: 0; z-index: 4001;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <img id="sv-pic" src="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
+                    <span id="sv-name" style="font-weight: bold; color: white;"></span>
+                    <span id="sv-time" style="color: #aaa; font-size: 12px;"></span>
+                </div>
+                <i class="fas fa-times" style="color: white; font-size: 24px; cursor: pointer;" onclick="closeStoryViewer()"></i>
+            </div>
+            <div class="story-progress-container">
+                <div class="story-progress-bar" id="sv-progress"></div>
+            </div>
+            <img id="sv-img" src="" style="width: 100%; height: 80%; object-fit: contain; margin-top: 60px;">
+        </div>
+
 
         <div id="video-details-modal" class="modal">
             <div class="modal-header">
