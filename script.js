@@ -216,6 +216,140 @@ function timeAgo(timestamp) {
     return date.toLocaleDateString('de-DE');
 }
 
+// --- HASHTAGS UND MENTIONS FORMATIEREN ---
+window.formatText = function(text) {
+    if (!text) return "";
+    // 1. HTML Escapen (XSS Schutz)
+    let safeText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    // 2. Hashtags filtern (inkl. Umlaute)
+    safeText = safeText.replace(/#([a-zA-Z0-9_äöüÄÖÜß]+)/g, '<span class="hashtag" onclick="openHashtag(\'$1\', event)">#$1</span>');
+    // 3. Mentions filtern (nur a-zA-Z0-9_ da Usernamen bereinigt sind)
+    safeText = safeText.replace(/@([a-zA-Z0-9_]+)/g, '<span class="mention" onclick="openProfileByUsername(\'$1\', event)">@$1</span>');
+    return safeText;
+};
+
+window.openProfileByUsername = function(username, event) {
+    if (event) event.stopPropagation();
+    const user = allKnownUsers.find(u => (u.username || "").toLowerCase() === username.toLowerCase());
+    if (user) {
+        openProfile(user.uid);
+    } else {
+        showToast("Nutzer @" + username + " nicht gefunden!");
+    }
+};
+
+window.openHashtag = function(tag, event) {
+    if (event) event.stopPropagation();
+    switchView('hashtag');
+    document.getElementById('hashtag-title').innerText = '#' + tag;
+    const grid = document.getElementById('hashtag-grid');
+    grid.innerHTML = '';
+
+    // Suche in allen Videos nach dem Hashtag
+    const matchedVideos = allVideosData.filter(v => (v.description || "").toLowerCase().includes('#' + tag.toLowerCase()));
+
+    if (matchedVideos.length === 0) {
+        grid.innerHTML = '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Keine Videos gefunden</div>';
+        return;
+    }
+
+    matchedVideos.forEach(v => {
+        const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`;
+        const mediaTag = v.mediaType === 'images' ? `<img src="${previewSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<video src="${previewSrc}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`;
+        const icon = v.mediaType === 'images' ? 'fa-images' : 'fa-play';
+        grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')">${mediaTag}<div class="grid-views"><i class="fas ${icon}"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`;
+    });
+};
+
+// --- MENTION AUTOCOMPLETE LOGIK ---
+let activeMentionInput = null;
+let mentionStartIndex = -1;
+
+document.addEventListener('input', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        const val = e.target.value;
+        const cursorPos = e.target.selectionStart;
+        if (cursorPos === undefined) return;
+
+        const textBeforeCursor = val.substring(0, cursorPos);
+        // Prüft, ob das letzte Wort mit @ anfängt
+        const match = textBeforeCursor.match(/@([a-zA-Z0-9_]*)$/);
+
+        if (match) {
+            activeMentionInput = e.target;
+            mentionStartIndex = cursorPos - match[0].length;
+            const query = match[1].toLowerCase();
+            showMentionSuggestions(e.target, query);
+        } else {
+            hideMentionSuggestions();
+        }
+    }
+});
+
+window.showMentionSuggestions = function(inputEl, query) {
+    const matchedUsers = allKnownUsers.filter(u =>
+        (u.username || "").toLowerCase().startsWith(query) ||
+        (u.displayName || "").toLowerCase().startsWith(query)
+    ).slice(0, 5); // Max 5 Vorschläge
+
+    const box = document.getElementById('mention-suggestions');
+    if (!box) return;
+
+    if (matchedUsers.length === 0) {
+        box.style.display = 'none';
+        return;
+    }
+
+    box.innerHTML = matchedUsers.map(u => `
+        <div class="mention-item" onclick="selectMention('${u.username}')">
+            <img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}">
+            <span>${u.username}</span>
+        </div>
+    `).join('');
+
+    const rect = inputEl.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    box.style.left = rect.left + 'px';
+    if (spaceBelow > 200) {
+        // Dropdown nach unten
+        box.style.top = (rect.bottom + 5) + 'px';
+        box.style.bottom = 'auto';
+    } else {
+        // Dropdown nach oben (z.B. wenn Tastatur offen ist)
+        box.style.top = 'auto';
+        box.style.bottom = (window.innerHeight - rect.top + 5) + 'px';
+    }
+
+    box.style.display = 'block';
+};
+
+window.selectMention = function(username) {
+    if (!activeMentionInput) return;
+    const val = activeMentionInput.value;
+    const before = val.substring(0, mentionStartIndex);
+    const after = val.substring(activeMentionInput.selectionStart);
+
+    // Einfügen des Usernames + Leerzeichen danach
+    activeMentionInput.value = before + '@' + username + ' ' + after;
+    hideMentionSuggestions();
+    activeMentionInput.focus();
+};
+
+window.hideMentionSuggestions = function() {
+    const box = document.getElementById('mention-suggestions');
+    if (box) box.style.display = 'none';
+    activeMentionInput = null;
+};
+
+// Schließe Dropdown bei Klick woanders hin
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#mention-suggestions') && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+        hideMentionSuggestions();
+    }
+});
+
+
 let userUnsubscribe = null;
 
 function initLiveUser() {
@@ -467,7 +601,12 @@ function initLiveDatabase() {
                     });
 
                     document.querySelectorAll(`.video[data-id="${vData.id}"] .video__footer .video-desc-preview`).forEach(el => {
-                        el.innerHTML = `${(vData.description || "").substring(0, 50)}${(vData.description && vData.description.length > 50) ? '... <strong>mehr anzeigen</strong>' : ''}`;
+                        let rawPreview = (vData.description || "").substring(0, 50);
+                        let previewHtml = formatText(rawPreview);
+                        if (vData.description && vData.description.length > 50) {
+                            previewHtml += '... <strong>mehr anzeigen</strong>';
+                        }
+                        el.innerHTML = previewHtml;
                     });
                     document.querySelectorAll(`.video[data-id="${vData.id}"] .video__footer .video-title`).forEach(el => {
                         el.innerText = vData.title || 'Ohne Titel';
@@ -524,7 +663,7 @@ function appendLoader(container, isEnd) {
     const loader = document.createElement('div');
     loader.className = 'feed-end-loader';
     if (isEnd) {
-        loader.innerHTML = '<i class="fas fa-check-circle"></i><span>Du bist auf dem neuesten Stand</span>';
+        loader.innerHTML = '<i class="fas fa-check-circle"></i><span>Du bist auf dem neueste Stand</span>';
         loader.classList.add('no-more');
     } else {
         loader.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Prüfe Algorithmus...</span>';
@@ -589,7 +728,6 @@ function createVideoElement(video) {
 
     const editVideoBtn = isMe ? `<div class="videoSidebar__button" onclick="openEditVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-pen" style="font-size:24px;"></i></div>` : '';
 
-    // Muted Attribut abhängig von der globalen Einstellung.
     const mutedAttr = window.globalMuted ? 'muted' : '';
 
     let mediaHTML = '';
@@ -630,6 +768,12 @@ function createVideoElement(video) {
         `;
     }
 
+    let rawPreview = (video.description || "").substring(0, 50);
+    let previewHtml = formatText(rawPreview);
+    if ((video.description && video.description.length > 50)) {
+        previewHtml += '... <strong>mehr anzeigen</strong>';
+    }
+
     div.innerHTML = `
         <div class="video-inner is-paused">
             <div class="video-wrapper">
@@ -646,7 +790,7 @@ function createVideoElement(video) {
                 <p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p>
                 
                 <h4 class="video-title" onclick="openVideoDetails('${video.id}')">${video.title || 'Ohne Titel'}</h4>
-                <p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${(video.description || "").substring(0, 50)}${(video.description && video.description.length > 50) ? '... <strong>mehr anzeigen</strong>' : ''}</p>
+                <p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${previewHtml}</p>
             </div>
             
             <div class="video__sidebar">
@@ -690,7 +834,7 @@ window.openVideoDetails = function(id) {
     const timestampStr = video.timestamp ? timeAgo(video.timestamp) : 'Unbekannt';
     document.getElementById('detail-date').innerHTML = `<i class="fas fa-calendar" style="color: #ffd700;"></i> ${timestampStr}`;
 
-    document.getElementById('detail-desc').innerText = video.description || '';
+    document.getElementById('detail-desc').innerHTML = formatText(video.description || '');
     document.getElementById('video-details-modal').classList.add('show');
 }
 document.getElementById('close-details').addEventListener('click', () => { document.getElementById('video-details-modal').classList.remove('show'); });
@@ -790,7 +934,6 @@ videoContainer.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 
-// --- PERFEKTE OBSERVER LOGIK ---
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         const el = e.target; 
@@ -804,7 +947,6 @@ const videoObserver = new IntersectionObserver(entries => {
 
             const videoPlayer = el.querySelector('.video__player');
             if (videoPlayer) {
-                // Alle vorherigen pausieren
                 document.querySelectorAll('.video__player').forEach(otherVid => {
                     if (otherVid !== videoPlayer && !otherVid.paused) {
                         otherVid.pause();
@@ -812,15 +954,11 @@ const videoObserver = new IntersectionObserver(entries => {
                     }
                 });
 
-                // Versuche, das Video UNGEMUTET (oder je nach globaler Einstellung) abzuspielen
                 videoPlayer.muted = window.globalMuted;
                 const playPromise = videoPlayer.play();
 
                 if (playPromise !== undefined) {
                     playPromise.catch(error => { 
-                        console.log("Browser blockiert Autoplay mit Ton. Warte auf Nutzer-Klick.", error);
-                        // KEIN AUTOMATISCHER MUTE MEHR! 
-                        // Das Video wird pausiert und wartet, bis der Nutzer 1x auf den Bildschirm tippt.
                         videoPlayer.pause();
                         const container = videoPlayer.closest('.video-inner');
                         if(container) container.classList.add('is-paused');
@@ -875,7 +1013,6 @@ function attachInteractionsToVideo(videoContainerEl) {
                     if (vid !== v && !vid.paused) vid.pause();
                 });
                 
-                // SOBALD DER NUTZER KLICKT, TON IMMER AN MACHEN
                 window.globalMuted = false;
                 v.muted = window.globalMuted;
                 window.updateGlobalVolumeUI();
@@ -1270,7 +1407,7 @@ function renderComments(id) {
                                 <span class="live-username-${r.uid}" style="color:#888; font-weight:normal; font-size:12px;">@${rUser.username}</span> 
                                 <span class="comment-time">${replyTimeString}</span>
                             </strong>
-                            <p style="word-break: break-word;">${r.text}</p>
+                            <p style="word-break: break-word;">${formatText(r.text)}</p>
                             <div class="comment-actions">
                                 <span onclick="toggleReplyBox('${commentId}')">Antworten</span>
                                 <span class="${rHasLiked}" onclick="likeReply('${id}', '${commentId}', '${r.rId}')"><i class="fas fa-heart"></i> ${rLikeCount}</span>
@@ -1298,7 +1435,7 @@ function renderComments(id) {
                                 <span class="live-username-${c.uid}" style="color:#888; font-weight:normal; font-size:12px;">@${cUser.username}</span> 
                                 <span class="comment-time">${timeString}</span>
                             </strong>
-                            <p style="word-break: break-word;">${c.text}</p>
+                            <p style="word-break: break-word;">${formatText(c.text)}</p>
                             <div class="comment-actions">
                                 <span onclick="toggleReplyBox('${commentId}')">Antworten</span>
                                 <span class="${hasLiked}" onclick="likeComment('${id}', '${commentId}')"><i class="fas fa-heart"></i> ${likeCount}</span>
@@ -1438,7 +1575,7 @@ window.openProfile = async function(targetUid) {
         document.getElementById('profile-title').innerHTML = '@' + cleanUsername;
         document.getElementById('profile-name').innerHTML = targetUser.displayName + verifiedBadge;
         document.getElementById('profile-username').innerText = '@' + cleanUsername;
-        document.getElementById('profile-bio').innerText = targetUser.bio || "Keine Bio vorhanden.";
+        document.getElementById('profile-bio').innerHTML = formatText(targetUser.bio || "Keine Bio vorhanden.");
         document.getElementById('profile-pic').src = targetUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback';
         document.getElementById('stat-likes').innerText = totalLikes;
         document.getElementById('stat-followers').innerText = realFollowersCount;
@@ -1606,7 +1743,7 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
         document.getElementById('profile-name').innerHTML = newDisplayName + (currentUser.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '');
         document.getElementById('profile-title').innerText = '@' + newUsername;
         document.getElementById('profile-username').innerText = '@' + newUsername;
-        document.getElementById('profile-bio').innerText = newBio;
+        document.getElementById('profile-bio').innerHTML = formatText(newBio);
         document.getElementById('profile-pic').src = newPic;
         showToast("Profil erfolgreich aktualisiert!");
         document.getElementById('settings-modal').classList.remove('show');
@@ -1867,7 +2004,7 @@ function initInbox() {
                             <span class="live-username-${n.fromUid}" style="color:#888; font-weight:normal; font-size:12px;">@${nUser.username}</span>
                         </span>
                         <div class="chat-bubble" style="background: transparent; padding: 0; word-break: break-word;">
-                            <i class="fas ${icon}" style="color:${color}; margin-right:5px;"></i> ${n.text}
+                            <i class="fas ${icon}" style="color:${color}; margin-right:5px;"></i> ${formatText(n.text)}
                         </div>
                         <div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(n.timestamp)}</div>
                     </div>
@@ -1920,7 +2057,7 @@ function initInboxChats() {
                             <span class="live-username-${partnerUid}" style="color:#888; font-weight:normal; font-size:12px;">@${nUser.username}</span>
                         </span>
                         <div class="chat-bubble" style="background: transparent; padding: 0; color: #888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                            ${chat.lastMessage || 'Neuer Chat...'}
+                            ${formatText(chat.lastMessage) || 'Neuer Chat...'}
                         </div>
                         <div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(chat.lastMessageTime)}</div>
                     </div>
@@ -1978,7 +2115,7 @@ window.openDM = async function(targetUid, targetName, targetPic) {
                     <div class="chat-msg ${isMe}">
                         <img src="${pic}" class="chat-avatar" style="flex-shrink:0;">
                         <div style="min-width:0; max-width: 100%;">
-                            <div class="chat-bubble">${msg.text}</div>
+                            <div class="chat-bubble">${formatText(msg.text)}</div>
                             <div class="chat-time" style="font-size: 10px; color: #666; margin-top: 4px; text-align: ${isMe ? 'right' : 'left'};">${timeAgo(msg.timestamp)}</div>
                         </div>
                     </div>`;
