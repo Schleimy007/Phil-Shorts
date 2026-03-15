@@ -117,6 +117,7 @@ let isInitialLoad = true;
 let sortedFeed = [];
 const viewedVideos = new Set();
 
+// STANDARD: TON IST AN!
 window.globalVolume = 1;
 window.globalMuted = false;
 
@@ -588,6 +589,7 @@ function createVideoElement(video) {
 
     const editVideoBtn = isMe ? `<div class="videoSidebar__button" onclick="openEditVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-pen" style="font-size:24px;"></i></div>` : '';
 
+    // Muted Attribut abhängig von der globalen Einstellung.
     const mutedAttr = window.globalMuted ? 'muted' : '';
 
     let mediaHTML = '';
@@ -788,7 +790,7 @@ videoContainer.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 
-// --- PERFEKTE OBSERVER LOGIK - ÜBERWACHT DEN CONTAINER, NICHT DAS VIDEO ---
+// --- PERFEKTE OBSERVER LOGIK ---
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         const el = e.target; 
@@ -802,7 +804,7 @@ const videoObserver = new IntersectionObserver(entries => {
 
             const videoPlayer = el.querySelector('.video__player');
             if (videoPlayer) {
-                
+                // Alle vorherigen pausieren
                 document.querySelectorAll('.video__player').forEach(otherVid => {
                     if (otherVid !== videoPlayer && !otherVid.paused) {
                         otherVid.pause();
@@ -810,13 +812,16 @@ const videoObserver = new IntersectionObserver(entries => {
                     }
                 });
 
+                // Versuche, das Video UNGEMUTET (oder je nach globaler Einstellung) abzuspielen
                 videoPlayer.muted = window.globalMuted;
                 const playPromise = videoPlayer.play();
 
                 if (playPromise !== undefined) {
                     playPromise.catch(error => { 
-                        console.log("Autoplay blockiert (Browser erfordert Interaktion):", error);
-                        // KEIN AUTOMATISCHER MUTE MEHR! Das Video bleibt pausiert, bis der Nutzer interagiert.
+                        console.log("Browser blockiert Autoplay mit Ton. Warte auf Nutzer-Klick.", error);
+                        // KEIN AUTOMATISCHER MUTE MEHR! 
+                        // Das Video wird pausiert und wartet, bis der Nutzer 1x auf den Bildschirm tippt.
+                        videoPlayer.pause();
                         const container = videoPlayer.closest('.video-inner');
                         if(container) container.classList.add('is-paused');
                     });
@@ -869,7 +874,12 @@ function attachInteractionsToVideo(videoContainerEl) {
                 document.querySelectorAll('.video__player').forEach(vid => {
                     if (vid !== v && !vid.paused) vid.pause();
                 });
+                
+                // SOBALD DER NUTZER KLICKT, TON IMMER AN MACHEN
+                window.globalMuted = false;
                 v.muted = window.globalMuted;
+                window.updateGlobalVolumeUI();
+                
                 v.play().catch(err => console.log("Play error:", err));
             } else {
                 v.pause();
