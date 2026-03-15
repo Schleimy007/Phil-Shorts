@@ -186,7 +186,6 @@ function parseJwt(token) {
     return JSON.parse(jsonPayload);
 }
 
-// Dynamischer Daten-Abruf (Damit Namen, Bilder und Haken IMMER aktuell sind)
 function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackVerified) {
     const user = allKnownUsers.find(u => u.uid === uid);
     return {
@@ -224,11 +223,20 @@ function initLiveUser() {
 
     userUnsubscribe = onSnapshot(doc(db, "users", currentUser.uid), (docSnap) => {
         if (docSnap.exists()) {
-            currentUser = {...currentUser, ...docSnap.data() };
+            const data = docSnap.data();
+
+            // --- BANNED CHECK ---
+            if (data.banned) {
+                localStorage.removeItem('phil_session');
+                alert("Dein Account wurde durch einen Administrator gesperrt.");
+                window.location.reload();
+                return;
+            }
+
+            currentUser = {...currentUser, ...data };
             if (currentUser.coins === undefined) currentUser.coins = 1000;
             if (!currentUser.followers) currentUser.followers = [];
             if (!currentUser.following) currentUser.following = [];
-            // Sicherstellen dass currentUser auch einen username hat
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
@@ -247,13 +255,11 @@ function initLiveUser() {
     });
 }
 
-// --- SOFORTIGE ÜBERALL-AKTUALISIERUNG ---
 function initSearchUsers() {
     onSnapshot(collection(db, "users"), (snapshot) => {
         allKnownUsers = [];
         snapshot.forEach(doc => allKnownUsers.push(doc.data()));
 
-        // Patcht das komplette HTML live durch!
         allKnownUsers.forEach(u => {
             const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
             const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
@@ -303,11 +309,23 @@ window.addEventListener('googleLoginSuccess', async(event) => {
                 followers: [],
                 verified: false,
                 coins: 1000,
-                profileViews: 0
+                profileViews: 0,
+                isAdmin: false,
+                banned: false
             });
-            currentUser = { uid, displayName: rawDisplayName, username: finalUser, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0 };
+            currentUser = { uid, displayName: rawDisplayName, username: finalUser, email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0, isAdmin: false, banned: false };
         } else {
             currentUser = userSnap.data();
+
+            // BANNED CHECK BEIM LOGIN
+            if (currentUser.banned) {
+                showCustomAlert("Gesperrt", "Dein Account wurde dauerhaft gesperrt.");
+                localStorage.removeItem('phil_session');
+                currentUser = null;
+                document.getElementById('login-screen').classList.add('show');
+                return;
+            }
+
             if (!currentUser.following) currentUser.following = [];
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             if (currentUser.coins === undefined) await updateDoc(userRef, { coins: 1000, profileViews: 0, followers: [] });
@@ -388,7 +406,6 @@ function applyAlgorithm(videos, mode) {
     }
 }
 
-// --- LIVE DATENBANK FÜR VIDEOS ---
 function initLiveDatabase() {
     document.getElementById('video-container').innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i><p>Lade Algorithmus...</p></div>';
 
@@ -539,7 +556,6 @@ window.updateGlobalVolumeUI = function() {
     });
 };
 
-// CAROUSEL Pfeil-Logik
 window.scrollCarousel = function(vidId, dir, event) {
     if (event) event.stopPropagation();
     const container = document.querySelector(`.carousel-container[data-vid="${vidId}"]`);
@@ -567,7 +583,7 @@ function createVideoElement(video) {
     const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : '';
     const realLikes = video.likedBy ? video.likedBy.length : 0;
 
-    const canDeleteVideo = currentUser && (video.authorUid === currentUser.uid || currentUser.email === "schleimyverteilung@gmail.com");
+    const canDeleteVideo = currentUser && (video.authorUid === currentUser.uid || currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
     const deleteVideoBtn = canDeleteVideo ? `<div class="videoSidebar__button" onclick="deleteVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-trash" style="color: #ff4444; font-size:24px;"></i></div>` : '';
 
     const editVideoBtn = isMe ? `<div class="videoSidebar__button" onclick="openEditVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-pen" style="font-size:24px;"></i></div>` : '';
@@ -786,7 +802,6 @@ const videoObserver = new IntersectionObserver(entries => {
                 document.querySelectorAll('.video__player').forEach(otherVid => {
                     if (otherVid !== el && !otherVid.paused) {
                         otherVid.pause();
-                        otherVid.currentTime = 0;
                     }
                 });
 
@@ -800,11 +815,10 @@ const videoObserver = new IntersectionObserver(entries => {
         } else {
             if (el.tagName === 'VIDEO') {
                 el.pause();
-                el.currentTime = 0;
             }
         }
     });
-}, { threshold: 0.5 });
+}, { threshold: 0.6 });
 
 
 function attachInteractionsToVideo(videoContainerEl) {
@@ -1008,14 +1022,12 @@ window.deleteVideo = async function(videoId) {
     }
 };
 
-// --- CREATOR HERZ LOGIK (WIE YOUTUBE) ---
 window.toggleCreatorHeart = async function(videoId, cId, rId = null) {
     if (!currentUser) return;
     const videoIndex = allVideosData.findIndex(v => v.id === videoId);
     if (videoIndex === -1) return;
     
     const video = allVideosData[videoIndex];
-    // SICHERHEIT: Nur der Ersteller des Videos darf sein Creator-Herz vergeben!
     if (currentUser.uid !== video.authorUid) return;
 
     let comments = video.comments || [];
@@ -1171,7 +1183,6 @@ function renderComments(id) {
     const video = allVideosData.find(v => v.id === id);
     if (video && video.comments && video.comments.length > 0) {
         
-        // Infos vom Video Ersteller holen (für Creator-Heart Logik)
         const isCreator = currentUser && currentUser.uid === video.authorUid;
         const authorData = getUserData(video.authorUid, video.authorName, video.authorUsername || video.authorName, video.authorPic, video.authorVerified);
         const creatorPic = authorData.pic || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback';
@@ -1179,7 +1190,7 @@ function renderComments(id) {
         list.innerHTML = video.comments.map((c, index) => {
             const cUser = getUserData(c.uid, c.name, c.username, c.pic, c.verified);
             const badge = getVerifiedBadge(cUser.verified);
-            const canDelete = currentUser && (currentUser.uid === c.uid || currentUser.email === "schleimyverteilung@gmail.com");
+            const canDelete = currentUser && (currentUser.uid === c.uid || currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
             const commentId = c.cId || index.toString();
             const deleteBtn = canDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteComment('${id}', '${commentId}')"></i>` : '';
 
@@ -1188,7 +1199,6 @@ function renderComments(id) {
 
             const timeString = timeAgo(c.cId);
 
-            // Creator Heart Logik (Hauptkommentar)
             let cCreatorHeartHtml = '';
             if (c.creatorHeart) {
                 cCreatorHeartHtml = `
@@ -1208,14 +1218,13 @@ function renderComments(id) {
                 repliesHtml = `<div class="reply-container">` + c.replies.map(r => {
                     const rUser = getUserData(r.uid, r.name, r.username, r.pic, r.verified);
                     const rBadge = getVerifiedBadge(rUser.verified);
-                    const rCanDelete = currentUser && (currentUser.uid === r.uid || currentUser.email === "schleimyverteilung@gmail.com");
+                    const rCanDelete = currentUser && (currentUser.uid === r.uid || currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
                     const rDeleteBtn = rCanDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteReply('${id}', '${commentId}', '${r.rId}')"></i>` : '';
                     const rLikeCount = r.likes ? r.likes.length : 0;
                     const rHasLiked = r.likes && currentUser && r.likes.includes(currentUser.uid) ? 'liked-heart' : '';
 
                     const replyTimeString = timeAgo(r.rId);
                     
-                    // Creator Heart Logik (Antworten)
                     let rCreatorHeartHtml = '';
                     if (r.creatorHeart) {
                         rCreatorHeartHtml = `
@@ -1423,7 +1432,7 @@ window.openProfile = async function(targetUid) {
         const adminControls = document.getElementById('admin-controls');
         adminControls.innerHTML = '';
 
-        if (currentUser && currentUser.email === "schleimyverteilung@gmail.com" && targetUid !== currentUser.uid) {
+        if (currentUser && (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) && targetUid !== currentUser.uid) {
             const isVerif = targetUser.verified || false;
             adminControls.innerHTML = `<button onclick="toggleVerify('${targetUid}', ${isVerif})" class="profile-action-btn" style="background: transparent; color: #00f2fe; border: 1px solid #00f2fe; margin-top: 15px; width: 100%;">👑 Admin: ${isVerif ? 'Blauen Haken entfernen' : 'Blauen Haken geben'}</button>`;
         }
@@ -1446,7 +1455,7 @@ window.openProfile = async function(targetUid) {
                 document.getElementById('app-settings-modal').classList.add('show');
             };
             
-            adminDashboardBtn.style.display = currentUser.email === "schleimyverteilung@gmail.com" ? 'block' : 'none';
+            adminDashboardBtn.style.display = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) ? 'block' : 'none';
             privateStats.style.display = 'block';
             document.getElementById('my-coins').innerText = targetUser.coins || 0;
             document.getElementById('my-views').innerText = targetUser.profileViews || 0;
@@ -1486,7 +1495,6 @@ window.toggleVerify = async function(targetUid, currentStatus) {
     } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); }
 };
 
-// --- PROFIL & KOMMENTAR SYNC LOGIK ---
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
 
     const newDisplayName = document.getElementById('edit-displayname-input').value.trim();
@@ -1596,7 +1604,7 @@ document.getElementById('open-admin-dashboard').addEventListener('click', () => 
 });
 
 window.loadAdminDashboard = async function() {
-    if (currentUser.email !== "schleimyverteilung@gmail.com") return;
+    if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return;
 
     const userList = document.getElementById('admin-user-list');
     userList.innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i></div>';
@@ -1610,19 +1618,33 @@ window.loadAdminDashboard = async function() {
         usersSnap.forEach(docSnap => {
             const u = docSnap.data();
             const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
-            userList.innerHTML += `
-                <div class="admin-user-card">
-                    <div class="admin-user-header" onclick="openProfile('${u.uid}')" style="cursor:pointer;">
-                        <img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}">
-                        <div style="flex:1; min-width:0;">
-                            <strong style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;">@${u.displayName} ${isVerif}</strong>
-                            <div style="font-size:11px; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${u.email} | Coins: ${u.coins || 0}</div>
-                        </div>
-                    </div>
+            const isAdminBadge = u.isAdmin ? '<i class="fas fa-shield-alt" style="color:#ffd700; margin-left:5px;" title="Admin"></i>' : '';
+            const isBannedBadge = u.banned ? '<span style="color:#ff4444; font-size:10px; margin-left:5px; font-weight:bold;">[GEBANNT]</span>' : '';
+            
+            let actionsHtml = '';
+            if (u.email !== "schleimyverteilung@gmail.com") {
+                actionsHtml = `
                     <div class="admin-actions">
                         <button class="admin-btn btn-blue" onclick="toggleVerifyAdmin('${u.uid}', ${u.verified || false})">${u.verified ? 'Haken entfernen' : 'Haken geben'}</button>
                         <button class="admin-btn btn-gold" onclick="giveCoins('${u.uid}')">+1000 Coins</button>
                     </div>
+                    <div class="admin-actions" style="margin-top: 8px;">
+                        <button class="admin-btn ${u.isAdmin ? 'btn-red' : 'btn-green'}" onclick="toggleAdminRole('${u.uid}', ${u.isAdmin || false})">${u.isAdmin ? 'Admin entfernen' : 'Admin machen'}</button>
+                        <button class="admin-btn ${u.banned ? 'btn-green' : 'btn-red'}" onclick="toggleBanStatus('${u.uid}', ${u.banned || false})">${u.banned ? 'Entbannen' : 'Bannen'}</button>
+                    </div>
+                `;
+            }
+
+            userList.innerHTML += `
+                <div class="admin-user-card ${u.banned ? 'banned-card' : ''}">
+                    <div class="admin-user-header" onclick="openProfile('${u.uid}')" style="cursor:pointer;">
+                        <img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}">
+                        <div style="flex:1; min-width:0;">
+                            <strong style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;">@${u.displayName} ${isVerif}${isAdminBadge}${isBannedBadge}</strong>
+                            <div style="font-size:11px; color:#888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${u.email} | Coins: ${u.coins || 0}</div>
+                        </div>
+                    </div>
+                    ${actionsHtml}
                 </div>
             `;
         });
@@ -1630,9 +1652,28 @@ window.loadAdminDashboard = async function() {
 }
 
 window.toggleVerifyAdmin = async function(targetUid, currentStatus) {
+    if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return;
     try {
         await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus });
         showToast(!currentStatus ? "Blauer Haken vergeben!" : "Blauer Haken entfernt.");
+        loadAdminDashboard();
+    } catch (e) { showCustomAlert("Fehler", "Berechtigung verweigert."); }
+};
+
+window.toggleAdminRole = async function(targetUid, currentStatus) {
+    if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return;
+    try {
+        await updateDoc(doc(db, "users", targetUid), { isAdmin: !currentStatus });
+        showToast(!currentStatus ? "Nutzer ist nun Admin! 🛡️" : "Admin-Rechte entfernt.");
+        loadAdminDashboard();
+    } catch (e) { showCustomAlert("Fehler", "Berechtigung verweigert."); }
+};
+
+window.toggleBanStatus = async function(targetUid, currentStatus) {
+    if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return;
+    try {
+        await updateDoc(doc(db, "users", targetUid), { banned: !currentStatus });
+        showToast(!currentStatus ? "Nutzer wurde gebannt! 🚫" : "Nutzer wurde entbannt.");
         loadAdminDashboard();
     } catch (e) { showCustomAlert("Fehler", "Berechtigung verweigert."); }
 };
@@ -1645,7 +1686,6 @@ window.giveCoins = async function(targetUid) {
     } catch (e) {}
 };
 
-// --- SUCHFUNKTION ---
 document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase();
     const resultsGrid = document.getElementById('search-results');
