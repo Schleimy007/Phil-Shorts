@@ -20,6 +20,8 @@
 </head>
 
 <body>
+    <div id="mention-suggestions" class="mention-dropdown"></div>
+
     <div class="app">
         <div id="toast" class="toast">Nachricht hier</div>
 
@@ -59,14 +61,23 @@
             </div>
             <div class="trending-section" id="trending-tags">
                 <h4 style="padding: 15px; font-size: 14px; color: #888; text-transform: uppercase;">Angesagte Hashtags</h4>
-                <div class="trend-item" onclick="document.getElementById('search-input').value='brainrot'; document.getElementById('search-input').dispatchEvent(new Event('input'));">
+                <div class="trend-item" onclick="openHashtag('brainrot')">
                     <div class="trend-icon"><i class="fas fa-fire"></i></div>
-                    <div class="trend-info"><strong>brainrot</strong>
+                    <div class="trend-info"><strong>#brainrot</strong>
                         <p>Trending in deiner Region</p>
                     </div>
                 </div>
             </div>
             <div id="search-results" style="display: none; padding-top: 10px; padding-bottom: 80px;"></div>
+        </div>
+
+        <div id="view-hashtag" class="view">
+            <div class="top-bar glass-nav">
+                <i class="fas fa-chevron-left back-btn" onclick="switchView('feed')"></i>
+                <h3 id="hashtag-title" style="font-weight: 600;">#hashtag</h3>
+                <i class="fas fa-hashtag back-btn" style="opacity: 0;"></i>
+            </div>
+            <div class="grid-container" id="hashtag-grid"></div>
         </div>
 
         <div id="view-inbox" class="view">
@@ -209,7 +220,7 @@
             </div>
             <div class="modal-body" id="comment-list"></div>
             <div class="modal-footer">
-                <input type="text" id="new-comment-input" placeholder="Sag etwas Nettes..." class="comment-input">
+                <input type="text" id="new-comment-input" placeholder="Sag etwas Nettes... (@mention)" class="comment-input">
                 <button id="submit-comment" class="comment-submit"><i class="fas fa-arrow-up"></i></button>
             </div>
         </div>
@@ -221,7 +232,7 @@
             <div class="modal-body upload-body">
                 <label style="color:#888; font-size:12px; margin-left:5px;">Titel & Beschreibung</label>
                 <input type="text" id="edit-video-title" class="comment-input" placeholder="Titel..." maxlength="60" style="border-radius:15px; margin-bottom:10px; width: 100%;">
-                <textarea id="edit-video-desc" class="comment-input" placeholder="Beschreibe dein Video..." rows="4" style="resize:none; border-radius:15px; width:100%;"></textarea>
+                <textarea id="edit-video-desc" class="comment-input" placeholder="Beschreibe dein Video... (@mention, #hashtag)" rows="4" style="resize:none; border-radius:15px; width:100%;"></textarea>
                 <button id="save-video-edit-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; min-height: 56px; font-size:16px;">Speichern</button>
             </div>
         </div>
@@ -307,7 +318,7 @@
 
                 <label style="color:#888; font-size:12px; margin-left:5px; margin-top:10px;">Titel & Beschreibung</label>
                 <input type="text" id="up-title" class="comment-input" placeholder="Titel des Posts" maxlength="60" style="border-radius:15px; margin-bottom:10px; width: 100%;">
-                <textarea id="up-desc" class="comment-input" placeholder="Beschreibe deinen Post... #hashtags" rows="3" style="resize:none; border-radius:15px; width:100%;"></textarea>
+                <textarea id="up-desc" class="comment-input" placeholder="Beschreibe deinen Post... (@mention, #hashtag)" rows="3" style="resize:none; border-radius:15px; width:100%;"></textarea>
 
                 <p id="upload-status" style="text-align: center; font-size: 14px; font-weight: bold; color: #ff0050;"></p>
                 <button id="submit-upload" class="profile-action-btn" style="width:100%; min-height: 56px; font-size:16px;">Veröffentlichen</button>
