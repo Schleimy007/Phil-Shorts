@@ -171,7 +171,8 @@ function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackV
         displayName: user ? user.displayName : fallbackName,
         username: user && user.username ? user.username : (user ? user.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase() : (fallbackUsername || fallbackName)),
         pic: user ? user.photoURL : fallbackPic,
-        verified: user ? (user.verified === true) : fallbackVerified
+        verified: user ? (user.verified === true) : fallbackVerified,
+        philPlusUntil: user ? user.philPlusUntil : 0
     };
 }
 
@@ -298,6 +299,14 @@ function checkPhilPlusStatus() {
     return currentUser.philPlusUntil && currentUser.philPlusUntil > Date.now();
 }
 
+function applyAppTheme(themeName) {
+    if (!themeName || themeName === 'default') {
+        document.body.className = '';
+    } else {
+        document.body.className = `theme-${themeName}`;
+    }
+}
+
 function initLiveUser() {
     if (!currentUser) return;
     if (userUnsubscribe) userUnsubscribe();
@@ -318,8 +327,17 @@ function initLiveUser() {
             if (!currentUser.following) currentUser.following = [];
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             if (!currentUser.decorations) currentUser.decorations = [];
+            if (!currentUser.appTheme) currentUser.appTheme = 'default';
 
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
+
+            // Apply Theme
+            if (checkPhilPlusStatus()) {
+                applyAppTheme(currentUser.appTheme);
+                document.getElementById('app-theme-select').value = currentUser.appTheme;
+            } else {
+                applyAppTheme('default');
+            }
 
             const coinEl = document.getElementById('my-coins');
             if (coinEl) coinEl.innerText = currentUser.coins;
@@ -407,7 +425,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
                 nameSnap = await getDocs(nameQuery);
             }
 
-            const newUser = { uid: uid, displayName: rawDisplayName, username: finalUser, email: email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0, isAdmin: false, banned: false, decorations: [], activeBorder: "", stories: [] };
+            const newUser = { uid: uid, displayName: rawDisplayName, username: finalUser, email: email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0, isAdmin: false, banned: false, decorations: [], activeBorder: "", stories: [], appTheme: 'default' };
             await setDoc(userRef, newUser);
             currentUser = newUser;
         } else {
@@ -445,6 +463,25 @@ window.onload = async function() {
         initInboxChats();
         initSearchUsers();
     }
+
+    // Setup Theme Event Listener
+    document.getElementById('app-theme-select').addEventListener('change', (e) => {
+        if (e.target.value !== 'default' && !checkPhilPlusStatus()) {
+            showCustomAlert("Premium Feature", "App Themes erfordern Phil Shorts+!");
+            e.target.value = 'default';
+            return;
+        }
+        applyAppTheme(e.target.value);
+        if (currentUser) {
+            updateDoc(doc(db, "users", currentUser.uid), { appTheme: e.target.value });
+        }
+    });
+
+    // GIF Button click
+    document.getElementById('btn-gif-comment').addEventListener('click', () => {
+        if (!checkPhilPlusStatus()) return showCustomAlert("Phil Shorts+", "GIFs in Kommentaren sind exklusiv für Phil Shorts+ Mitglieder!");
+        showCustomAlert("GIFs", "Das GIF-Menü öffnet sich hier. (UI Vorstufe)");
+    });
 };
 
 document.getElementById('logout-btn').addEventListener('click', () => {
@@ -468,6 +505,12 @@ function applyAlgorithm(videos, mode) {
             let gifts = v.gifts || 0;
             let engagementScore = (likes * 5) + (comments * 10) + (gifts * 20);
             let baseViralPower = Math.log(engagementScore + 1) * 30;
+
+            // PLUS BOOST
+            let authorData = allKnownUsers.find(u => u.uid === v.authorUid);
+            if (authorData && authorData.philPlusUntil && authorData.philPlusUntil > Date.now()) {
+                baseViralPower += 50;
+            }
 
             let affinityScore = 0;
             if (currentUser) {
@@ -619,6 +662,8 @@ function createVideoElement(video) {
     const authorData = getUserData(video.authorUid, video.authorName, video.authorUsername || video.authorName, video.authorPic, video.authorVerified);
     const verifiedBadge = getVerifiedBadge(authorData.verified);
 
+    let nameClass = authorData.philPlusUntil > Date.now() ? "name-phil-plus" : "";
+
     const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : '';
     const realLikes = video.likedBy ? video.likedBy.length : 0;
 
@@ -660,7 +705,7 @@ function createVideoElement(video) {
             
             <div class="video__footer">
                 <h3 class="creator-name" onclick="openProfile('${video.authorUid}')">
-                    <span class="live-name-${video.authorUid}">${authorData.displayName}${verifiedBadge}</span>
+                    <span class="live-name-${video.authorUid} ${nameClass}">${authorData.displayName}${verifiedBadge}</span>
                 </h3>
                 <p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p>
                 
@@ -779,7 +824,7 @@ const videoObserver = new IntersectionObserver(entries => {
     });
 }, { threshold: 0.4 });
 
-// --- GESCHENK SYSTEM (20+ Items) ---
+// --- GESCHENK SYSTEM (20 Items) ---
 const allGifts = [
     { id: 'g1', name: 'Rose', emoji: '🌹', price: 1 },
     { id: 'g2', name: 'Kaffee', emoji: '☕', price: 1 },
@@ -928,7 +973,6 @@ function attachInteractionsToVideo(videoContainerEl) {
         else { await updateDoc(doc(db, "videos", id), { likedBy: arrayUnion(currentUser.uid) }); if (targetVidData) addNotification(targetVidData.authorUid, "like", "hat dein Post geliket.", id); }
     });
 
-    // NEUER GIFT BUTTON AUFRUF
     container.querySelector('.gift-btn').addEventListener('click', (e) => {
         const id = e.currentTarget.dataset.id;
         openGiftModal(id);
@@ -1307,8 +1351,12 @@ window.openProfile = async function(targetUid) {
             settingsIcon.style.display = 'none';
         }
 
-        // STORIES ANZEIGEN (24h Filter)
-        profileUserStories = (targetUser.stories || []).filter(s => (Date.now() - s.timestamp) < 86400000);
+        // STORIES ANZEIGEN (24h Filter oder 48h für Phil Shorts+)
+        let storyDuration = 86400000; // 24 Stunden
+        if (targetUser.philPlusUntil && targetUser.philPlusUntil > Date.now()) {
+            storyDuration = 172800000; // 48 Stunden Boost
+        }
+        profileUserStories = (targetUser.stories || []).filter(s => (Date.now() - s.timestamp) < storyDuration);
         const picContainer = document.getElementById('profile-pic-container');
         const storyBadge = document.getElementById('story-badge');
 
@@ -1333,7 +1381,8 @@ const shopItems = [
     { id: 'b2', name: 'Neon', type: 'border', cost: 500, cssClass: 'neon' },
     { id: 'b3', name: 'Gold', type: 'border', cost: 1000, cssClass: 'gold' },
     { id: 'b4', name: '3663 Pro', type: 'border', cost: 2500, cssClass: '3663' },
-    { id: 'b5', name: 'Diamant', type: 'border', cost: 5000, cssClass: 'diamond' }
+    { id: 'b5', name: 'Diamant', type: 'border', cost: 5000, cssClass: 'diamond' },
+    { id: 'b6', name: 'RGB Chroma (Plus)', type: 'border', cost: 0, cssClass: 'chroma', requiresPlus: true }
 ];
 
 document.getElementById('profile-shop-btn').addEventListener('click', () => {
@@ -1357,13 +1406,20 @@ document.getElementById('close-shop-modal').addEventListener('click', () => docu
 function renderShopBorders() {
     const grid = document.getElementById('shop-borders-grid');
     grid.innerHTML = shopItems.filter(i => i.type === 'border').map(item => {
+        const hasPlus = checkPhilPlusStatus();
         const isOwned = currentUser.decorations && currentUser.decorations.includes(item.id) || item.cost === 0;
         const isEquipped = currentUser.activeBorder === item.cssClass;
         
         let btnHtml = '';
-        if(isEquipped) btnHtml = `<button class="profile-action-btn edit-btn" style="width:100%; font-size:12px; min-height:30px;">Ausgerüstet</button>`;
-        else if(isOwned) btnHtml = `<button class="profile-action-btn" onclick="equipDecoration('${item.id}', '${item.cssClass}')" style="width:100%; font-size:12px; min-height:30px; background:#00f2fe; color:black;">Ausrüsten</button>`;
-        else btnHtml = `<button class="profile-action-btn" onclick="buyDecoration('${item.id}', ${item.cost})" style="width:100%; font-size:12px; min-height:30px;"><i class="fas fa-coins"></i> ${item.cost}</button>`;
+        if(item.requiresPlus && !hasPlus) {
+            btnHtml = `<button class="profile-action-btn edit-btn" style="width:100%; font-size:12px; min-height:30px;">Phil Shorts+ benötigt</button>`;
+        } else if(isEquipped) {
+            btnHtml = `<button class="profile-action-btn edit-btn" style="width:100%; font-size:12px; min-height:30px;">Ausgerüstet</button>`;
+        } else if(isOwned) {
+            btnHtml = `<button class="profile-action-btn" onclick="equipDecoration('${item.id}', '${item.cssClass}')" style="width:100%; font-size:12px; min-height:30px; background:#00f2fe; color:black;">Ausrüsten</button>`;
+        } else {
+            btnHtml = `<button class="profile-action-btn" onclick="buyDecoration('${item.id}', ${item.cost})" style="width:100%; font-size:12px; min-height:30px;"><i class="fas fa-coins"></i> ${item.cost}</button>`;
+        }
 
         return `
         <div class="shop-item-card">
@@ -1426,6 +1482,7 @@ window.buyPhilPlus = async function(days, cost) {
             document.getElementById('my-coins').innerText = currentUser.coins;
             showToast(`Phil Shorts+ aktiviert! 🎉`);
             document.getElementById('shop-modal').classList.remove('show');
+            initLiveUser(); // reload features
         } catch(e) { showCustomAlert("Fehler", "Kauf fehlgeschlagen."); }
     }
 }
@@ -1539,7 +1596,21 @@ window.closeStoryViewer = function() {
     document.getElementById('story-viewer').classList.remove('show');
 }
 
-// Admin toggle functions and other existing functionality remaining identical ...
+// Support & Admin
+window.sendSupport = async function() {
+    const msg = document.getElementById('support-msg').value;
+    if(!msg || !currentUser) return;
+    await addDoc(collection(db, "reports"), {
+        uid: currentUser.uid,
+        name: currentUser.displayName,
+        msg: msg,
+        hasPlus: checkPhilPlusStatus(),
+        timestamp: Date.now()
+    });
+    showToast("Support-Anfrage gesendet!");
+    document.getElementById('support-msg').value = '';
+}
+
 window.toggleVerify = async function(targetUid, currentStatus) { try { await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus }); showToast(!currentStatus ? "Blauer Haken vergeben! 🔵" : "Blauer Haken entfernt."); } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); } };
 
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
@@ -1928,8 +1999,12 @@ async function renderAndUploadImages() {
 document.getElementById('submit-upload').addEventListener('click', async() => {
     const files = document.getElementById('up-file').files; const titleVal = document.getElementById('up-title').value.trim(); const desc = document.getElementById('up-desc').value.trim();
     if (!files || files.length === 0 || (!desc && !titleVal)) return showCustomAlert("Fehlende Daten", "Bitte wähle Dateien aus und schreibe einen Titel oder eine Beschreibung.");
+    
     let isVideo = files[0].type.startsWith('video/');
-    if (isVideo && files[0].size > 30 * 1024 * 1024) return showCustomAlert("Zu groß", "Videos dürfen maximal 30 MB groß sein!");
+    let maxSize = checkPhilPlusStatus() ? 100 * 1024 * 1024 : 30 * 1024 * 1024;
+    let limitText = checkPhilPlusStatus() ? "100" : "30";
+
+    if (isVideo && files[0].size > maxSize) return showCustomAlert("Zu groß", `Videos dürfen maximal ${limitText} MB groß sein!`);
 
     const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status');
     btn.disabled = true; status.innerText = "Wird gerendert und verarbeitet... Bitte warten!";
@@ -2016,31 +2091,5 @@ function initResponsiveLayout() {
         const videoContainer = document.getElementById('video-container'); if (videoContainer) videoObserver2.observe(videoContainer, { childList: true });
     }
 }
-
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
-            const videoFooter = infoPanel.querySelector('.video__footer'); const videoSidebar = infoPanel.querySelector('.video__sidebar');
-            if (videoFooter) inner.appendChild(videoFooter); if (videoSidebar) inner.appendChild(videoSidebar);
-            infoPanel.remove();
-
-    function checkResponsiveMode() {
-        const isPC = window.innerWidth > 768;
-        if (isPC && currentMode !== 'pc') {
-            currentMode = 'pc'; createPCContainers(); if (originalNav) pcSidebar.appendChild(originalNav);
-            document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC);
-        } else if (!isPC && currentMode !== 'handy') {
-            currentMode = 'handy'; if (originalNav) appContainer.appendChild(originalNav);
-            if (pcSidebar) { pcSidebar.remove(); pcSidebar = null; }
-            document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy);
-        }
-    }
-
-    checkResponsiveMode(); window.addEventListener('resize', checkResponsiveMode);
-
-    if (window.innerWidth > 768) {
-        const videoObserver2 = new MutationObserver(function(mutations) {
-            if (currentMode === 'pc') mutations.forEach(mutation => mutation.addedNodes.forEach(node => { if (node.classList && node.classList.contains('video')) restructureVideoForPC(node); }));
-        });
-        const videoContainer = document.getElementById('video-container'); if (videoContainer) videoObserver2.observe(videoContainer, { childList: true });
-    }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();

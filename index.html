@@ -149,7 +149,7 @@
                 <div id="admin-controls" style="width: 100%;"></div>
                 <button id="open-admin-dashboard" class="profile-action-btn" style="display:none; background:#ffd700; color:black; margin-top:10px; width:100%;">👑 Admin Dashboard</button>
 
-                <div id="private-stats" style="display: none; width: 100%; margin-top: 20px; background: #111; border-radius: 15px; padding: 15px; border: 1px solid #333;">
+                <div id="private-stats" style="display: none; width: 100%; margin-top: 20px; background: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 15px; border: 1px solid #333;">
                     <div style="display: flex; justify-content: space-around; text-align: center;">
                         <div>
                             <i class="fas fa-coins" style="color: #ffd700; font-size: 20px; margin-bottom: 5px;"></i>
@@ -217,7 +217,7 @@
                 <div style="font-size: 14px; color: #ffd700; font-weight: bold;"><i class="fas fa-coins"></i> <span id="gift-modal-coins">0</span></div>
                 <i class="fas fa-times close-modal" id="close-gift-modal"></i>
             </div>
-            <div class="modal-body" style="background: #0a0a0a;">
+            <div class="modal-body" style="background: rgba(0,0,0,0.5);">
                 <div class="gift-grid" id="gift-grid">
                 </div>
             </div>
@@ -234,7 +234,7 @@
                 <div class="shop-tab" data-tab="shop-stories">Stories</div>
                 <div class="shop-tab" data-tab="shop-plus">Phil Shorts+</div>
             </div>
-            <div class="modal-body" style="background: #0a0a0a; padding: 15px;">
+            <div class="modal-body" style="background: rgba(0,0,0,0.5); padding: 15px;">
 
                 <div id="shop-borders" class="shop-content-section active">
                     <h4 style="margin-bottom: 15px; color: #aaa; font-size: 14px; text-transform: uppercase;">Profilrahmen</h4>
@@ -254,7 +254,20 @@
                     <div class="phil-plus-banner">
                         <i class="fas fa-star"></i> Phil Shorts+
                     </div>
-                    <p style="color: #888; font-size: 13px; margin-bottom: 20px; text-align: center;">Schalte das exklusive Plus-Abzeichen frei, erhalte einen rot-blauen Namen in Kommentaren und unterstütze die App!</p>
+                    <p style="color: #888; font-size: 13px; margin-bottom: 10px; text-align: center;">Werde Legende und schalte alle Features frei!</p>
+
+                    <ul class="plus-features-list">
+                        <li><i class="fas fa-check"></i> Exklusives Stern-Badge</li>
+                        <li><i class="fas fa-check"></i> Rot/Blauer Gradient-Name</li>
+                        <li><i class="fas fa-check"></i> 100 MB Video-Upload (statt 30 MB)</li>
+                        <li><i class="fas fa-check"></i> Premium App-Themes (Deep Blue, Neon)</li>
+                        <li><i class="fas fa-check"></i> Exklusiver RGB Chroma Rahmen</li>
+                        <li><i class="fas fa-check"></i> GIFs in Kommentaren nutzen</li>
+                        <li><i class="fas fa-check"></i> 48h Stories (statt 24h)</li>
+                        <li><i class="fas fa-check"></i> 100% Werbefrei</li>
+                        <li><i class="fas fa-check"></i> Priorisierter Feed (Boost Algorithmus)</li>
+                        <li><i class="fas fa-check"></i> Priority VIP Support</li>
+                    </ul>
 
                     <div class="plus-plan-card" onclick="buyPhilPlus(5, 10000)">
                         <div>
@@ -275,7 +288,7 @@
 
                     <div class="plus-plan-card" onclick="buyPhilPlus(30, 50000)">
                         <div>
-                            <h4>30 Tage Pass</h4>
+                            <h4>1 Monat Pass</h4>
                             <p>Für wahre Legenden</p>
                         </div>
                         <div class="plus-price"><i class="fas fa-coins"></i> 50.000</div>
@@ -342,6 +355,7 @@
             <div class="modal-body" id="comment-list"></div>
             <div class="modal-footer">
                 <input type="text" id="new-comment-input" placeholder="Sag etwas Nettes... (@mention)" class="comment-input">
+                <button id="btn-gif-comment" class="comment-submit" style="background:#333; margin-right:5px; color: #fff;"><i class="fas fa-image"></i></button>
                 <button id="submit-comment" class="comment-submit"><i class="fas fa-arrow-up"></i></button>
             </div>
         </div>
@@ -371,7 +385,7 @@
                     </div>
                 </div>
 
-                <div id="trimmer-ui" style="display:none; background:#1a1a1a; padding:15px; border-radius:15px; border:1px solid #333;">
+                <div id="trimmer-ui" style="display:none; background: rgba(255, 255, 255, 0.05); padding:15px; border-radius:15px; border:1px solid #333;">
                     <label style="color:#888; font-size:12px; margin-bottom:10px; display:block;">Video zuschneiden</label>
                     <video id="trim-preview" style="width:100%; height:120px; object-fit:contain; background:#000; border-radius:10px; margin-bottom:10px;" muted playsinline></video>
                     <div style="display:flex; justify-content:space-between; font-size:12px; color:#aaa; margin-bottom:5px;">
@@ -382,7 +396,7 @@
                     <input type="range" id="trim-end" min="0" value="0" step="0.1" class="trim-slider slider-red" style="width:100%;">
                 </div>
 
-                <div id="image-advanced-editor" style="display:none; background:#1a1a1a; padding:10px; border-radius:15px; border:1px solid #333;">
+                <div id="image-advanced-editor" style="display:none; background: rgba(255, 255, 255, 0.05); padding:10px; border-radius:15px; border:1px solid #333;">
 
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                         <label style="color:#888; font-size:12px;">Bild Editor</label>
@@ -403,11 +417,11 @@
 
                     <button id="btn-add-text" class="profile-action-btn" style="width: 100%; background: white; color: black; margin-top: 10px; min-height: 40px;"><i class="fas fa-font"></i> Text hinzufügen</button>
 
-                    <div id="text-controls" style="display: none; margin-top: 15px; background: #222; padding: 15px; border-radius: 10px; border: 1px solid #444;">
-                        <input type="text" id="text-ctrl-input" class="comment-input" style="width: 100%; margin-bottom: 15px; background: #111;" placeholder="Textinhalt">
+                    <div id="text-controls" style="display: none; margin-top: 15px; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; border: 1px solid #444;">
+                        <input type="text" id="text-ctrl-input" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5);" placeholder="Textinhalt">
 
                         <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Schriftart</label>
-                        <select id="text-ctrl-font" class="comment-input" style="width: 100%; margin-bottom: 15px; background: #111; color: white; padding: 10px; border-radius: 10px; border: 1px solid #444; outline: none;">
+                        <select id="text-ctrl-font" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5); color: white; padding: 10px; border-radius: 10px; border: 1px solid #444; outline: none;">
                             <option value="Arial, sans-serif">Arial</option>
                             <option value="'Courier New', Courier, monospace">Courier</option>
                             <option value="'Times New Roman', Times, serif">Times New Roman</option>
@@ -427,20 +441,20 @@
                             <div class="color-dot" style="background: #39ff14;" data-color="#39ff14"></div>
                         </div>
 
-                        <label style="font-size: 11px; color: #888;">Größe (oder ziehe die Box-Ecken)</label>
+                        <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Größe</label>
                         <input type="range" id="text-ctrl-size" min="15" max="100" value="24" class="trim-slider slider-blue" style="width: 100%; margin-bottom: 15px;">
 
-                        <label style="font-size: 11px; color: #888;">Drehung</label>
+                        <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Rotation</label>
                         <input type="range" id="text-ctrl-rot" min="-180" max="180" value="0" class="trim-slider slider-red" style="width: 100%; margin-bottom: 15px;">
 
-                        <button id="btn-delete-text" class="profile-action-btn" style="width: 100%; background: transparent; color: #ff4444; border: 1px solid #ff4444; min-height: 36px; font-size: 14px;"><i class="fas fa-trash"></i> Text löschen</button>
+                        <button id="btn-delete-text" class="profile-action-btn" style="width: 100%; background: #ff4444; color: white; min-height: 40px;"><i class="fas fa-trash"></i> Text löschen</button>
                     </div>
+
                 </div>
 
-                <label style="color:#888; font-size:12px; margin-left:5px; margin-top:10px;">Titel & Beschreibung</label>
-                <input type="text" id="up-title" class="comment-input" placeholder="Titel des Posts" maxlength="60" style="border-radius:15px; margin-bottom:10px; width: 100%;">
-                <textarea id="up-desc" class="comment-input" placeholder="Beschreibe deinen Post... (@mention, #hashtag)" rows="3" style="resize:none; border-radius:15px; width:100%;"></textarea>
-
+                <hr style="border:0; border-top:1px solid #333; margin: 15px 0;">
+                <input type="text" id="up-title" class="comment-input" placeholder="Titel..." maxlength="60" style="border-radius:15px; margin-bottom:10px; width: 100%;">
+                <textarea id="up-desc" class="comment-input" placeholder="Beschreibe deinen Post... (@mention, #hashtag)" rows="4" style="resize:none; border-radius:15px; width:100%;"></textarea>
                 <p id="upload-status" style="text-align: center; font-size: 14px; font-weight: bold; color: #ff0050;"></p>
                 <button id="submit-upload" class="profile-action-btn" style="width:100%; min-height: 56px; font-size:16px;">Veröffentlichen</button>
             </div>
@@ -451,19 +465,15 @@
                 <h4>Profil bearbeiten</h4><i class="fas fa-times close-modal" id="close-settings"></i>
             </div>
             <div class="modal-body upload-body">
-                <label style="color:#888; font-size:12px; margin-left:5px;">Anzeigename (Leerzeichen & Großschrift erlaubt)</label>
-                <input type="text" id="edit-displayname-input" class="comment-input" placeholder="Dein Anzeigename" style="border-radius:10px; margin-bottom:10px;">
-
-                <label style="color:#888; font-size:12px; margin-left:5px;">Benutzername (@... einmalig, nur Kleinbuchstaben)</label>
-                <input type="text" id="edit-username-input" class="comment-input" placeholder="benutzername" style="border-radius:10px;">
-
-                <label style="color:#888; font-size:12px; margin-left:5px; margin-top:10px;">Profilbild (Bild-Link einfügen)</label>
-                <input type="url" id="edit-pic-input" class="comment-input" placeholder="https://..." style="border-radius:10px;">
-
-                <label style="color:#888; font-size:12px; margin-left:5px; margin-top:10px;">Deine Bio / Beschreibung</label>
-                <textarea id="edit-bio-input" class="comment-input" placeholder="Wer bist du?" rows="3" style="resize:none; border-radius:10px;"></textarea>
-
-                <button id="save-settings-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; min-height: 56px; font-size: 17px;">Profil Speichern</button>
+                <label style="color:#888; font-size:12px; margin-left:5px;">Profilbild URL</label>
+                <input type="text" id="edit-pic-input" class="comment-input" placeholder="https://..." style="border-radius:15px; margin-bottom:10px; width: 100%;">
+                <label style="color:#888; font-size:12px; margin-left:5px;">Anzeigename</label>
+                <input type="text" id="edit-displayname-input" class="comment-input" placeholder="Dein Name" maxlength="30" style="border-radius:15px; margin-bottom:10px; width: 100%;">
+                <label style="color:#888; font-size:12px; margin-left:5px;">Benutzername</label>
+                <input type="text" id="edit-username-input" class="comment-input" placeholder="benutzername" maxlength="20" style="border-radius:15px; margin-bottom:10px; width: 100%;">
+                <label style="color:#888; font-size:12px; margin-left:5px;">Bio</label>
+                <textarea id="edit-bio-input" class="comment-input" placeholder="Etwas über dich..." rows="4" style="resize:none; border-radius:15px; width:100%;"></textarea>
+                <button id="save-settings-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; min-height: 56px; font-size:16px;">Profil Speichern</button>
             </div>
         </div>
 
@@ -471,22 +481,29 @@
             <div class="modal-header">
                 <h4>Einstellungen</h4><i class="fas fa-times close-modal" id="close-app-settings"></i>
             </div>
-            <div class="modal-body upload-body">
+            <div class="modal-body">
+                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
+                    <h5 style="margin-bottom: 15px; color: #00f2fe;"><i class="fas fa-palette"></i> App Design (Phil Shorts+)</h5>
+                    <select id="app-theme-select" class="comment-input" style="width: 100%; background: #111; color: white;">
+                        <option value="default">Standard (Dunkel)</option>
+                        <option value="deep-blue">Deep Blue</option>
+                        <option value="neon-pink">Neon Pink</option>
+                    </select>
+                </div>
 
-                <h4 style="margin-bottom: 5px; font-size: 15px;">Desktop Benachrichtigungen</h4>
-                <p style="font-size: 12px; color: #888; margin-bottom: 15px;">Erhalte Push-Meldungen auf dem PC.</p>
-
-                <div class="setting-toggle-row">
-                    <span>Alle Desktop Benachrichtigungen</span>
+                <div class="setting-toggle-row" style="margin-bottom: 5px;">
+                    <span style="font-weight: bold; font-size: 16px;">Desktop Benachrichtigungen</span>
                     <label class="switch"><input type="checkbox" id="notif-master"><span class="slider round"></span></label>
                 </div>
+                <p style="font-size: 11px; color: #888; margin-bottom: 15px;">Erlaube Benachrichtigungen in deinem Browser, um nichts zu verpassen.</p>
+
                 <div id="notif-sub-settings" class="sub-settings-box">
                     <div class="setting-toggle-row">
                         <span>Kommentare</span>
                         <label class="switch"><input type="checkbox" id="notif-comments"><span class="slider round"></span></label>
                     </div>
                     <div class="setting-toggle-row">
-                        <span>Likes & Gifts</span>
+                        <span>Likes & Geschenke</span>
                         <label class="switch"><input type="checkbox" id="notif-likes"><span class="slider round"></span></label>
                     </div>
                     <div class="setting-toggle-row">
@@ -500,6 +517,12 @@
                 </div>
 
                 <hr style="border:0; border-top:1px solid #222; margin: 25px 0;">
+                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
+                    <h5 style="margin-bottom: 10px; color: #888;">Support / Hilfe</h5>
+                    <textarea id="support-msg" class="comment-input" placeholder="Wie können wir dir helfen?" rows="3" style="resize:none; width:100%; margin-bottom:10px;"></textarea>
+                    <button class="profile-action-btn edit-btn" onclick="sendSupport()" style="width:100%;">Nachricht senden</button>
+                </div>
+
                 <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050; min-height: 56px; font-size: 17px;">Abmelden / Account wechseln</button>
             </div>
         </div>
@@ -512,7 +535,6 @@
                 <button id="close-alert-btn" class="profile-action-btn" style="width:100%; margin-top:20px; min-height: 50px;">Okay</button>
             </div>
         </div>
-
     </div>
     <script type="module" src="script.js"></script>
 </body>
