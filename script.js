@@ -267,7 +267,6 @@ function initLiveUser() {
                 document.getElementById('app-theme-select').value = currentUser.appTheme;
             } else { applyAppTheme('default'); }
 
-            // JEDER Nutzer darf den Support-Reiter sehen (Admins alle Tickets, Nutzer die eigenen)
             const supportTab = document.getElementById('tab-support');
             if (supportTab) supportTab.style.display = 'block';
             if (window.initSupportTickets) window.initSupportTickets();
@@ -617,7 +616,7 @@ window.sendSpecificGift = async function(giftId, price, emoji, name) {
     document.querySelectorAll(`.gift-btn[data-id="${window.currentGiftVideoId}"] .gift-count`).forEach(el => { let currentGifts = Number(el.innerText) || 0; el.innerText = currentGifts + price; });
     const anim = document.getElementById(`gift-anim-${window.currentGiftVideoId}`); if(anim) { anim.innerHTML = `${emoji}<span class="gift-animation-name">${name}</span>`; anim.style.animation = 'none'; void anim.offsetWidth; anim.style.animation = 'flyUpGift 2s ease-out forwards'; }
     showToast(`${name} gesendet! 🎁`);
-    try { await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-price) }); await updateDoc(doc(db, "videos", window.currentGiftVideoId), { gifts: increment(price) }); await updateDoc(doc(db, "users", targetVidData.authorUid), { coins: increment(price) }); addNotification(targetVidData.authorUid, "gift", `hat dir ein ${name} ${emoji} gesendet!`, window.currentGiftVideoId); } catch (err) { showCustomAlert("Netzwerkfehler", "Geschenk konnte im Hintergrund nicht verarbeitet werden."); }
+    try { await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-price) }); await updateDoc(doc(db, "videos", window.currentGiftVideoId), { gifts: increment(price) }); await updateDoc(doc(db, "users", targetVidData.authorUid), { coins: increment(price) }); addNotification(targetVidData.authorUid, "gift", `hat dir ein ${name} ${emoji} gesendet!`, window.currentGiftVideoId); } catch (err) { console.error(err); showCustomAlert("Netzwerkfehler", "Geschenk konnte im Hintergrund nicht verarbeitet werden."); }
 };
 
 function attachInteractionsToVideo(videoContainerEl) {
@@ -930,13 +929,15 @@ window.initSupportTickets = function() {
     });
 }
 
-let currentTicketSnapshot = null; window.currentActiveTicketId = null;
+let currentTicketSnapshot = null; let currentTicketMetaSnapshot = null; window.currentActiveTicketId = null;
+
 window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
     if (!currentUser) return; window.currentActiveTicketId = ticketId; document.getElementById('ticket-title').innerText = "Ticket: @" + username; switchView('ticket');
     const ticketBox = document.getElementById('ticket-box'); ticketBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
     const isAdmin = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
-    if(isAdmin) { document.getElementById('admin-close-ticket-btn').style.display = 'block'; } else { document.getElementById('admin-close-ticket-btn').style.display = 'none'; }
+    
     if (currentTicketSnapshot) currentTicketSnapshot();
+    if (currentTicketMetaSnapshot) currentTicketMetaSnapshot();
     
     currentTicketSnapshot = onSnapshot(query(collection(db, `reports/${ticketId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
         ticketBox.innerHTML = '';
@@ -958,17 +959,43 @@ window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
         }
         ticketBox.scrollTop = ticketBox.scrollHeight;
     });
-    const tRef = doc(db, "reports", ticketId); const tSnap = await getDoc(tRef);
-    if(tSnap.exists()) {
-        const tData = tSnap.data(); const statEl = document.getElementById('ticket-status');
-        if(tData.status === 'closed') { statEl.innerText = "Geschlossen"; statEl.style.background = "#ff4444"; document.getElementById('ticket-input-area').style.display = 'none'; document.getElementById('admin-close-ticket-btn').style.display = 'none'; } 
-        else { statEl.innerText = "Offen"; statEl.style.background = "#39ff14"; statEl.style.color = "black"; document.getElementById('ticket-input-area').style.display = 'flex'; }
-    }
+
+    // NEU: Live-Status Listener für das Ticket (Reagiert sofort auf Schließen)
+    currentTicketMetaSnapshot = onSnapshot(doc(db, "reports", ticketId), (docSnap) => {
+        if(docSnap.exists()) {
+            const tData = docSnap.data(); 
+            const statEl = document.getElementById('ticket-status');
+            if(tData.status === 'closed') { 
+                statEl.innerText = "Geschlossen"; 
+                statEl.style.background = "#ff4444"; 
+                document.getElementById('ticket-input-area').style.display = 'none'; 
+                document.getElementById('admin-close-ticket-btn').style.display = 'none'; 
+            } else { 
+                statEl.innerText = "Offen"; 
+                statEl.style.background = "#39ff14"; 
+                statEl.style.color = "black"; 
+                document.getElementById('ticket-input-area').style.display = 'flex'; 
+                if(isAdmin) document.getElementById('admin-close-ticket-btn').style.display = 'block'; 
+                else document.getElementById('admin-close-ticket-btn').style.display = 'none';
+            }
+        } else {
+            // Falls das Ticket aus der DB gelöscht wird, gehe zurück
+            switchView('inbox');
+            document.getElementById('tab-support').click();
+        }
+    });
 };
 
 document.getElementById('send-ticket-btn').addEventListener('click', async() => { const input = document.getElementById('ticket-input'); const text = input.value.trim(); if (!text || !window.currentActiveTicketId || !currentUser) return; input.value = ''; await addDoc(collection(db, `reports/${window.currentActiveTicketId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); });
 document.getElementById('ticket-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-ticket-btn').click(); });
-document.getElementById('admin-close-ticket-btn').addEventListener('click', async() => { if(!window.currentActiveTicketId) return; if(confirm("Support Ticket schließen? (Nutzer kann nicht mehr antworten)")) { await updateDoc(doc(db, "reports", window.currentActiveTicketId), { status: 'closed' }); showToast("Ticket geschlossen."); switchView('inbox'); document.getElementById('tab-support').click(); } });
+
+document.getElementById('admin-close-ticket-btn').addEventListener('click', async() => { 
+    if(!window.currentActiveTicketId) return; 
+    if(confirm("Support Ticket schließen? (Nutzer kann nicht mehr antworten)")) { 
+        await updateDoc(doc(db, "reports", window.currentActiveTicketId), { status: 'closed' }); 
+        showToast("Ticket geschlossen."); 
+    } 
+});
 
 let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
 window.openDM = async function(targetUid, targetName, targetPic) {
