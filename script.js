@@ -923,11 +923,49 @@ window.initSupportTickets = function() {
             const uData = getUserData(ticket.uid, ticket.name, ticket.name, 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback', false);
             const safeName = uData.username.replace(/'/g, "\\'");
             
-            supportBox.innerHTML += `<div class="support-ticket ${isVip}" onclick="openTicketChat('${ticketId}', '${safeName}', '${ticket.uid}')" style="cursor:pointer;"><div style="display:flex; justify-content:space-between; margin-bottom:10px; align-items:center;"><strong style="color:white; font-size:14px;">@${uData.username} ${vipBadge}</strong><span style="color:#888; font-size:11px;">${timeAgo(ticket.timestamp)}</span></div><div style="font-size:12px; color:#aaa; margin-bottom:5px;"><i class="fas fa-ticket-alt"></i> Ticket Status: <span style="color:${ticket.status === 'closed' ? '#ff4444' : '#39ff14'}; font-weight:bold;">${ticket.status === 'closed' ? 'Geschlossen' : 'Offen'}</span></div><p style="font-size:14px; color:#ddd; background:rgba(0,0,0,0.3); padding:10px; border-radius:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Klicken um Chat zu öffnen</p></div>`;
+            // Buttons für Admin in der Ticket-Übersicht
+            let adminButtons = '';
+            if (isAdmin) {
+                if (ticket.status === 'closed') {
+                    adminButtons = `<button class="profile-action-btn edit-btn" onclick="deleteTicket(event, '${ticketId}')" style="min-height:26px; font-size:11px; background:transparent; border:1px solid #ff4444; color:#ff4444; padding:0 8px;"><i class="fas fa-trash"></i> Löschen</button>`;
+                } else {
+                    adminButtons = `<button class="profile-action-btn edit-btn" onclick="resolveTicket(event, '${ticketId}')" style="min-height:26px; font-size:11px; background:transparent; border:1px solid #ffd700; color:#ffd700; padding:0 8px;"><i class="fas fa-lock"></i> Schließen</button>`;
+                }
+            }
+
+            supportBox.innerHTML += `
+            <div class="support-ticket ${isVip}" onclick="openTicketChat('${ticketId}', '${safeName}', '${ticket.uid}')" style="cursor:pointer; display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong style="color:white; font-size:14px;">@${uData.username} ${vipBadge}</strong>
+                    <span style="color:#888; font-size:11px;">${timeAgo(ticket.timestamp)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-size:12px; color:#aaa;"><i class="fas fa-ticket-alt"></i> Status: <span style="color:${ticket.status === 'closed' ? '#ff4444' : '#39ff14'}; font-weight:bold;">${ticket.status === 'closed' ? 'Geschlossen' : 'Offen'}</span></div>
+                    ${adminButtons}
+                </div>
+                <p style="font-size:14px; color:#ddd; background:rgba(0,0,0,0.3); padding:10px; border-radius:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Klicken um Chat zu öffnen</p>
+            </div>`;
         });
         if (!foundAny) { supportBox.innerHTML = '<div class="empty-state" style="height:100%;"><i class="fas fa-check-circle" style="color:#00f2fe; font-size:40px; margin-bottom:10px;"></i><p>Keine Support-Tickets gefunden!</p></div>'; }
     });
 }
+
+// Funktionen zum schnellen Schließen / Löschen aus der Übersicht
+window.resolveTicket = async function(event, ticketId) {
+    event.stopPropagation();
+    if(confirm("Ticket als erledigt markieren und schließen?")) {
+        try { await updateDoc(doc(db, "reports", ticketId), { status: 'closed' }); showToast("Ticket geschlossen."); } 
+        catch(e) { showCustomAlert("Fehler", "Konnte nicht geschlossen werden."); }
+    }
+};
+
+window.deleteTicket = async function(event, ticketId) {
+    event.stopPropagation();
+    if(confirm("Ticket endgültig löschen?")) {
+        try { await deleteDoc(doc(db, "reports", ticketId)); showToast("Ticket gelöscht."); } 
+        catch(e) { showCustomAlert("Fehler", "Konnte nicht gelöscht werden."); }
+    }
+};
 
 let currentTicketSnapshot = null; let currentTicketMetaSnapshot = null; window.currentActiveTicketId = null;
 
@@ -960,7 +998,7 @@ window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
         ticketBox.scrollTop = ticketBox.scrollHeight;
     });
 
-    // NEU: Live-Status Listener für das Ticket (Reagiert sofort auf Schließen)
+    // NEU: Live-Status Listener für das Ticket (Reagiert sofort auf Schließen durch den Admin)
     currentTicketMetaSnapshot = onSnapshot(doc(db, "reports", ticketId), (docSnap) => {
         if(docSnap.exists()) {
             const tData = docSnap.data(); 
@@ -968,6 +1006,7 @@ window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
             if(tData.status === 'closed') { 
                 statEl.innerText = "Geschlossen"; 
                 statEl.style.background = "#ff4444"; 
+                statEl.style.color = "white";
                 document.getElementById('ticket-input-area').style.display = 'none'; 
                 document.getElementById('admin-close-ticket-btn').style.display = 'none'; 
             } else { 
@@ -979,9 +1018,11 @@ window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
                 else document.getElementById('admin-close-ticket-btn').style.display = 'none';
             }
         } else {
-            // Falls das Ticket aus der DB gelöscht wird, gehe zurück
-            switchView('inbox');
-            document.getElementById('tab-support').click();
+            // Falls das Ticket gelöscht wurde
+            document.getElementById('ticket-status').innerText = "Gelöscht";
+            document.getElementById('ticket-status').style.background = "#ff4444";
+            document.getElementById('ticket-input-area').style.display = 'none';
+            document.getElementById('admin-close-ticket-btn').style.display = 'none'; 
         }
     });
 };
@@ -989,13 +1030,14 @@ window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
 document.getElementById('send-ticket-btn').addEventListener('click', async() => { const input = document.getElementById('ticket-input'); const text = input.value.trim(); if (!text || !window.currentActiveTicketId || !currentUser) return; input.value = ''; await addDoc(collection(db, `reports/${window.currentActiveTicketId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); });
 document.getElementById('ticket-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-ticket-btn').click(); });
 
-document.getElementById('admin-close-ticket-btn').addEventListener('click', async() => { 
-    if(!window.currentActiveTicketId) return; 
-    if(confirm("Support Ticket schließen? (Nutzer kann nicht mehr antworten)")) { 
-        await updateDoc(doc(db, "reports", window.currentActiveTicketId), { status: 'closed' }); 
-        showToast("Ticket geschlossen."); 
-    } 
+document.getElementById('admin-close-ticket-btn').addEventListener('click', async() => {
+    if(!window.currentActiveTicketId) return;
+    if(confirm("Support Ticket schließen? (Nutzer kann nicht mehr antworten)")) {
+        await updateDoc(doc(db, "reports", window.currentActiveTicketId), { status: 'closed' });
+        showToast("Ticket geschlossen.");
+    }
 });
+
 
 let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
 window.openDM = async function(targetUid, targetName, targetPic) {
