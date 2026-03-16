@@ -511,17 +511,6 @@ body.theme-neon-pink .glass-nav-bottom {
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
 }
 
-.app-logo {
-    width: 75px;
-    height: 75px;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin: 0 auto 20px;
-    object-fit: cover;
-}
-
 .alert-modal-overlay {
     position: absolute;
     top: 0;
@@ -1898,9 +1887,9 @@ body.theme-neon-pink .glass-nav-bottom {
         color: #fff;
         margin-bottom: 20px;
     }
-    .logo-area .app-logo {
-        width: 60px;
-        height: 60px;
+    .logo-area .logo-pulse {
+        width: 40px;
+        height: 40px;
         font-size: 16px;
         margin: 0;
     }
@@ -2314,7 +2303,7 @@ input:checked+.slider:before {
 }
 
 .mention,
-\r .hashtag {
+.hashtag {
     color: #3ea6ff;
     cursor: pointer;
     text-decoration: none;
