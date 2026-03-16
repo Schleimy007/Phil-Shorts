@@ -25,6 +25,11 @@ if (currentUser) currentUser.verified = false;
 
 let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || { master: false, comments: true, likes: true, dms: true, follows: true };
 
+// --- NEUE LOKALE SPEICHER FÜR FEATURES ---
+let savedVideos = JSON.parse(localStorage.getItem('phil_saved_videos')) || [];
+let watchHistory = JSON.parse(localStorage.getItem('phil_watch_history')) || [];
+let videoDrafts = JSON.parse(localStorage.getItem('phil_drafts')) || [];
+
 window.sendDesktopNotification = function(title, body, type) {
     if (!("Notification" in window) || !notifSettings.master || Notification.permission !== "granted") return;
     if (type === 'comment' && !notifSettings.comments) return;
@@ -170,6 +175,7 @@ window.openProfileByUsername = function(username, event) {
     if (user) openProfile(user.uid);
     else showToast("Nutzer @" + username + " nicht gefunden!");
 };
+
 window.openHashtag = function(tag, event) {
     if (event) event.stopPropagation();
     switchView('hashtag');
@@ -297,6 +303,10 @@ function initSearchUsers() {
     onSnapshot(collection(db, "users"), (snapshot) => {
         allKnownUsers = [];
         snapshot.forEach(doc => allKnownUsers.push(doc.data()));
+
+        // Leaderboard Update
+        if (window.updateLeaderboard) window.updateLeaderboard();
+
         allKnownUsers.forEach(u => {
             const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
             const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
@@ -399,7 +409,14 @@ async function addNotification(targetUid, type, text, videoId = null) {
 }
 
 function applyAlgorithm(videos, mode) {
-    if (mode === 'following') { let followedVids = videos.filter(v => currentUser && currentUser.following && currentUser.following.includes(v.authorUid)); return followedVids.sort(() => Math.random() - 0.5); } else {
+    if (mode === 'following') {
+        let followedVids = videos.filter(v => currentUser && currentUser.following && currentUser.following.includes(v.authorUid));
+        return followedVids.sort(() => Math.random() - 0.5);
+    } else if (mode !== 'foryou') {
+        // Erweiterter Algorithmus für Kategorien (Trending, Gaming, Music, Memes)
+        let filtered = videos.filter(v => (v.description || "").toLowerCase().includes('#' + mode));
+        return filtered.sort(() => Math.random() - 0.5);
+    } else {
         let scoredVids = videos.map(v => {
             let likes = v.likedBy ? v.likedBy.length : 0;
             let comments = v.comments ? v.comments.length : 0;
@@ -471,7 +488,7 @@ function initLiveDatabase() {
                 }
                 if (change.type === "removed") { const vidEl = document.querySelector(`.video[data-id="${vData.id}"]`); if (vidEl) vidEl.remove(); }
             });
-            if (document.getElementById('view-profile').classList.contains('active')) { const currentProfileUid = document.getElementById('profile-action-btn').dataset.uid; if (currentProfileUid) window.renderProfileGrid(currentProfileUid); }
+            if (document.getElementById('view-profile').classList.contains('active')) { const currentProfileUid = document.getElementById('profile-action-btn').dataset.uid; if (currentProfileUid) window.renderProfileGrid(currentProfileUid, 'videos'); }
         }
     }, (error) => { document.getElementById('video-container').innerHTML = '<div class="empty-state"><h3>Netzwerkfehler</h3></div>'; });
 }
@@ -482,7 +499,7 @@ function renderFeed(reset = false) {
         container.innerHTML = '';
         sortedFeed = applyAlgorithm(allVideosData, currentFeedMode);
         if (sortedFeed.length === 0) {
-            const emptyTxt = currentFeedMode === 'following' ? 'Folge Creatorn' : 'Feed ist leer';
+            const emptyTxt = currentFeedMode === 'following' ? 'Folge Creatorn' : 'Keine Videos in dieser Kategorie';
             const emptyIco = currentFeedMode === 'following' ? 'fa-user-plus' : 'fa-video-slash';
             container.innerHTML = `<div class="empty-state"><i class="fas ${emptyIco}"></i><h3>${emptyTxt}</h3></div>`;
             return;
@@ -548,6 +565,17 @@ function createVideoElement(video) {
     const deleteVideoBtn = canDeleteVideo ? `<div class="videoSidebar__button" onclick="deleteVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-trash" style="color: #ff4444; font-size:24px;"></i></div>` : '';
     const editVideoBtn = isMe ? `<div class="videoSidebar__button" onclick="openEditVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-pen" style="font-size:24px;"></i></div>` : '';
 
+    // Saved & Repost State Mocks / Logic
+    const isSaved = savedVideos.includes(video.id) ? 'saved' : '';
+    const isLiveMock = Math.random() > 0.95; // Demo purposes
+    const isRepostMock = Math.random() > 0.95; // Demo purposes
+
+    let specialBadges = '';
+    if (isLiveMock) specialBadges += `<div class="live-badge"><i class="fas fa-broadcast-tower"></i> LIVE</div>`;
+    if (isRepostMock) specialBadges += `<div class="repost-label"><i class="fas fa-retweet"></i> Reposted by @community</div>`;
+
+    const soundHTML = `<div class="sound-marquee-container"><i class="fas fa-compact-disc"></i><marquee scrollamount="3">Original Sound - ${authorData.displayName}</marquee></div>`;
+
     const mutedAttr = window.globalMuted ? 'muted' : '';
     let mediaHTML = '';
     let muteUIHtml = '';
@@ -561,9 +589,53 @@ function createVideoElement(video) {
     }
     let rawPreview = (video.description || "").substring(0, 50); let previewHtml = formatText(rawPreview); if ((video.description && video.description.length > 50)) previewHtml += '... <strong>mehr anzeigen</strong>';
 
-    div.innerHTML = `<div class="video-inner is-paused"><div class="video-wrapper">${mediaHTML}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div><div class="video__footer"><h3 class="creator-name" onclick="openProfile('${video.authorUid}')"><span class="live-name-${video.authorUid} ${nameClass}">${authorData.displayName}${verifiedBadge}</span></h3><p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p><h4 class="video-title" onclick="openVideoDetails('${video.id}')">${video.title || 'Ohne Titel'}</h4><p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${previewHtml}</p></div><div class="video__sidebar"><div class="sidebar__profile" onclick="openProfile('${video.authorUid}')"><img src="${authorData.pic}" class="live-pic-${video.authorUid}" alt="Profil">${plusButton}</div><div class="videoSidebar__button like-btn ${hasLiked}" data-id="${video.id}"><i class="fas fa-heart"></i><p class="like-count">${realLikes}</p></div><div class="videoSidebar__button comment-btn" data-id="${video.id}"><i class="fas fa-comment-dots"></i><p class="comment-count-txt">${commentCount}</p></div><div class="videoSidebar__button gift-btn" data-id="${video.id}"><i class="fas fa-gift" style="color: #ffd700;"></i><p class="gift-count">${video.gifts || 0}</p></div><div class="videoSidebar__button share-btn" data-id="${video.id}"><i class="fas fa-share"></i><p>Teilen</p></div>${editVideoBtn}${deleteVideoBtn}</div></div>`;
+    div.innerHTML = `
+        <div class="video-inner is-paused">
+            <div class="video-wrapper">
+                ${specialBadges}
+                ${mediaHTML}
+                ${muteUIHtml}
+                <div class="like-animation"><i class="fas fa-heart"></i></div>
+                <div class="gift-animation" id="gift-anim-${video.id}"></div>
+            </div>
+            <div class="video__footer">
+                <h3 class="creator-name" onclick="openProfile('${video.authorUid}')"><span class="live-name-${video.authorUid} ${nameClass}">${authorData.displayName}${verifiedBadge}</span></h3>
+                <p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p>
+                <h4 class="video-title" onclick="openVideoDetails('${video.id}')">${video.title || 'Ohne Titel'}</h4>
+                <p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${previewHtml}</p>
+                ${soundHTML}
+            </div>
+            <div class="video__sidebar">
+                <div class="sidebar__profile" onclick="openProfile('${video.authorUid}')"><img src="${authorData.pic}" class="live-pic-${video.authorUid}" alt="Profil">${plusButton}</div>
+                <div class="videoSidebar__button like-btn ${hasLiked}" data-id="${video.id}"><i class="fas fa-heart"></i><p class="like-count">${realLikes}</p></div>
+                <div class="videoSidebar__button comment-btn" data-id="${video.id}"><i class="fas fa-comment-dots"></i><p class="comment-count-txt">${commentCount}</p></div>
+                <div class="videoSidebar__button save-btn ${isSaved}" onclick="toggleSave('${video.id}', this)"><i class="fas fa-bookmark"></i><p>Save</p></div>
+                <div class="videoSidebar__button gift-btn" data-id="${video.id}"><i class="fas fa-gift" style="color: #ffd700;"></i><p class="gift-count">${video.gifts || 0}</p></div>
+                <div class="videoSidebar__button share-btn" data-id="${video.id}"><i class="fas fa-share"></i><p>Teilen</p></div>
+                <div class="videoSidebar__button repost-btn" onclick="repostVideo('${video.id}')"><i class="fas fa-retweet"></i><p>Repost</p></div>
+                ${editVideoBtn}
+                ${deleteVideoBtn}
+            </div>
+        </div>`;
     attachInteractionsToVideo(div); return div;
 }
+
+// Toggle Save Feature
+window.toggleSave = function(id, btnEl) {
+    if(savedVideos.includes(id)) { 
+        savedVideos = savedVideos.filter(v => v !== id); 
+        btnEl.classList.remove('saved'); 
+        showToast("Aus Favoriten entfernt"); 
+    } else { 
+        savedVideos.push(id); 
+        btnEl.classList.add('saved'); 
+        showToast("In Favoriten gespeichert!"); 
+    }
+    localStorage.setItem('phil_saved_videos', JSON.stringify(savedVideos));
+}
+
+// Repost Feature Mock
+window.repostVideo = function(id) { showToast("Video erfolgreich reposten! 🔄"); }
 
 window.openVideoDetails = function(id) {
     const video = allVideosData.find(v => v.id === id); if (!video) return;
@@ -575,8 +647,16 @@ window.openEditVideo = function(videoId) { const video = allVideosData.find(v =>
 document.getElementById('save-video-edit-btn').addEventListener('click', async() => { const newTitle = document.getElementById('edit-video-title').value.trim(); const newDesc = document.getElementById('edit-video-desc').value.trim(); if (!window.currentEditVideoId || (!newDesc && !newTitle)) return; try { document.getElementById('edit-video-modal').classList.remove('show'); showToast("Video aktualisiert!"); await updateDoc(doc(db, "videos", window.currentEditVideoId), { title: newTitle, description: newDesc }); } catch (e) { showCustomAlert("Fehler", "Konnte nicht gespeichert werden."); } });
 document.getElementById('close-edit-video').addEventListener('click', () => { document.getElementById('edit-video-modal').classList.remove('show'); });
 
-document.getElementById('tab-foryou').addEventListener('click', function() { document.getElementById('tab-following').classList.remove('active'); this.classList.add('active'); currentFeedMode = 'foryou'; renderFeed(true); });
-document.getElementById('tab-following').addEventListener('click', function() { document.getElementById('tab-foryou').classList.remove('active'); this.classList.add('active'); currentFeedMode = 'following'; renderFeed(true); });
+// Feed Tabs Handler Erweitert
+['foryou', 'following', 'trending', 'gaming', 'music', 'memes'].forEach(mode => {
+    const tab = document.getElementById(`tab-${mode}`);
+    if(tab) tab.addEventListener('click', function() {
+        document.querySelectorAll('.app__header .header__link').forEach(l => l.classList.remove('active'));
+        this.classList.add('active'); 
+        currentFeedMode = mode; 
+        renderFeed(true);
+    });
+});
 
 const videoContainer = document.getElementById('video-container');
 videoContainer.addEventListener('scroll', () => { if (videoContainer.scrollTop + videoContainer.clientHeight >= videoContainer.scrollHeight - 20) { setTimeout(() => { const vids = document.querySelectorAll('.video'); if (vids.length) vids[vids.length - 1].scrollIntoView({ behavior: 'smooth' }); }, 800); } });
@@ -594,6 +674,13 @@ const videoObserver = new IntersectionObserver(entries => {
         const el = e.target; const vidId = el.dataset.id;
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
             if (vidId && !viewedVideos.has(vidId)) { viewedVideos.add(vidId); updateDoc(doc(db, "videos", vidId), { views: increment(1) }).catch(() => {}); }
+            
+            // Watch History Array Update
+            if (vidId && !watchHistory.includes(vidId)) { 
+                watchHistory.unshift(vidId); 
+                localStorage.setItem('phil_watch_history', JSON.stringify(watchHistory.slice(0, 50))); 
+            }
+
             const videoPlayer = el.querySelector('.video__player');
             if (videoPlayer) { document.querySelectorAll('.video__player').forEach(otherVid => { if (otherVid !== videoPlayer && !otherVid.paused) { otherVid.pause(); otherVid.currentTime = 0; } }); videoPlayer.muted = window.globalMuted; const playPromise = videoPlayer.play(); if (playPromise !== undefined) { playPromise.catch(error => { videoPlayer.pause(); const container = videoPlayer.closest('.video-inner'); if(container) container.classList.add('is-paused'); }); } }
         } else { const videoPlayer = el.querySelector('.video__player'); if (videoPlayer) { videoPlayer.pause(); videoPlayer.currentTime = 0; } }
@@ -737,13 +824,67 @@ window.toggleFollow = async function(targetUid, element, event) {
     }
 };
 
-let currentProfileUnsubscribe = null; let profileUserStories = [];
-window.renderProfileGrid = function(targetUid) {
-    const grid = document.getElementById('profile-grid'); const userVideos = allVideosData.filter(v => v.authorUid === targetUid); grid.innerHTML = '';
-    if (userVideos.length === 0) { grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`; } 
-    else { userVideos.forEach(v => { const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`; const mediaTag = v.mediaType === 'images' ? `<img src="${previewSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<video src="${previewSrc}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`; const icon = v.mediaType === 'images' ? 'fa-images' : 'fa-play'; grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')">${mediaTag}<div class="grid-views"><i class="fas ${icon}"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`; }); }
+// Erweiterte Grid-Renderer (Videos, Saved, History)
+window.renderProfileGrid = function(targetUid, type) {
+    const grid = document.getElementById('profile-grid'); grid.innerHTML = '';
+    let vids = [];
+    if(type === 'videos') vids = allVideosData.filter(v => v.authorUid === targetUid);
+    else if(type === 'saved') vids = allVideosData.filter(v => savedVideos.includes(v.id));
+    
+    if (vids.length === 0) { grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`; } 
+    else { vids.forEach((v, i) => { 
+        let pinHTML = (type==='videos' && i < 2 && targetUid === v.authorUid) ? `<div class="pinned-badge"><i class="fas fa-thumbtack"></i></div>` : ''; 
+        const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`; const mediaTag = v.mediaType === 'images' ? `<img src="${previewSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<video src="${previewSrc}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`; const icon = v.mediaType === 'images' ? 'fa-images' : 'fa-play'; 
+        grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')">${pinHTML}${mediaTag}<div class="grid-views"><i class="fas ${icon}"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`; 
+    }); }
 }
 
+// Profil Tabs Handler
+document.getElementById('ptab-grid').addEventListener('click', e => { document.querySelectorAll('.profile-tab').forEach(t=>t.classList.remove('active')); e.currentTarget.classList.add('active'); renderProfileGrid(document.getElementById('profile-action-btn').dataset.uid, 'videos');});
+document.getElementById('ptab-saved').addEventListener('click', e => { document.querySelectorAll('.profile-tab').forEach(t=>t.classList.remove('active')); e.currentTarget.classList.add('active'); renderProfileGrid(document.getElementById('profile-action-btn').dataset.uid, 'saved');});
+
+// Watch History Renderer
+window.renderHistoryGrid = function() {
+    const grid = document.getElementById('history-grid'); grid.innerHTML = '';
+    const hVids = allVideosData.filter(v => watchHistory.includes(v.id));
+    if(hVids.length === 0) grid.innerHTML = '<div style="grid-column: span 3; text-align:center; color:#888; margin-top:20px;">Noch keine Videos gesehen</div>';
+    else hVids.forEach(v => { grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')"><video src="${v.url}#t=0.5" style="width:100%; height:100%; object-fit:cover;"></video></div>`; });
+}
+
+// Leaderboard Update
+window.updateLeaderboard = function() {
+    const lbContainer = document.getElementById('leaderboard-container'); if(!lbContainer) return;
+    let sortedUsers = [...allKnownUsers].sort((a,b) => (b.followers?b.followers.length:0) - (a.followers?a.followers.length:0)).slice(0, 20);
+    lbContainer.innerHTML = sortedUsers.map((u, i) => `
+        <div class="leaderboard-item" onclick="openProfile('${u.uid}')">
+            <div class="leaderboard-rank rank-${i+1}">${i+1}</div>
+            <img src="${u.photoURL}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;">
+            <div style="flex:1;"><strong>${u.displayName}</strong><p style="font-size:12px; color:#aaa;">@${u.username}</p></div>
+            <div style="color: #00f2fe; font-size: 14px; font-weight: bold;"><i class="fas fa-users"></i> ${u.followers ? u.followers.length : 0}</div>
+        </div>
+    `).join('');
+}
+
+// Analytics Loader
+window.loadAnalytics = function() {
+    if(!currentUser) return;
+    const myVids = allVideosData.filter(v => v.authorUid === currentUser.uid);
+    let totalViews = 0; let totalLikes = 0;
+    myVids.forEach(v => { totalViews += (v.views || Math.floor(Math.random()*1000)); totalLikes += (v.likedBy ? v.likedBy.length : 0); });
+    document.getElementById('an-views').innerText = totalViews;
+    document.getElementById('an-likes').innerText = totalLikes;
+    document.getElementById('an-followers').innerText = currentUser.followers ? currentUser.followers.length : 0;
+    document.getElementById('an-watch').innerText = (totalViews * 0.25).toFixed(0);
+}
+
+// Live Stream Mock Upload
+window.startLiveStreamMock = function() { showCustomAlert("LIVE", "Bereite Stream vor... Kamera wird verbunden."); }
+
+// Upload Draft
+document.getElementById('submit-draft').addEventListener('click', () => { showToast("Als Entwurf gespeichert! 📦"); document.getElementById('upload-modal').classList.remove('show'); });
+
+
+let currentProfileUnsubscribe = null; let profileUserStories = [];
 window.openProfile = async function(targetUid) {
     switchView('profile'); document.getElementById('profile-grid').innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
     if (currentProfileUnsubscribe) currentProfileUnsubscribe();
@@ -755,13 +896,31 @@ window.openProfile = async function(targetUid) {
         let nameClass = ""; if(targetUser.philPlusUntil && targetUser.philPlusUntil > Date.now()) { nameClass = "name-phil-plus"; document.getElementById('phil-plus-badge-container').style.display = 'block'; } else { document.getElementById('phil-plus-badge-container').style.display = 'none'; }
         document.getElementById('profile-title').innerHTML = '@' + cleanUsername; document.getElementById('profile-name').innerHTML = `<span class="${nameClass}">${targetUser.displayName}</span>${verifiedBadge}`; document.getElementById('profile-username').innerText = '@' + cleanUsername; document.getElementById('profile-bio').innerHTML = formatText(targetUser.bio || "Keine Bio vorhanden."); document.getElementById('profile-pic').src = targetUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'; document.getElementById('stat-likes').innerText = totalLikes; document.getElementById('stat-followers').innerText = realFollowersCount; document.getElementById('stat-following').innerText = targetUser.following ? targetUser.following.length : 0;
         updateProfileBorder(targetUser.activeBorder, 'profile-pic');
-        const actionBtn = document.getElementById('profile-action-btn'); const msgBtn = document.getElementById('profile-message-btn'); const shopBtn = document.getElementById('profile-shop-btn'); actionBtn.dataset.uid = targetUid; const settingsIcon = document.getElementById('open-settings'); const adminDashboardBtn = document.getElementById('open-admin-dashboard'); const privateStats = document.getElementById('private-stats'); const adminControls = document.getElementById('admin-controls'); adminControls.innerHTML = '';
+        const actionBtn = document.getElementById('profile-action-btn'); const msgBtn = document.getElementById('profile-message-btn'); const shopBtn = document.getElementById('profile-shop-btn'); const analyticsBtn = document.getElementById('profile-analytics-btn'); actionBtn.dataset.uid = targetUid; const settingsIcon = document.getElementById('open-settings'); const adminDashboardBtn = document.getElementById('open-admin-dashboard'); const privateStats = document.getElementById('private-stats'); const adminControls = document.getElementById('admin-controls'); adminControls.innerHTML = '';
+        
+        // Badges Rendern
+        let badgesHtml = `<div class="creator-badge"><i class="fas fa-video"></i> ${userVideos.length} Posts</div>`;
+        if(realFollowersCount >= 10) badgesHtml += `<div class="creator-badge"><i class="fas fa-users"></i> 10+ Fans</div>`;
+        if(level === "Pro") badgesHtml += `<div class="creator-badge" style="border-color:#ffd700;"><i class="fas fa-crown" style="color:#ffd700;"></i> Top Creator</div>`;
+        document.getElementById('profile-badges').innerHTML = badgesHtml;
+
         if (currentUser && (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) && targetUid !== currentUser.uid) { const isVerif = targetUser.verified || false; adminControls.innerHTML = `<button onclick="toggleVerify('${targetUid}', ${isVerif})" class="profile-action-btn" style="background: transparent; color: #00f2fe; border: 1px solid #00f2fe; margin-top: 15px; width: 100%;">👑 Admin: ${isVerif ? 'Blauen Haken entfernen' : 'Blauen Haken geben'}</button>`; }
-        if (currentUser && targetUid === currentUser.uid) { msgBtn.style.display = 'none'; shopBtn.style.display = 'block'; actionBtn.innerText = "Profil bearbeiten"; actionBtn.classList.add('edit-btn'); actionBtn.onclick = () => { document.getElementById('edit-displayname-input').value = currentUser.displayName; document.getElementById('edit-username-input').value = currentUser.username || cleanUsername; document.getElementById('edit-pic-input').value = currentUser.photoURL; document.getElementById('edit-bio-input').value = currentUser.bio; document.getElementById('settings-modal').classList.add('show'); }; settingsIcon.style.display = 'block'; settingsIcon.onclick = () => { updateNotifUI(); document.getElementById('app-settings-modal').classList.add('show'); }; adminDashboardBtn.style.display = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) ? 'block' : 'none'; privateStats.style.display = 'block'; document.getElementById('my-coins').innerText = targetUser.coins || 0; document.getElementById('my-views').innerText = targetUser.profileViews || 0; } 
-        else { adminDashboardBtn.style.display = 'none'; privateStats.style.display = 'none'; shopBtn.style.display = 'none'; if (currentUser) { msgBtn.style.display = 'block'; msgBtn.onclick = () => { window.openDM(targetUid, cleanUsername, targetUser.photoURL); }; } if (currentUser && currentUser.following && currentUser.following.includes(targetUid)) { actionBtn.innerText = "Entfolgen"; actionBtn.classList.add('edit-btn'); } else { actionBtn.innerText = "Folgen"; actionBtn.classList.remove('edit-btn'); } actionBtn.onclick = () => toggleFollow(targetUid); settingsIcon.style.display = 'none'; }
+        if (currentUser && targetUid === currentUser.uid) { 
+            msgBtn.style.display = 'none'; shopBtn.style.display = 'block'; analyticsBtn.style.display = 'block'; document.getElementById('ptab-saved').style.display = 'block';
+            actionBtn.innerText = "Profil bearbeiten"; actionBtn.classList.add('edit-btn'); actionBtn.onclick = () => { document.getElementById('edit-displayname-input').value = currentUser.displayName; document.getElementById('edit-username-input').value = currentUser.username || cleanUsername; document.getElementById('edit-pic-input').value = currentUser.photoURL; document.getElementById('edit-bio-input').value = currentUser.bio; document.getElementById('settings-modal').classList.add('show'); }; settingsIcon.style.display = 'block'; settingsIcon.onclick = () => { updateNotifUI(); document.getElementById('app-settings-modal').classList.add('show'); }; adminDashboardBtn.style.display = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) ? 'block' : 'none'; privateStats.style.display = 'block'; document.getElementById('my-coins').innerText = targetUser.coins || 0; document.getElementById('my-views').innerText = targetUser.profileViews || 0; 
+            document.getElementById('profile-streak').style.display = 'inline-flex'; document.getElementById('streak-count').innerText = Math.floor(Math.random() * 15) + 1; // Fake Streak
+        } 
+        else { 
+            adminDashboardBtn.style.display = 'none'; privateStats.style.display = 'none'; shopBtn.style.display = 'none'; analyticsBtn.style.display = 'none'; document.getElementById('ptab-saved').style.display = 'none'; document.getElementById('profile-streak').style.display = 'none';
+            if (currentUser) { msgBtn.style.display = 'block'; msgBtn.onclick = () => { window.openDM(targetUid, cleanUsername, targetUser.photoURL); }; } if (currentUser && currentUser.following && currentUser.following.includes(targetUid)) { actionBtn.innerText = "Entfolgen"; actionBtn.classList.add('edit-btn'); } else { actionBtn.innerText = "Folgen"; actionBtn.classList.remove('edit-btn'); } actionBtn.onclick = () => toggleFollow(targetUid); settingsIcon.style.display = 'none'; 
+        }
         let storyDuration = 86400000; if (targetUser.philPlusUntil && targetUser.philPlusUntil > Date.now()) { storyDuration = 172800000; } profileUserStories = (targetUser.stories || []).filter(s => (Date.now() - s.timestamp) < storyDuration); const picContainer = document.getElementById('profile-pic-container'); const storyBadge = document.getElementById('story-badge');
         if(profileUserStories.length > 0) { picContainer.classList.add('story-ring'); storyBadge.style.display = 'none'; } else { picContainer.classList.remove('story-ring'); if(currentUser && targetUid === currentUser.uid) storyBadge.style.display = 'flex'; else storyBadge.style.display = 'none'; }
-        window.renderProfileGrid(targetUid);
+        
+        // Tab reset and render
+        document.querySelectorAll('.profile-tab').forEach(t=>t.classList.remove('active'));
+        document.getElementById('ptab-grid').classList.add('active');
+        window.renderProfileGrid(targetUid, 'videos');
     });
     if (currentUser && targetUid !== currentUser.uid) { updateDoc(doc(db, "users", targetUid), { profileViews: increment(1) }).catch(e => {}); }
 };
@@ -1059,7 +1218,7 @@ window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
         ticketBox.scrollTop = ticketBox.scrollHeight;
     });
 
-    // NEU: Live-Status Listener für das Ticket (Reagiert sofort auf Schließen durch den Admin)
+    // Live-Status Listener für das Ticket (Reagiert sofort auf Schließen durch den Admin)
     currentTicketMetaSnapshot = onSnapshot(doc(db, "reports", ticketId), (docSnap) => {
         if(docSnap.exists()) {
             const tData = docSnap.data(); 
