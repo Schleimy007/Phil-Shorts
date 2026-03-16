@@ -150,7 +150,17 @@ document.getElementById('close-alert-btn').addEventListener('click', () => { doc
 
 function parseJwt(token) { var base64Url = token.split('.')[1]; var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); return JSON.parse(jsonPayload); }
 
-function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackVerified) { const user = allKnownUsers.find(u => u.uid === uid); return { displayName: user ? user.displayName : fallbackName, username: user && user.username ? user.username : (user ? user.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase() : (fallbackUsername || fallbackName)), pic: user ? user.photoURL : fallbackPic, verified: user ? (user.verified === true) : fallbackVerified, philPlusUntil: user ? user.philPlusUntil : 0 }; }
+function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackVerified) {
+    const user = allKnownUsers.find(u => u.uid === uid);
+    return {
+        displayName: user ? user.displayName : fallbackName,
+        username: user && user.username ? user.username : (user ? user.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase() : (fallbackUsername || fallbackName)),
+        pic: user ? user.photoURL : fallbackPic,
+        verified: user ? (user.verified === true) : fallbackVerified,
+        philPlusUntil: user ? user.philPlusUntil : 0,
+        philPlusTier: user ? user.philPlusTier : 0
+    };
+}
 
 function getVerifiedBadge(isVerif) { return isVerif ? '<i class="fas fa-check-circle verified-badge"></i>' : ''; }
 
@@ -237,7 +247,10 @@ document.addEventListener('click', (e) => { if (!e.target.closest('#mention-sugg
 
 let userUnsubscribe = null;
 
-function checkPhilPlusStatus() { if (!currentUser) return false; return currentUser.philPlusUntil && currentUser.philPlusUntil > Date.now(); }
+function checkPhilPlusStatus(requiredTier = 1) {
+    if (!currentUser) return false;
+    return currentUser.philPlusUntil && currentUser.philPlusUntil > Date.now() && (currentUser.philPlusTier || 1) >= requiredTier;
+}
 
 function applyAppTheme(themeName) { if (!themeName || themeName === 'default') { document.body.className = ''; } else { document.body.className = `theme-${themeName}`; } }
 
@@ -260,9 +273,31 @@ function initLiveUser() {
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             if (!currentUser.decorations) currentUser.decorations = [];
             if (!currentUser.appTheme) currentUser.appTheme = 'default';
+            if (!currentUser.philPlusTier) currentUser.philPlusTier = 0;
+
+            // Downgrade Check, falls das Abo abgelaufen ist oder die Stufe nicht mehr ausreicht
+            let needsUpdate = false;
+            if (!checkPhilPlusStatus(2)) {
+                if (currentUser.appTheme && currentUser.appTheme !== 'default') {
+                    currentUser.appTheme = 'default';
+                    needsUpdate = true;
+                }
+                if (currentUser.activeBorder === 'chroma') {
+                    currentUser.activeBorder = '';
+                    needsUpdate = true;
+                    document.querySelectorAll('.profile-image').forEach(el => el.classList.remove('border-chroma'));
+                }
+            }
+            if (needsUpdate) {
+                updateDoc(doc(db, "users", currentUser.uid), {
+                    appTheme: currentUser.appTheme,
+                    activeBorder: currentUser.activeBorder
+                });
+            }
+
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
-            if (checkPhilPlusStatus()) {
+            if (checkPhilPlusStatus(2)) {
                 applyAppTheme(currentUser.appTheme);
                 document.getElementById('app-theme-select').value = currentUser.appTheme;
             } else { applyAppTheme('default'); }
@@ -280,7 +315,15 @@ function initLiveUser() {
                 document.getElementById('stat-followers').innerText = currentUser.followers.length;
                 document.getElementById('stat-following').innerText = currentUser.following.length;
                 updateProfileBorder(currentUser.activeBorder, 'profile-pic');
-                if (checkPhilPlusStatus()) { document.getElementById('phil-plus-badge-container').style.display = 'block'; } else { document.getElementById('phil-plus-badge-container').style.display = 'none'; }
+                if (checkPhilPlusStatus(1)) {
+                    document.getElementById('phil-plus-badge-container').style.display = 'block';
+                    let tierText = "Phil Shorts+";
+                    if (currentUser.philPlusTier === 2) tierText = "Phil Shorts++";
+                    if (currentUser.philPlusTier === 3) tierText = "Phil Shorts+++";
+                    document.getElementById('phil-plus-badge-text').innerHTML = `<i class="fas fa-star"></i> ${tierText}`;
+                } else {
+                    document.getElementById('phil-plus-badge-container').style.display = 'none';
+                }
             }
         }
     });
@@ -301,7 +344,7 @@ function initSearchUsers() {
             const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : '';
             const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             let nameClass = "";
-            if (u.philPlusUntil && u.philPlusUntil > Date.now()) nameClass = "name-phil-plus";
+            if (u.philPlusUntil && u.philPlusUntil > Date.now() && (u.philPlusTier || 1) >= 1) nameClass = "name-phil-plus";
             document.querySelectorAll(`.live-name-${u.uid}`).forEach(el => {
                 el.innerHTML = u.displayName + isVerif;
                 if (nameClass) el.classList.add(nameClass);
@@ -340,7 +383,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
                 nameQuery = query(collection(db, "users"), where("username", "==", finalUser));
                 nameSnap = await getDocs(nameQuery);
             }
-            const newUser = { uid: uid, displayName: rawDisplayName, username: finalUser, email: email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0, isAdmin: false, banned: false, decorations: [], activeBorder: "", stories: [], appTheme: 'default' };
+            const newUser = { uid: uid, displayName: rawDisplayName, username: finalUser, email: email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0, isAdmin: false, banned: false, decorations: [], activeBorder: "", stories: [], appTheme: 'default', philPlusTier: 0 };
             await setDoc(userRef, newUser);
             currentUser = newUser;
         } else {
@@ -378,8 +421,8 @@ window.onload = async function() {
         initSearchUsers();
     }
     document.getElementById('app-theme-select').addEventListener('change', (e) => {
-        if (e.target.value !== 'default' && !checkPhilPlusStatus()) {
-            showCustomAlert("Premium Feature", "App Themes erfordern Phil Shorts+!");
+        if (e.target.value !== 'default' && !checkPhilPlusStatus(2)) {
+            showCustomAlert("Premium Feature", "App Themes erfordern mindestens Phil Shorts++!");
             e.target.value = 'default';
             return;
         }
@@ -407,7 +450,9 @@ function applyAlgorithm(videos, mode) {
             let engagementScore = (likes * 5) + (comments * 10) + (gifts * 20);
             let baseViralPower = Math.log(engagementScore + 1) * 30;
             let authorData = allKnownUsers.find(u => u.uid === v.authorUid);
-            if (authorData && authorData.philPlusUntil && authorData.philPlusUntil > Date.now()) baseViralPower += 50;
+            if (authorData && authorData.philPlusUntil && authorData.philPlusUntil > Date.now() && authorData.philPlusTier >= 2) {
+                baseViralPower += 50; // Boost für Tier 2 und 3
+            }
             let affinityScore = 0;
             if (currentUser) { if (currentUser.following && currentUser.following.includes(v.authorUid)) affinityScore += 30; if (v.likedBy && v.likedBy.includes(currentUser.uid)) affinityScore -= 40; if (v.authorUid === currentUser.uid) affinityScore -= 100; }
             return {...v, algoScore: baseViralPower + affinityScore + (Math.random() * 120) };
@@ -541,7 +586,7 @@ function createVideoElement(video) {
     const plusButton = (!isMe) ? `<i class="fas fa-circle-plus follow-btn" data-target="${video.authorUid}" onclick="toggleFollow('${video.authorUid}', this, event)" style="${isFollowing ? 'display: none;' : ''}"></i>` : '';
     const authorData = getUserData(video.authorUid, video.authorName, video.authorUsername || video.authorName, video.authorPic, video.authorVerified);
     const verifiedBadge = getVerifiedBadge(authorData.verified);
-    let nameClass = authorData.philPlusUntil > Date.now() ? "name-phil-plus" : "";
+    let nameClass = (authorData.philPlusUntil > Date.now() && authorData.philPlusTier >= 1) ? "name-phil-plus" : "";
     const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : '';
     const realLikes = video.likedBy ? video.likedBy.length : 0;
     const canDeleteVideo = currentUser && (video.authorUid === currentUser.uid || currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
@@ -670,14 +715,14 @@ function renderComments(id) {
         const isCreator = currentUser && currentUser.uid === video.authorUid; const authorData = getUserData(video.authorUid, video.authorName, video.authorUsername || video.authorName, video.authorPic, video.authorVerified); const creatorPic = authorData.pic || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback';
         list.innerHTML = video.comments.map((c, index) => {
             const cUser = getUserData(c.uid, c.name, c.username, c.pic, c.verified); const badge = getVerifiedBadge(cUser.verified); const canDelete = currentUser && (currentUser.uid === c.uid || currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin); const commentId = c.cId || index.toString(); const deleteBtn = canDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteComment('${id}', '${commentId}')"></i>` : ''; const likeCount = c.likes ? c.likes.length : 0; const hasLiked = c.likes && currentUser && c.likes.includes(currentUser.uid) ? 'liked-heart' : ''; const timeString = timeAgo(c.cId);
-            let cClass = ""; if(cUser.philPlusUntil && cUser.philPlusUntil > Date.now()) cClass = "name-phil-plus";
+            let cClass = ""; if(cUser.philPlusUntil && cUser.philPlusUntil > Date.now() && cUser.philPlusTier >= 1) cClass = "name-phil-plus";
             let cCreatorHeartHtml = ''; if (c.creatorHeart) cCreatorHeartHtml = `<div class="creator-heart-wrap" onclick="toggleCreatorHeart('${id}', '${commentId}')" style="cursor:${isCreator?'pointer':'default'};" title="Vom Creator geliket"><div class="creator-heart-img" style="background-image: url('${creatorPic}')"></div><i class="fas fa-heart creator-heart-badge"></i></div>`; else if (isCreator) cCreatorHeartHtml = `<div class="creator-heart-wrap creator-heart-inactive" onclick="toggleCreatorHeart('${id}', '${commentId}')" title="Creator Herz geben"><i class="far fa-heart creator-heart-badge-outline"></i></div>`;
             let renderedGif = ''; if(c.gifUrl) renderedGif = `<img src="${c.gifUrl}" class="comment-gif" alt="GIF">`;
             let repliesHtml = '';
             if (c.replies && c.replies.length > 0) {
                 repliesHtml = `<div class="reply-container">` + c.replies.map(r => {
                     const rUser = getUserData(r.uid, r.name, r.username, r.pic, r.verified); const rBadge = getVerifiedBadge(rUser.verified); const rCanDelete = currentUser && (currentUser.uid === r.uid || currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin); const rDeleteBtn = rCanDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteReply('${id}', '${commentId}', '${r.rId}')"></i>` : ''; const rLikeCount = r.likes ? r.likes.length : 0; const rHasLiked = r.likes && currentUser && r.likes.includes(currentUser.uid) ? 'liked-heart' : ''; const replyTimeString = timeAgo(r.rId);
-                    let rClass = ""; if(rUser.philPlusUntil && rUser.philPlusUntil > Date.now()) rClass = "name-phil-plus";
+                    let rClass = ""; if(rUser.philPlusUntil && rUser.philPlusUntil > Date.now() && rUser.philPlusTier >= 1) rClass = "name-phil-plus";
                     let rCreatorHeartHtml = ''; if (r.creatorHeart) rCreatorHeartHtml = `<div class="creator-heart-wrap" onclick="toggleCreatorHeart('${id}', '${commentId}', '${r.rId}')" style="cursor:${isCreator?'pointer':'default'};" title="Vom Creator geliket"><div class="creator-heart-img" style="background-image: url('${creatorPic}')"></div><i class="fas fa-heart creator-heart-badge"></i></div>`; else if (isCreator) rCreatorHeartHtml = `<div class="creator-heart-wrap creator-heart-inactive" onclick="toggleCreatorHeart('${id}', '${commentId}', '${r.rId}')" title="Creator Herz geben"><i class="far fa-heart creator-heart-badge-outline"></i></div>`;
                     return `<div class="reply-item"><img src="${rUser.pic}" class="live-pic-${r.uid}" alt="User" onclick="openProfile('${r.uid}')" style="cursor:pointer;"><div style="flex:1; min-width: 0;"><strong onclick="openProfile('${r.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;"><span class="live-name-${r.uid} ${rClass}">${rUser.displayName}${rBadge}</span> <span class="live-username-${r.uid}" style="color:#888; font-weight:normal; font-size:12px;">@${rUser.username}</span> <span class="comment-time">${replyTimeString}</span></strong><p style="word-break: break-word;">${formatText(r.text)}</p><div class="comment-actions"><span onclick="toggleReplyBox('${commentId}')">Antworten</span><span class="${rHasLiked}" onclick="likeReply('${id}', '${commentId}', '${r.rId}')"><i class="fas fa-heart"></i> ${rLikeCount}</span>${rCreatorHeartHtml}</div></div>${rDeleteBtn}</div>`;
                 }).join('') + `</div>`;
@@ -690,7 +735,7 @@ function renderComments(id) {
 
 // --- GIPHY API LOGIK ---
 let currentPendingGifUrl = null;
-document.getElementById('btn-gif-comment').addEventListener('click', () => { if(!checkPhilPlusStatus()) return showCustomAlert("Phil Shorts+", "GIFs in Kommentaren sind exklusiv für Phil Shorts+ Mitglieder!"); document.getElementById('giphy-modal').classList.add('show'); fetchGiphyTrending(); });
+document.getElementById('btn-gif-comment').addEventListener('click', () => { if(!checkPhilPlusStatus(2)) return showCustomAlert("Phil Shorts++", "GIFs in Kommentaren sind exklusiv ab Phil Shorts++!"); document.getElementById('giphy-modal').classList.add('show'); fetchGiphyTrending(); });
 document.getElementById('close-giphy-modal').addEventListener('click', () => { document.getElementById('giphy-modal').classList.remove('show'); });
 document.getElementById('remove-pending-gif').addEventListener('click', () => { currentPendingGifUrl = null; document.getElementById('pending-gif-preview').style.display = 'none'; });
 
@@ -752,21 +797,41 @@ window.openProfile = async function(targetUid) {
         let totalLikes = 0; let totalGifts = 0; const userVideos = allVideosData.filter(v => v.authorUid === targetUid); userVideos.forEach(v => { totalLikes += (v.likedBy ? v.likedBy.length : 0); totalGifts += (v.gifts || 0); });
         let level = 1; if (totalLikes > 10 || totalGifts > 50) level = 2; if (totalLikes > 50 || totalGifts > 200) level = 3; if (totalLikes > 500) level = "Pro"; document.getElementById('profile-level').innerText = `Level ${level} Creator 🌟`;
         const verifiedBadge = targetUser.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : ''; const realFollowersCount = targetUser.followers ? targetUser.followers.length : 0; const cleanUsername = targetUser.username || targetUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
-        let nameClass = ""; if(targetUser.philPlusUntil && targetUser.philPlusUntil > Date.now()) { nameClass = "name-phil-plus"; document.getElementById('phil-plus-badge-container').style.display = 'block'; } else { document.getElementById('phil-plus-badge-container').style.display = 'none'; }
+        let nameClass = ""; 
+        if(targetUser.philPlusUntil && targetUser.philPlusUntil > Date.now() && (targetUser.philPlusTier || 1) >= 1) { 
+            nameClass = "name-phil-plus"; 
+            document.getElementById('phil-plus-badge-container').style.display = 'block'; 
+            let tierText = "Phil Shorts+";
+            if(targetUser.philPlusTier === 2) tierText = "Phil Shorts++";
+            if(targetUser.philPlusTier === 3) tierText = "Phil Shorts+++";
+            document.getElementById('phil-plus-badge-text').innerHTML = `<i class="fas fa-star"></i> ${tierText}`;
+        } else { 
+            document.getElementById('phil-plus-badge-container').style.display = 'none'; 
+        }
         document.getElementById('profile-title').innerHTML = '@' + cleanUsername; document.getElementById('profile-name').innerHTML = `<span class="${nameClass}">${targetUser.displayName}</span>${verifiedBadge}`; document.getElementById('profile-username').innerText = '@' + cleanUsername; document.getElementById('profile-bio').innerHTML = formatText(targetUser.bio || "Keine Bio vorhanden."); document.getElementById('profile-pic').src = targetUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'; document.getElementById('stat-likes').innerText = totalLikes; document.getElementById('stat-followers').innerText = realFollowersCount; document.getElementById('stat-following').innerText = targetUser.following ? targetUser.following.length : 0;
         updateProfileBorder(targetUser.activeBorder, 'profile-pic');
         const actionBtn = document.getElementById('profile-action-btn'); const msgBtn = document.getElementById('profile-message-btn'); const shopBtn = document.getElementById('profile-shop-btn'); actionBtn.dataset.uid = targetUid; const settingsIcon = document.getElementById('open-settings'); const adminDashboardBtn = document.getElementById('open-admin-dashboard'); const privateStats = document.getElementById('private-stats'); const adminControls = document.getElementById('admin-controls'); adminControls.innerHTML = '';
         if (currentUser && (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) && targetUid !== currentUser.uid) { const isVerif = targetUser.verified || false; adminControls.innerHTML = `<button onclick="toggleVerify('${targetUid}', ${isVerif})" class="profile-action-btn" style="background: transparent; color: #00f2fe; border: 1px solid #00f2fe; margin-top: 15px; width: 100%;">👑 Admin: ${isVerif ? 'Blauen Haken entfernen' : 'Blauen Haken geben'}</button>`; }
         if (currentUser && targetUid === currentUser.uid) { msgBtn.style.display = 'none'; shopBtn.style.display = 'block'; actionBtn.innerText = "Profil bearbeiten"; actionBtn.classList.add('edit-btn'); actionBtn.onclick = () => { document.getElementById('edit-displayname-input').value = currentUser.displayName; document.getElementById('edit-username-input').value = currentUser.username || cleanUsername; document.getElementById('edit-pic-input').value = currentUser.photoURL; document.getElementById('edit-bio-input').value = currentUser.bio; document.getElementById('settings-modal').classList.add('show'); }; settingsIcon.style.display = 'block'; settingsIcon.onclick = () => { updateNotifUI(); document.getElementById('app-settings-modal').classList.add('show'); }; adminDashboardBtn.style.display = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) ? 'block' : 'none'; privateStats.style.display = 'block'; document.getElementById('my-coins').innerText = targetUser.coins || 0; document.getElementById('my-views').innerText = targetUser.profileViews || 0; } 
         else { adminDashboardBtn.style.display = 'none'; privateStats.style.display = 'none'; shopBtn.style.display = 'none'; if (currentUser) { msgBtn.style.display = 'block'; msgBtn.onclick = () => { window.openDM(targetUid, cleanUsername, targetUser.photoURL); }; } if (currentUser && currentUser.following && currentUser.following.includes(targetUid)) { actionBtn.innerText = "Entfolgen"; actionBtn.classList.add('edit-btn'); } else { actionBtn.innerText = "Folgen"; actionBtn.classList.remove('edit-btn'); } actionBtn.onclick = () => toggleFollow(targetUid); settingsIcon.style.display = 'none'; }
-        let storyDuration = 86400000; if (targetUser.philPlusUntil && targetUser.philPlusUntil > Date.now()) { storyDuration = 172800000; } profileUserStories = (targetUser.stories || []).filter(s => (Date.now() - s.timestamp) < storyDuration); const picContainer = document.getElementById('profile-pic-container'); const storyBadge = document.getElementById('story-badge');
+        
+        let storyDuration = 86400000; 
+        if (targetUser.philPlusUntil && targetUser.philPlusUntil > Date.now() && (targetUser.philPlusTier || 1) >= 1) { storyDuration = 172800000; } 
+        profileUserStories = (targetUser.stories || []).filter(s => (Date.now() - s.timestamp) < storyDuration); 
+        const picContainer = document.getElementById('profile-pic-container'); const storyBadge = document.getElementById('story-badge');
         if(profileUserStories.length > 0) { picContainer.classList.add('story-ring'); storyBadge.style.display = 'none'; } else { picContainer.classList.remove('story-ring'); if(currentUser && targetUid === currentUser.uid) storyBadge.style.display = 'flex'; else storyBadge.style.display = 'none'; }
         window.renderProfileGrid(targetUid);
     });
-    if (currentUser && targetUid !== currentUser.uid) { updateDoc(doc(db, "users", targetUid), { profileViews: increment(1) }).catch(e => {}); }
+    
+    // Ghost Mode check (Tier 3)
+    if (currentUser && targetUid !== currentUser.uid) { 
+        if(!checkPhilPlusStatus(3)) {
+            updateDoc(doc(db, "users", targetUid), { profileViews: increment(1) }).catch(e => {}); 
+        }
+    }
 };
 
-const shopItems = [ { id: 'b1', name: 'Ohne', type: 'border', cost: 0, cssClass: 'none' }, { id: 'b2', name: 'Neon', type: 'border', cost: 500, cssClass: 'neon' }, { id: 'b3', name: 'Gold', type: 'border', cost: 1000, cssClass: 'gold' }, { id: 'b4', name: '3663 Pro', type: 'border', cost: 2500, cssClass: '3663' }, { id: 'b5', name: 'Diamant', type: 'border', cost: 5000, cssClass: 'diamond' }, { id: 'b6', name: 'RGB Chroma (Plus)', type: 'border', cost: 0, cssClass: 'chroma', requiresPlus: true } ];
+const shopItems = [ { id: 'b1', name: 'Ohne', type: 'border', cost: 0, cssClass: 'none' }, { id: 'b2', name: 'Neon', type: 'border', cost: 500, cssClass: 'neon' }, { id: 'b3', name: 'Gold', type: 'border', cost: 1000, cssClass: 'gold' }, { id: 'b4', name: '3663 Pro', type: 'border', cost: 2500, cssClass: '3663' }, { id: 'b5', name: 'Diamant', type: 'border', cost: 5000, cssClass: 'diamond' }, { id: 'b6', name: 'RGB Chroma (Plus++)', type: 'border', cost: 0, cssClass: 'chroma', requiresPlusLevel: 2 } ];
 document.getElementById('profile-shop-btn').addEventListener('click', () => { if(!currentUser) return; document.getElementById('shop-modal-coins').innerText = currentUser.coins; renderShopBorders(); document.getElementById('shop-modal').classList.add('show'); });
 document.querySelectorAll('.shop-tab').forEach(tab => { tab.addEventListener('click', (e) => { document.querySelectorAll('.shop-tab').forEach(t => t.classList.remove('active')); e.target.classList.add('active'); document.querySelectorAll('.shop-content-section').forEach(s => s.style.display = 'none'); document.getElementById(e.target.dataset.tab).style.display = 'block'; }); });
 document.getElementById('close-shop-modal').addEventListener('click', () => document.getElementById('shop-modal').classList.remove('show'));
@@ -774,8 +839,9 @@ document.getElementById('close-shop-modal').addEventListener('click', () => docu
 function renderShopBorders() {
     const grid = document.getElementById('shop-borders-grid');
     grid.innerHTML = shopItems.filter(i => i.type === 'border').map(item => {
-        const hasPlus = checkPhilPlusStatus(); const isOwned = currentUser.decorations && currentUser.decorations.includes(item.id) || item.cost === 0; const isEquipped = currentUser.activeBorder === item.cssClass;
-        let btnHtml = ''; if(item.requiresPlus && !hasPlus) { btnHtml = `<button class="profile-action-btn edit-btn" style="width:100%; font-size:12px; min-height:30px;">Phil Shorts+ benötigt</button>`; } else if(isEquipped) { btnHtml = `<button class="profile-action-btn edit-btn" style="width:100%; font-size:12px; min-height:30px;">Ausgerüstet</button>`; } else if(isOwned) { btnHtml = `<button class="profile-action-btn" onclick="equipDecoration('${item.id}', '${item.cssClass}')" style="width:100%; font-size:12px; min-height:30px; background:#00f2fe; color:black;">Ausrüsten</button>`; } else { btnHtml = `<button class="profile-action-btn" onclick="buyDecoration('${item.id}', ${item.cost})" style="width:100%; font-size:12px; min-height:30px;"><i class="fas fa-coins"></i> ${item.cost}</button>`; }
+        const hasRequiredLevel = item.requiresPlusLevel ? checkPhilPlusStatus(item.requiresPlusLevel) : true; 
+        const isOwned = currentUser.decorations && currentUser.decorations.includes(item.id) || item.cost === 0; const isEquipped = currentUser.activeBorder === item.cssClass;
+        let btnHtml = ''; if(item.requiresPlusLevel && !hasRequiredLevel) { btnHtml = `<button class="profile-action-btn edit-btn" style="width:100%; font-size:12px; min-height:30px;">Phil Shorts++ benötigt</button>`; } else if(isEquipped) { btnHtml = `<button class="profile-action-btn edit-btn" style="width:100%; font-size:12px; min-height:30px;">Ausgerüstet</button>`; } else if(isOwned) { btnHtml = `<button class="profile-action-btn" onclick="equipDecoration('${item.id}', '${item.cssClass}')" style="width:100%; font-size:12px; min-height:30px; background:#00f2fe; color:black;">Ausrüsten</button>`; } else { btnHtml = `<button class="profile-action-btn" onclick="buyDecoration('${item.id}', ${item.cost})" style="width:100%; font-size:12px; min-height:30px;"><i class="fas fa-coins"></i> ${item.cost}</button>`; }
         return `<div class="shop-item-card"><div class="shop-item-preview border-${item.cssClass}"></div><strong style="font-size: 14px; display:block; margin-bottom:10px;">${item.name}</strong>${btnHtml}</div>`;
     }).join('');
 }
@@ -783,18 +849,27 @@ function renderShopBorders() {
 window.buyDecoration = async function(id, cost) { if(!currentUser) return; if(currentUser.coins < cost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins dafür!"); try { currentUser.coins -= cost; if(!currentUser.decorations) currentUser.decorations = []; currentUser.decorations.push(id); await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-cost), decorations: arrayUnion(id) }); document.getElementById('shop-modal-coins').innerText = currentUser.coins; document.getElementById('my-coins').innerText = currentUser.coins; renderShopBorders(); showToast("Erfolgreich gekauft!"); } catch(e) { showCustomAlert("Fehler", "Kauf fehlgeschlagen."); } }
 window.equipDecoration = async function(id, cssClass) { if(!currentUser) return; try { let finalClass = cssClass === 'none' ? "" : cssClass; currentUser.activeBorder = finalClass; await updateDoc(doc(db, "users", currentUser.uid), { activeBorder: finalClass }); renderShopBorders(); showToast("Ausgerüstet!"); } catch(e) {} }
 
-window.buyPhilPlus = async function(days, cost) { 
+window.buyPhilPlus = async function(days, cost, tier) { 
     if(!currentUser) return; 
-    if(checkPhilPlusStatus()) return showCustomAlert("Bereits aktiv", "Du besitzt bereits Phil Shorts+! Ein erneuter Kauf ist aktuell nicht nötig.");
+    
+    // Check if trying to buy a lower tier while having an active higher tier
+    if(checkPhilPlusStatus(1)) {
+        if(currentUser.philPlusTier > tier) {
+            if(!confirm(`Warnung: Du besitzt aktuell Stufe ${currentUser.philPlusTier}. Möchtest du wirklich auf Stufe ${tier} wechseln?`)) return;
+        } else if (currentUser.philPlusTier === tier) {
+             if(!confirm(`Du hast bereits Stufe ${tier}. Abo um ${days} Tage verlängern?`)) return;
+        }
+    }
 
-    if(currentUser.coins < cost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins für Phil Shorts+."); 
-    if(confirm(`Möchtest du Phil Shorts+ für ${days} Tage kaufen? Kosten: ${cost} Coins.`)) { 
+    if(currentUser.coins < cost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins für dieses Abo."); 
+    if(confirm(`Möchtest du Phil Shorts+ (Stufe ${tier}) für ${days} Tage kaufen? Kosten: ${cost} Coins.`)) { 
         try { 
             currentUser.coins -= cost; 
             let currentUntil = currentUser.philPlusUntil && currentUser.philPlusUntil > Date.now() ? currentUser.philPlusUntil : Date.now(); 
             let newUntil = currentUntil + (days * 86400000); 
             currentUser.philPlusUntil = newUntil; 
-            await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-cost), philPlusUntil: newUntil }); 
+            currentUser.philPlusTier = tier;
+            await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-cost), philPlusUntil: newUntil, philPlusTier: tier }); 
             document.getElementById('shop-modal-coins').innerText = currentUser.coins; 
             document.getElementById('my-coins').innerText = currentUser.coins; 
             showToast(`Phil Shorts+ aktiviert! 🎉`); 
@@ -860,7 +935,7 @@ window.prevStory = function() {
 
 window.closeStoryViewer = function() { clearTimeout(storyViewerTimer); document.getElementById('story-viewer').classList.remove('show'); }
 
-window.sendSupport = async function() { const msg = document.getElementById('support-msg').value.trim(); if(!msg || !currentUser) return; const ticketRef = await addDoc(collection(db, "reports"), { uid: currentUser.uid, name: currentUser.displayName, hasPlus: checkPhilPlusStatus(), status: 'open', timestamp: Date.now() }); await addDoc(collection(db, `reports/${ticketRef.id}/messages`), { senderUid: currentUser.uid, text: msg, timestamp: Date.now() }); showToast("Support-Ticket erstellt!"); document.getElementById('support-msg').value = ''; document.getElementById('app-settings-modal').classList.remove('show'); switchView('inbox'); document.getElementById('tab-support').click(); }
+window.sendSupport = async function() { const msg = document.getElementById('support-msg').value.trim(); if(!msg || !currentUser) return; const ticketRef = await addDoc(collection(db, "reports"), { uid: currentUser.uid, name: currentUser.displayName, hasPlus: checkPhilPlusStatus(1), tier: currentUser.philPlusTier || 0, status: 'open', timestamp: Date.now() }); await addDoc(collection(db, `reports/${ticketRef.id}/messages`), { senderUid: currentUser.uid, text: msg, timestamp: Date.now() }); showToast("Support-Ticket erstellt!"); document.getElementById('support-msg').value = ''; document.getElementById('app-settings-modal').classList.remove('show'); switchView('inbox'); document.getElementById('tab-support').click(); }
 window.toggleVerify = async function(targetUid, currentStatus) { try { await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus }); showToast(!currentStatus ? "Blauer Haken vergeben! 🔵" : "Blauer Haken entfernt."); } catch (e) { showCustomAlert("Fehler", "Fehler! Bist du wirklich Admin?"); } };
 
 document.getElementById('save-settings-btn').addEventListener('click', async() => {
@@ -914,7 +989,7 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     let html = '';
     if (matchedUsers.length > 0) {
         html += '<h4 style="padding: 10px 15px; color:#888; font-size:14px; text-transform:uppercase;">Benutzer</h4><div style="display:flex; flex-direction:column; gap:15px; padding: 0 15px 20px;">';
-        matchedUsers.forEach(u => { const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : ''; const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase(); let nameClass = u.philPlusUntil && u.philPlusUntil > Date.now() ? "name-phil-plus" : ""; html += `<div style="display:flex; align-items:center; gap:15px; cursor:pointer;" onclick="openProfile('${u.uid}')"><img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}" style="width:50px; height:50px; border-radius:50%; object-fit:cover; border: 1px solid #333; flex-shrink:0;"><div style="flex:1; min-width:0;"><strong style="font-size:16px; display:block; margin-bottom:3px; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span class="live-name-${u.uid} ${nameClass}">${u.displayName}${isVerif}</span></strong><p class="live-username-${u.uid}" style="font-size:13px; color:#888;">@${cleanUsername}</p></div></div>`; });
+        matchedUsers.forEach(u => { const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : ''; const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase(); let nameClass = u.philPlusUntil && u.philPlusUntil > Date.now() && u.philPlusTier >= 1 ? "name-phil-plus" : ""; html += `<div style="display:flex; align-items:center; gap:15px; cursor:pointer;" onclick="openProfile('${u.uid}')"><img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}" style="width:50px; height:50px; border-radius:50%; object-fit:cover; border: 1px solid #333; flex-shrink:0;"><div style="flex:1; min-width:0;"><strong style="font-size:16px; display:block; margin-bottom:3px; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span class="live-name-${u.uid} ${nameClass}">${u.displayName}${isVerif}</span></strong><p class="live-username-${u.uid}" style="font-size:13px; color:#888;">@${cleanUsername}</p></div></div>`; });
         html += '</div>';
     }
     if (matchedVideos.length > 0) {
@@ -939,7 +1014,7 @@ function initInbox() {
         snapshot.forEach((doc) => {
             const n = doc.data(); let icon = 'fa-bell'; let color = '#aaa';
             if (n.type === 'like') { icon = 'fa-heart'; color = '#ff0050'; } if (n.type === 'follow') { icon = 'fa-user-plus'; color = '#00f2fe'; } if (n.type === 'comment') { icon = 'fa-comment-dots'; color = '#fff'; } if (n.type === 'gift') { icon = 'fa-gift'; color = '#ffd700'; } if (n.type === 'message') { icon = 'fa-envelope'; color = '#00f2fe'; }
-            const nUser = getUserData(n.fromUid, n.fromName, n.fromUsername, n.fromPic, false); let clickAction = `openProfile('${n.fromUid}')`; if (n.type === 'message') clickAction = `openDM('${n.fromUid}', '${nUser.username.replace(/'/g, "\\'")}', '${nUser.pic}')`; else if (n.videoId) clickAction = `jumpToVideo('${n.videoId}')`; const isVerif = getVerifiedBadge(nUser.verified); let nameClass = nUser.philPlusUntil && nUser.philPlusUntil > Date.now() ? "name-phil-plus" : "";
+            const nUser = getUserData(n.fromUid, n.fromName, n.fromUsername, n.fromPic, false); let clickAction = `openProfile('${n.fromUid}')`; if (n.type === 'message') clickAction = `openDM('${n.fromUid}', '${nUser.username.replace(/'/g, "\\'")}', '${nUser.pic}')`; else if (n.videoId) clickAction = `jumpToVideo('${n.videoId}')`; const isVerif = getVerifiedBadge(nUser.verified); let nameClass = nUser.philPlusUntil && nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 1 ? "name-phil-plus" : "";
             inboxBox.innerHTML += `<div class="inbox-msg" onclick="${clickAction}"><img src="${nUser.pic}" class="chat-avatar live-pic-${n.fromUid}" style="flex-shrink:0;"><div style="flex:1; min-width:0;"><span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span class="live-name-${n.fromUid} ${nameClass}">${nUser.displayName}${isVerif}</span> <span class="live-username-${n.fromUid}" style="color:#888; font-weight:normal; font-size:12px;">@${nUser.username}</span></span><div class="chat-bubble" style="background: transparent; padding: 0; word-break: break-word;"><i class="fas ${icon}" style="color:${color}; margin-right:5px;"></i> ${formatText(n.text)}</div><div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(n.timestamp)}</div></div></div>`;
         });
     });
@@ -952,7 +1027,7 @@ function initInboxChats() {
         let chats = []; snapshot.forEach(doc => { const chat = doc.data(); if (chat.participants && chat.participants.includes(currentUser.uid)) chats.push({ id: doc.id, ...chat }); }); chats.sort((a, b) => b.lastMessageTime - a.lastMessageTime); msgBox.innerHTML = '';
         if (chats.length === 0) { msgBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Keine Nachrichten vorhanden</p></div>'; return; }
         chats.forEach(chat => {
-            const partnerUid = chat.participants.find(uid => uid !== currentUser.uid); const partner = chat.users[partnerUid]; if (!partner) return; const nUser = getUserData(partnerUid, partner.name, partner.name, partner.pic, false); const safeName = nUser.username.replace(/'/g, "\\'"); const isVerif = getVerifiedBadge(nUser.verified); let nameClass = nUser.philPlusUntil && nUser.philPlusUntil > Date.now() ? "name-phil-plus" : "";
+            const partnerUid = chat.participants.find(uid => uid !== currentUser.uid); const partner = chat.users[partnerUid]; if (!partner) return; const nUser = getUserData(partnerUid, partner.name, partner.name, partner.pic, false); const safeName = nUser.username.replace(/'/g, "\\'"); const isVerif = getVerifiedBadge(nUser.verified); let nameClass = nUser.philPlusUntil && nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 1 ? "name-phil-plus" : "";
             msgBox.innerHTML += `<div class="inbox-msg" onclick="openDM('${partnerUid}', '${safeName}', '${nUser.pic}')"><img src="${nUser.pic}" class="chat-avatar live-pic-${partnerUid}" style="flex-shrink:0;"><div style="flex:1; min-width:0;"><span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span class="live-name-${partnerUid} ${nameClass}">${nUser.displayName}${isVerif}</span> <span class="live-username-${partnerUid}" style="color:#888; font-weight:normal; font-size:12px;">@${nUser.username}</span></span><div class="chat-bubble" style="background: transparent; padding: 0; color: #888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${formatText(chat.lastMessage) || 'Neuer Chat...'}</div><div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(chat.lastMessageTime)}</div></div></div>`;
         });
     });
@@ -980,7 +1055,12 @@ window.initSupportTickets = function() {
             foundAny = true;
             const ticketId = docSnap.id; 
             const isVip = ticket.hasPlus ? 'vip' : ''; 
-            const vipBadge = ticket.hasPlus ? '<span class="phil-plus-badge" style="font-size:9px; margin-left:5px;">PLUS</span>' : ''; 
+            
+            let plusText = "PLUS";
+            if(ticket.tier === 2) plusText = "PLUS++";
+            if(ticket.tier === 3) plusText = "PLUS+++";
+
+            const vipBadge = ticket.hasPlus ? `<span class="phil-plus-badge" style="font-size:9px; margin-left:5px;">${plusText}</span>` : ''; 
             const uData = getUserData(ticket.uid, ticket.name, ticket.name, 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback', false);
             const safeName = uData.username.replace(/'/g, "\\'");
             
@@ -1196,7 +1276,8 @@ async function renderAndUploadImages() {
 document.getElementById('submit-upload').addEventListener('click', async() => {
     const files = document.getElementById('up-file').files; const titleVal = document.getElementById('up-title').value.trim(); const desc = document.getElementById('up-desc').value.trim();
     if (!files || files.length === 0 || (!desc && !titleVal)) return showCustomAlert("Fehlende Daten", "Bitte wähle Dateien aus und schreibe einen Titel oder eine Beschreibung.");
-    let isVideo = files[0].type.startsWith('video/'); let maxSize = checkPhilPlusStatus() ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus() ? "100" : "30";
+    let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
+    let isVideo = files[0].type.startsWith('video/');
     if (isVideo && files[0].size > maxSize) return showCustomAlert("Zu groß", `Videos dürfen maximal ${limitText} MB groß sein!`);
     const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); btn.disabled = true; status.innerText = "Wird gerendert und verarbeitet... Bitte warten!";
     
@@ -1226,7 +1307,7 @@ document.getElementById('close-app-settings').addEventListener('click', () => do
 
 function initResponsiveLayout() {
     const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;
-    function createPCContainers() { if (!pcSidebar) { pcSidebar = document.createElement('div'); pcSidebar.id = 'pc-nav-sidebar'; pcSidebar.innerHTML = `<div class="logo-area"><img src="https://i.imgur.com/l1luc1q.png" class="app-logo" alt="Logo">Phil Shorts</div>`; appContainer.prepend(pcSidebar); } }
+    function createPCContainers() { if (!pcSidebar) { pcSidebar = document.createElement('div'); pcSidebar.id = 'pc-nav-sidebar'; pcSidebar.innerHTML = `<div class="logo-area"><img src="https://i.imgur.com/JDPRzCc.png" class="app-logo" alt="Logo">Phil Shorts</div>`; appContainer.prepend(pcSidebar); } }
     function restructureVideoForPC(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; let infoPanel = inner.querySelector('.pc-info-panel-container'); if (!infoPanel) { infoPanel = document.createElement('div'); infoPanel.className = 'pc-info-panel-container'; inner.appendChild(infoPanel); const videoFooter = inner.querySelector('.video__footer'); const videoSidebar = inner.querySelector('.video__sidebar'); if (videoFooter) infoPanel.appendChild(videoFooter); if (videoSidebar) infoPanel.appendChild(videoSidebar); } }
     function rollBackVideoForHandy(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; const infoPanel = inner.querySelector('.pc-info-panel-container'); if (infoPanel) { const videoFooter = infoPanel.querySelector('.video__footer'); const videoSidebar = infoPanel.querySelector('.video__sidebar'); if (videoFooter) inner.appendChild(videoFooter); if (videoSidebar) inner.appendChild(videoSidebar); infoPanel.remove(); } }
     function checkResponsiveMode() { const isPC = window.innerWidth > 768; if (isPC && currentMode !== 'pc') { currentMode = 'pc'; createPCContainers(); if (originalNav) pcSidebar.appendChild(originalNav); document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC); } else if (!isPC && currentMode !== 'handy') { currentMode = 'handy'; if (originalNav) appContainer.appendChild(originalNav); if (pcSidebar) { pcSidebar.remove(); pcSidebar = null; } document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy); } }

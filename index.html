@@ -5,16 +5,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 
-    <link rel="shortcut icon" type="image/png" href="https://i.imgur.com/l1luc1q.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="https://i.imgur.com/l1luc1q.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="https://i.imgur.com/l1luc1q.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="https://i.imgur.com/l1luc1q.png">
+    <link rel="shortcut icon" type="image/png" href="https://i.imgur.com/JDPRzCc.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="https://i.imgur.com/JDPRzCc.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="https://i.imgur.com/JDPRzCc.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="https://i.imgur.com/JDPRzCc.png">
     <meta name="theme-color" content="#000000">
 
     <meta property="og:site_name" content="Phil Shorts">
     <meta property="og:title" content="Phil Shorts - Entdecke Videos!">
     <meta property="og:description" content="Tauche ein in die Community. Entdecke, teile und kreiere die besten Kurzvideos und Storys auf Phil Shorts!">
-    <meta property="og:image" content="https://i.imgur.com/l1luc1q.png">
+    <meta property="og:image" content="https://i.imgur.com/JDPRzCc.png">
     <meta property="og:type" content="website">
     <meta name="twitter:card" content="summary_large_image">
 
@@ -28,6 +28,13 @@
             window.dispatchEvent(new CustomEvent('googleLoginSuccess', {
                 detail: response
             }));
+        }
+
+        function switchPlusTier(tier) {
+            document.querySelectorAll('.plus-tier-tab').forEach(t => t.classList.remove('active'));
+            document.querySelector('.plus-tier-tab[onclick="switchPlusTier(' + tier + ')"]').classList.add('active');
+            document.querySelectorAll('.plus-tier-content').forEach(c => c.style.display = 'none');
+            document.getElementById('plus-tier-' + tier).style.display = 'block';
         }
     </script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -162,7 +169,7 @@
                 </div>
                 <h2 id="profile-name" style="word-break: break-word; text-align: center;">Anzeigename</h2>
                 <div id="phil-plus-badge-container" style="display:none; margin-top: 5px;">
-                    <span class="phil-plus-badge"><i class="fas fa-star"></i> Phil Shorts+</span>
+                    <span id="phil-plus-badge-text" class="phil-plus-badge"><i class="fas fa-star"></i> Phil Shorts+</span>
                 </div>
                 <p id="profile-username" style="color: #aaa; font-weight: bold; font-size: 15px; margin-bottom: 10px; margin-top: 5px;">@username</p>
                 <div id="profile-level" class="creator-level">Level 1 Creator 🌟</div>
@@ -278,7 +285,7 @@
             <div class="shop-tabs">
                 <div class="shop-tab active" data-tab="shop-borders">Rahmen</div>
                 <div class="shop-tab" data-tab="shop-stories">Stories</div>
-                <div class="shop-tab" data-tab="shop-plus">Phil Shorts+</div>
+                <div class="shop-tab" data-tab="shop-plus">Abonnements</div>
             </div>
             <div class="modal-body" style="background: rgba(0,0,0,0.5); padding: 15px;">
 
@@ -291,7 +298,7 @@
                     <div class="story-shop-card">
                         <i class="fas fa-camera-retro" style="font-size: 50px; color: #00f2fe; margin-bottom: 15px;"></i>
                         <h3 style="margin-bottom: 10px;">Story posten</h3>
-                        <p style="color: #888; font-size: 14px; margin-bottom: 20px;">Lade ein Bild für 24 Stunden in deine Story hoch. Alle Follower können es sehen!</p>
+                        <p style="color: #888; font-size: 14px; margin-bottom: 20px;">Lade ein Bild für 24 Stunden (oder 48h mit Plus) in deine Story hoch. Alle Follower können es sehen!</p>
                         <button class="profile-action-btn" onclick="openStoryUpload()" style="width: 100%; font-size: 16px;"><i class="fas fa-coins" style="color: #ffd700;"></i> 1000 Coins</button>
                     </div>
                 </div>
@@ -300,54 +307,127 @@
                     <div class="phil-plus-banner">
                         <i class="fas fa-star"></i> Phil Shorts+
                     </div>
-                    <p style="color: #888; font-size: 13px; margin-bottom: 10px; text-align: center;">Werde Legende und schalte alle Features frei!</p>
 
-                    <ul class="plus-features-list">
-                        <li><i class="fas fa-check"></i> Exklusives Stern-Badge</li>
-                        <li><i class="fas fa-check"></i> Rot/Blauer Gradient-Name</li>
-                        <li><i class="fas fa-check"></i> 100 MB Video-Upload (statt 30 MB)</li>
-                        <li><i class="fas fa-check"></i> Premium App-Themes (Deep Blue, Neon)</li>
-                        <li><i class="fas fa-check"></i> Exklusiver RGB Chroma Rahmen</li>
-                        <li><i class="fas fa-check"></i> GIFs (Giphy) in Kommentaren nutzen</li>
-                        <li><i class="fas fa-check"></i> 48h Stories (statt 24h)</li>
-                        <li><i class="fas fa-check"></i> 100% Werbefrei</li>
-                        <li><i class="fas fa-check"></i> Priorisierter Feed (Boost Algorithmus)</li>
-                        <li><i class="fas fa-check"></i> Priority VIP Support Tickets</li>
-                        <li><i class="fas fa-check"></i> Eigene Custom-Sticker in Kommentaren</li>
-                        <li><i class="fas fa-check"></i> Animierte Profilbilder (GIFs)</li>
-                        <li><i class="fas fa-check"></i> Längere Videos (bis zu 3 Minuten)</li>
-                        <li><i class="fas fa-check"></i> Erweiterte Video-Analytics & Insights</li>
-                        <li><i class="fas fa-check"></i> Spezielle "Plus"-Geschenke im Shop</li>
-                        <li><i class="fas fa-check"></i> Goldenes Chat-Design in DMs</li>
-                        <li><i class="fas fa-check"></i> Lesebestätigungen in Nachrichten (DMs)</li>
-                        <li><i class="fas fa-check"></i> Unsichtbar-Modus (Ghost Mode)</li>
-                        <li><i class="fas fa-check"></i> Pinned Comments (Kommentare anheften)</li>
-                        <li><i class="fas fa-check"></i> 2x XP / Coins Multiplikator</li>
-                    </ul>
-
-                    <div class="plus-plan-card" onclick="buyPhilPlus(5, 10000)">
-                        <div>
-                            <h4>5 Tage Pass</h4>
-                            <p>Kurzzeit-Boost</p>
-                        </div>
-                        <div class="plus-price"><i class="fas fa-coins"></i> 10.000</div>
+                    <div class="plus-tier-tabs">
+                        <div class="plus-tier-tab active" onclick="switchPlusTier(1)">Plus</div>
+                        <div class="plus-tier-tab" onclick="switchPlusTier(2)">Plus++</div>
+                        <div class="plus-tier-tab" onclick="switchPlusTier(3)">Plus+++</div>
                     </div>
 
-                    <div class="plus-plan-card popular" onclick="buyPhilPlus(14, 20000)">
-                        <div class="popular-badge">Beliebt</div>
-                        <div>
-                            <h4>14 Tage Pass</h4>
-                            <p>Der Klassiker</p>
+                    <div id="plus-tier-1" class="plus-tier-content active">
+                        <p style="text-align:center; color:#888; font-size:13px; margin-bottom:10px;">Der perfekte Einstieg (5 Features)</p>
+                        <ul class="plus-features-list">
+                            <li><i class="fas fa-check"></i> Exklusives Stern-Badge</li>
+                            <li><i class="fas fa-check"></i> Rot/Blauer Gradient-Name</li>
+                            <li><i class="fas fa-check"></i> 100 MB Video-Upload (statt 30 MB)</li>
+                            <li><i class="fas fa-check"></i> 48h Stories (statt 24h)</li>
+                            <li><i class="fas fa-check"></i> Priority VIP Support Tickets</li>
+                        </ul>
+                        <div class="plus-plan-card" onclick="buyPhilPlus(5, 5000, 1)">
+                            <div>
+                                <h4>5 Tage</h4>
+                                <p>Plus Stufe 1</p>
+                            </div>
+                            <div class="plus-price"><i class="fas fa-coins"></i> 5.000</div>
                         </div>
-                        <div class="plus-price"><i class="fas fa-coins"></i> 20.000</div>
+                        <div class="plus-plan-card popular" onclick="buyPhilPlus(14, 12000, 1)">
+                            <div class="popular-badge">Beliebt</div>
+                            <div>
+                                <h4>14 Tage</h4>
+                                <p>Plus Stufe 1</p>
+                            </div>
+                            <div class="plus-price"><i class="fas fa-coins"></i> 12.000</div>
+                        </div>
+                        <div class="plus-plan-card" onclick="buyPhilPlus(30, 25000, 1)">
+                            <div>
+                                <h4>1 Monat</h4>
+                                <p>Plus Stufe 1</p>
+                            </div>
+                            <div class="plus-price"><i class="fas fa-coins"></i> 25.000</div>
+                        </div>
                     </div>
 
-                    <div class="plus-plan-card" onclick="buyPhilPlus(30, 50000)">
-                        <div>
-                            <h4>1 Monat Pass</h4>
-                            <p>Für wahre Legenden</p>
+                    <div id="plus-tier-2" class="plus-tier-content" style="display:none;">
+                        <p style="text-align:center; color:#888; font-size:13px; margin-bottom:10px;">Für echte Creator (15 Features)</p>
+                        <ul class="plus-features-list">
+                            <li style="color:#00f2fe;"><i class="fas fa-plus-circle"></i> Alle Plus Features enthalten</li>
+                            <li><i class="fas fa-check"></i> Premium App-Themes (Deep Blue, Neon)</li>
+                            <li><i class="fas fa-check"></i> Exklusiver RGB Chroma Rahmen</li>
+                            <li><i class="fas fa-check"></i> GIFs (Giphy) in Kommentaren nutzen</li>
+                            <li><i class="fas fa-check"></i> Priorisierter Feed (Boost Algorithmus)</li>
+                            <li><i class="fas fa-check"></i> Längere Videos (bis zu 3 Minuten)</li>
+                            <li><i class="fas fa-check"></i> 2x Coins bei täglichen Belohnungen</li>
+                            <li><i class="fas fa-check"></i> Goldener DM Chat</li>
+                            <li><i class="fas fa-check"></i> 100% Werbefrei</li>
+                            <li><i class="fas fa-check"></i> Lesebestätigungen in DMs</li>
+                            <li><i class="fas fa-check"></i> Spezielle "Plus++"-Geschenke im Shop</li>
+                        </ul>
+                        <div class="plus-plan-card" onclick="buyPhilPlus(5, 15000, 2)">
+                            <div>
+                                <h4>5 Tage</h4>
+                                <p>Plus Stufe 2</p>
+                            </div>
+                            <div class="plus-price"><i class="fas fa-coins"></i> 15.000</div>
                         </div>
-                        <div class="plus-price"><i class="fas fa-coins"></i> 50.000</div>
+                        <div class="plus-plan-card popular" onclick="buyPhilPlus(14, 35000, 2)">
+                            <div class="popular-badge">Beliebt</div>
+                            <div>
+                                <h4>14 Tage</h4>
+                                <p>Plus Stufe 2</p>
+                            </div>
+                            <div class="plus-price"><i class="fas fa-coins"></i> 35.000</div>
+                        </div>
+                        <div class="plus-plan-card" onclick="buyPhilPlus(30, 70000, 2)">
+                            <div>
+                                <h4>1 Monat</h4>
+                                <p>Plus Stufe 2</p>
+                            </div>
+                            <div class="plus-price"><i class="fas fa-coins"></i> 70.000</div>
+                        </div>
+                    </div>
+
+                    <div id="plus-tier-3" class="plus-tier-content" style="display:none;">
+                        <p style="text-align:center; color:#888; font-size:13px; margin-bottom:10px;">Werde zur Legende (30 Features)</p>
+                        <ul class="plus-features-list">
+                            <li style="color:#ffd700;"><i class="fas fa-plus-circle"></i> Alle Plus & Plus++ Features</li>
+                            <li><i class="fas fa-check"></i> Ghost Mode (Unsichtbare Profilaufrufe)</li>
+                            <li><i class="fas fa-check"></i> Pinned Comments (Kommentare anheften)</li>
+                            <li><i class="fas fa-check"></i> Animierte Profilbilder (GIFs)</li>
+                            <li><i class="fas fa-check"></i> Eigene Custom-Sticker</li>
+                            <li><i class="fas fa-check"></i> Erweiterte Video-Analytics</li>
+                            <li><i class="fas fa-check"></i> Profil-Song (Autoplay)</li>
+                            <li><i class="fas fa-check"></i> Custom Profile Colors</li>
+                            <li><i class="fas fa-check"></i> Auto-Translate Comments</li>
+                            <li><i class="fas fa-check"></i> Exklusives App Icon</li>
+                            <li><i class="fas fa-check"></i> Videos ohne Watermark speichern</li>
+                            <li><i class="fas fa-check"></i> Links in Stories (Swipe Up)</li>
+                            <li><i class="fas fa-check"></i> Bilder in DMs versenden</li>
+                            <li><i class="fas fa-check"></i> Live Streaming Zugang (Beta)</li>
+                            <li><i class="fas fa-check"></i> Multi-Account Fast Switch</li>
+                            <li><i class="fas fa-check"></i> Geheime Profil-Badges</li>
+                        </ul>
+                        <div class="plus-plan-card" onclick="buyPhilPlus(5, 40000, 3)">
+                            <div>
+                                <h4>5 Tage</h4>
+                                <p>Plus Stufe 3</p>
+                            </div>
+                            <div class="plus-price"><i class="fas fa-coins"></i> 40.000</div>
+                        </div>
+                        <div class="plus-plan-card popular" onclick="buyPhilPlus(14, 90000, 3)">
+                            <div class="popular-badge">Legende</div>
+                            <div>
+                                <h4>14 Tage</h4>
+                                <p>Plus Stufe 3</p>
+                            </div>
+                            <div class="plus-price"><i class="fas fa-coins"></i> 90.000</div>
+                        </div>
+                        <div class="plus-plan-card" onclick="buyPhilPlus(30, 180000, 3)">
+                            <div>
+                                <h4>1 Monat</h4>
+                                <p>Plus Stufe 3</p>
+                            </div>
+                            <div class="plus-price"><i class="fas fa-coins"></i> 180.000</div>
+                        </div>
                     </div>
                 </div>
 
@@ -548,7 +628,7 @@
             </div>
             <div class="modal-body">
                 <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
-                    <h5 style="margin-bottom: 15px; color: #00f2fe;"><i class="fas fa-palette"></i> App Design (Phil Shorts+)</h5>
+                    <h5 style="margin-bottom: 15px; color: #00f2fe;"><i class="fas fa-palette"></i> App Design (Phil Shorts++)</h5>
                     <select id="app-theme-select" class="comment-input" style="width: 100%; background: #111; color: white;">
                         <option value="default">Standard (Dunkel)</option>
                         <option value="deep-blue">Deep Blue</option>
