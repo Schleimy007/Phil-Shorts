@@ -661,6 +661,29 @@ body.theme-neon-pink .glass-nav-bottom {
     transform: translateY(-50%) scale(0.8);
 }
 
+.live-stream-btn {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    font-weight: bold;
+    background: #ff0050;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    box-shadow: 0 2px 10px rgba(255, 0, 80, 0.4);
+    transition: transform 0.2s;
+}
+
+.live-stream-btn:active {
+    transform: translateY(-50%) scale(0.9);
+}
+
 .top-bar {
     display: flex;
     align-items: center;
@@ -831,6 +854,19 @@ body.theme-neon-pink .glass-nav-bottom {
 
 .video-inner.is-paused .play-indicator {
     opacity: 1;
+}
+
+.like-animation {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0);
+    color: #ff0050;
+    font-size: 120px;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 30;
+    filter: drop-shadow(0 4px 15px rgba(0, 0, 0, 0.4));
 }
 
 @keyframes doubleTapHeart {
@@ -1252,6 +1288,13 @@ body.theme-neon-pink .glass-nav-bottom {
     background: #ff0050;
     border-top-left-radius: 20px;
     border-top-right-radius: 4px;
+}
+
+.gold-bubble {
+    background: linear-gradient(45deg, #ffd700, #ffaa00) !important;
+    color: black !important;
+    font-weight: 500;
+    border: 1px solid #ffe066;
 }
 
 .chat-input-wrapper {
@@ -2312,6 +2355,9 @@ input:checked+.slider:before {
 .hashtag:hover {
     text-decoration: underline;
 }
+
+
+/* ADMIN SUPPORT TICKET STYLES */
 
 .support-ticket {
     background: rgba(255, 255, 255, 0.05);

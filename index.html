@@ -5,18 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 
-    <link rel="shortcut icon" type="image/png" href="https://i.imgur.com/JDPRzCc.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="https://i.imgur.com/JDPRzCc.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="https://i.imgur.com/JDPRzCc.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="https://i.imgur.com/JDPRzCc.png">
+    <link id="dynamic-favicon" rel="shortcut icon" type="image/png" href="https://i.imgur.com/JDPRzCc.png">
     <meta name="theme-color" content="#000000">
-
-    <meta property="og:site_name" content="Phil Shorts">
-    <meta property="og:title" content="Phil Shorts - Entdecke Videos!">
-    <meta property="og:description" content="Tauche ein in die Community. Entdecke, teile und kreiere die besten Kurzvideos und Storys auf Phil Shorts!">
-    <meta property="og:image" content="https://i.imgur.com/JDPRzCc.png">
-    <meta property="og:type" content="website">
-    <meta name="twitter:card" content="summary_large_image">
 
     <title>Phil Shorts</title>
     <link rel="stylesheet" href="style.css">
@@ -64,6 +54,7 @@
                 <span class="header__link" id="tab-following">Folge ich</span>
                 <span class="header__link active" id="tab-foryou">Für dich</span>
                 <i class="fas fa-search search-icon" onclick="switchView('search')"></i>
+                <div id="btn-live-stream" class="live-stream-btn" style="display:none;"><i class="fas fa-broadcast-tower"></i> Live</div>
             </div>
             <div class="app__videos" id="video-container">
                 <div class="loading-screen"><i class="fas fa-spinner fa-spin"></i>
@@ -135,6 +126,8 @@
             </div>
             <div class="chat-container" id="dm-box"></div>
             <div class="chat-input-wrapper glass-nav-bottom">
+                <i class="fas fa-image" id="dm-img-btn" style="font-size: 24px; color: #888; cursor: pointer; padding: 5px; display: none;"></i>
+                <input type="file" id="dm-file-upload" accept="image/*" style="display:none;">
                 <input type="text" id="dm-input" placeholder="Nachricht senden..." class="chat-input">
                 <button id="send-dm-btn" class="chat-send-btn"><i class="fas fa-paper-plane"></i></button>
             </div>
@@ -157,9 +150,11 @@
         </div>
 
         <div id="view-profile" class="view">
-            <div class="top-bar glass-nav">
+            <audio id="profile-audio-player" loop style="display:none;"></audio>
+
+            <div class="top-bar glass-nav" style="background: transparent; border-bottom: none;">
                 <i class="fas fa-chevron-left back-btn" onclick="switchView('feed')"></i>
-                <h3 id="profile-title" style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">@username</h3>
+                <h3 id="profile-title" style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; text-shadow: 0 2px 5px black;">@username</h3>
                 <i class="fas fa-cog back-btn" id="open-settings" style="display:none;"></i>
             </div>
             <div class="profile-header">
@@ -167,11 +162,11 @@
                     <img src="" id="profile-pic" class="profile-image">
                     <div class="story-badge" id="story-badge" style="display:none;"><i class="fas fa-plus"></i></div>
                 </div>
-                <h2 id="profile-name" style="word-break: break-word; text-align: center;">Anzeigename</h2>
+                <h2 id="profile-name" style="word-break: break-word; text-align: center; text-shadow: 0 2px 5px black;">Anzeigename</h2>
                 <div id="phil-plus-badge-container" style="display:none; margin-top: 5px;">
                     <span id="phil-plus-badge-text" class="phil-plus-badge"><i class="fas fa-star"></i> Phil Shorts+</span>
                 </div>
-                <p id="profile-username" style="color: #aaa; font-weight: bold; font-size: 15px; margin-bottom: 10px; margin-top: 5px;">@username</p>
+                <p id="profile-username" style="color: #eee; font-weight: bold; font-size: 15px; margin-bottom: 10px; margin-top: 5px; text-shadow: 0 2px 5px black;">@username</p>
                 <div id="profile-level" class="creator-level">Level 1 Creator 🌟</div>
                 <p id="profile-bio" class="profile-bio">Hier könnte deine coole Bio stehen.</p>
 
@@ -190,22 +185,22 @@
                 <div id="admin-controls" style="width: 100%;"></div>
                 <button id="open-admin-dashboard" class="profile-action-btn" style="display:none; background:#ffd700; color:black; margin-top:10px; width:100%;">👑 Admin Dashboard</button>
 
-                <div id="private-stats" style="display: none; width: 100%; margin-top: 20px; background: rgba(255, 255, 255, 0.05); border-radius: 15px; padding: 15px; border: 1px solid #333;">
+                <div id="private-stats" style="display: none; width: 100%; margin-top: 20px; background: rgba(255, 255, 255, 0.1); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(5px);">
                     <div style="display: flex; justify-content: space-around; text-align: center;">
                         <div>
                             <i class="fas fa-coins" style="color: #ffd700; font-size: 20px; margin-bottom: 5px;"></i>
                             <strong id="my-coins" style="display: block; font-size: 16px;">1000</strong>
-                            <span style="font-size: 10px; color: #888;">Deine Coins</span>
+                            <span style="font-size: 10px; color: #ddd;">Deine Coins</span>
                         </div>
                         <div>
                             <i class="fas fa-eye" style="color: #00f2fe; font-size: 20px; margin-bottom: 5px;"></i>
                             <strong id="my-views" style="display: block; font-size: 16px;">0</strong>
-                            <span style="font-size: 10px; color: #888;">Profil Aufrufe</span>
+                            <span style="font-size: 10px; color: #ddd;">Profil Aufrufe</span>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="profile-tabs">
+            <div class="profile-tabs" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
                 <div class="profile-tab active"><i class="fas fa-bars"></i></div>
                 <div class="profile-tab"><i class="fas fa-heart"></i></div>
             </div>
@@ -273,6 +268,34 @@
             <div class="modal-body" style="background: rgba(0,0,0,0.5);">
                 <div class="gift-grid" id="gift-grid">
                 </div>
+            </div>
+        </div>
+
+        <div id="analytics-modal" class="modal" style="height: 50%; z-index: 300;">
+            <div class="modal-header">
+                <h4><i class="fas fa-chart-line" style="color: #00f2fe;"></i> Video Analytics</h4>
+                <i class="fas fa-times close-modal" onclick="document.getElementById('analytics-modal').classList.remove('show')"></i>
+            </div>
+            <div class="modal-body" style="text-align: center;">
+                <h3 id="analytics-title" style="margin-bottom: 20px;">Video Titel</h3>
+                <div style="display:flex; justify-content:space-around; background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; border: 1px solid #333;">
+                    <div>
+                        <i class="fas fa-play" style="color: #00f2fe; font-size: 24px; margin-bottom: 10px;"></i>
+                        <strong id="analytics-views" style="display: block; font-size: 20px;">0</strong>
+                        <span style="font-size: 12px; color: #888;">Aufrufe</span>
+                    </div>
+                    <div>
+                        <i class="fas fa-heart" style="color: #ff0050; font-size: 24px; margin-bottom: 10px;"></i>
+                        <strong id="analytics-likes" style="display: block; font-size: 20px;">0</strong>
+                        <span style="font-size: 12px; color: #888;">Likes</span>
+                    </div>
+                    <div>
+                        <i class="fas fa-gift" style="color: #ffd700; font-size: 24px; margin-bottom: 10px;"></i>
+                        <strong id="analytics-gifts" style="display: block; font-size: 20px;">0</strong>
+                        <span style="font-size: 12px; color: #888;">Coins</span>
+                    </div>
+                </div>
+                <p style="margin-top: 20px; font-size: 14px; color: #aaa;">Engagement Rate: <strong id="analytics-engagement" style="color: #39ff14;">0%</strong></p>
             </div>
         </div>
 
@@ -447,7 +470,9 @@
                         <p style="word-break: break-all; padding: 0 10px;">Bild für Story auswählen</p>
                     </div>
                 </div>
-                <img id="story-preview-img" style="width: 100%; height: 200px; object-fit: contain; border-radius: 10px; display: none; margin-bottom: 15px; border: 1px solid #333;">
+                <input type="text" id="up-story-link" class="comment-input" placeholder="Link hinzufügen (nur Plus+++)..." style="width: 100%; margin-top: 10px; display: none;">
+
+                <img id="story-preview-img" style="width: 100%; height: 200px; object-fit: contain; border-radius: 10px; display: none; margin-bottom: 15px; border: 1px solid #333; margin-top: 15px;">
                 <p id="story-upload-status" style="text-align: center; font-size: 14px; font-weight: bold; color: #ff0050;"></p>
                 <button id="submit-story-upload" class="profile-action-btn" style="width:100%; min-height: 56px; font-size:16px;">Story posten</button>
             </div>
@@ -467,6 +492,8 @@
             <div style="position: absolute; top: 0; left: 0; width: 30%; height: 100%; z-index: 4002;" onclick="prevStory()"></div>
             <div style="position: absolute; top: 0; right: 0; width: 70%; height: 100%; z-index: 4002;" onclick="nextStory()"></div>
             <img id="sv-img" src="" style="width: 100%; height: 80%; object-fit: contain; margin-top: 60px; position: relative; z-index: 4001;">
+
+            <a id="sv-link-btn" href="#" target="_blank" class="profile-action-btn" style="position: absolute; bottom: 30px; z-index: 4006; display: none; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); color: white; border: 1px solid white;"><i class="fas fa-link"></i> Link öffnen</a>
         </div>
 
 
@@ -527,6 +554,7 @@
                     <div class="file-upload-design" id="up-file-btn" onclick="document.getElementById('up-file').click()">
                         <i class="fas fa-cloud-upload-alt"></i>
                         <p style="word-break: break-all; padding: 0 10px;">Video oder Bilder auswählen</p>
+                        <p style="font-size: 11px; color: #666; margin-top: 5px;">(Plus++: bis 3 Min. | Plus: 100MB)</p>
                     </div>
                 </div>
 
@@ -560,7 +588,11 @@
                         <button id="btn-next-img" class="profile-action-btn edit-btn" style="min-height: 36px; padding: 0 15px;"><i class="fas fa-chevron-right"></i></button>
                     </div>
 
-                    <button id="btn-add-text" class="profile-action-btn" style="width: 100%; background: white; color: black; margin-top: 10px; min-height: 40px;"><i class="fas fa-font"></i> Text hinzufügen</button>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button id="btn-add-text" class="profile-action-btn" style="flex: 1; background: white; color: black; min-height: 40px;"><i class="fas fa-font"></i> Text</button>
+                        <button class="profile-action-btn" onclick="document.getElementById('sticker-upload-input').click()" style="flex: 1; background: #ffd700; color: black; min-height: 40px;"><i class="fas fa-sticky-note"></i> Sticker (Plus+++)</button>
+                        <input type="file" id="sticker-upload-input" accept="image/*" style="display:none;">
+                    </div>
 
                     <div id="text-controls" style="display: none; margin-top: 15px; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; border: 1px solid #444;">
                         <input type="text" id="text-ctrl-input" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5);" placeholder="Textinhalt">
@@ -587,12 +619,12 @@
                         </div>
 
                         <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Größe</label>
-                        <input type="range" id="text-ctrl-size" min="15" max="100" value="24" class="trim-slider slider-blue" style="width: 100%; margin-bottom: 15px;">
+                        <input type="range" id="text-ctrl-size" min="15" max="300" value="24" class="trim-slider slider-blue" style="width: 100%; margin-bottom: 15px;">
 
                         <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Rotation</label>
                         <input type="range" id="text-ctrl-rot" min="-180" max="180" value="0" class="trim-slider slider-red" style="width: 100%; margin-bottom: 15px;">
 
-                        <button id="btn-delete-text" class="profile-action-btn" style="width: 100%; background: #ff4444; color: white; min-height: 40px;"><i class="fas fa-trash"></i> Text löschen</button>
+                        <button id="btn-delete-text" class="profile-action-btn" style="width: 100%; background: #ff4444; color: white; min-height: 40px;"><i class="fas fa-trash"></i> Element löschen</button>
                     </div>
 
                 </div>
@@ -610,14 +642,23 @@
                 <h4>Profil bearbeiten</h4><i class="fas fa-times close-modal" id="close-settings"></i>
             </div>
             <div class="modal-body upload-body">
-                <label style="color:#888; font-size:12px; margin-left:5px;">Profilbild URL</label>
+                <label style="color:#888; font-size:12px; margin-left:5px;">Profilbild URL (Auch GIFs!)</label>
                 <input type="text" id="edit-pic-input" class="comment-input" placeholder="https://..." style="border-radius:15px; margin-bottom:10px; width: 100%;">
                 <label style="color:#888; font-size:12px; margin-left:5px;">Anzeigename</label>
                 <input type="text" id="edit-displayname-input" class="comment-input" placeholder="Dein Name" maxlength="30" style="border-radius:15px; margin-bottom:10px; width: 100%;">
                 <label style="color:#888; font-size:12px; margin-left:5px;">Benutzername</label>
                 <input type="text" id="edit-username-input" class="comment-input" placeholder="benutzername" maxlength="20" style="border-radius:15px; margin-bottom:10px; width: 100%;">
                 <label style="color:#888; font-size:12px; margin-left:5px;">Bio</label>
-                <textarea id="edit-bio-input" class="comment-input" placeholder="Etwas über dich..." rows="4" style="resize:none; border-radius:15px; width:100%;"></textarea>
+                <textarea id="edit-bio-input" class="comment-input" placeholder="Etwas über dich..." rows="4" style="resize:none; border-radius:15px; width:100%; margin-bottom: 10px;"></textarea>
+
+                <div id="tier3-settings-area" style="display:none; background: rgba(255,215,0,0.05); padding: 15px; border-radius: 15px; border: 1px solid #ffd700;">
+                    <h5 style="color: #ffd700; margin-bottom: 10px;"><i class="fas fa-crown"></i> Plus+++ Einstellungen</h5>
+                    <label style="color:#888; font-size:12px; margin-left:5px;">Profil Song (MP3/WAV URL)</label>
+                    <input type="text" id="edit-song-input" class="comment-input" placeholder="https://..." style="border-radius:15px; margin-bottom:10px; width: 100%; border-color: #ffd700;">
+                    <label style="color:#888; font-size:12px; margin-left:5px;">Custom Profile Color (Hex)</label>
+                    <input type="color" id="edit-color-input" style="width: 100%; height: 40px; border-radius: 10px; border: 1px solid #ffd700; background: none; margin-bottom: 10px; cursor: pointer;">
+                </div>
+
                 <button id="save-settings-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; min-height: 56px; font-size:16px;">Profil Speichern</button>
             </div>
         </div>
@@ -628,11 +669,18 @@
             </div>
             <div class="modal-body">
                 <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
-                    <h5 style="margin-bottom: 15px; color: #00f2fe;"><i class="fas fa-palette"></i> App Design (Phil Shorts++)</h5>
-                    <select id="app-theme-select" class="comment-input" style="width: 100%; background: #111; color: white;">
+                    <h5 style="margin-bottom: 15px; color: #00f2fe;"><i class="fas fa-palette"></i> App Design (Plus++)</h5>
+                    <select id="app-theme-select" class="comment-input" style="width: 100%; background: #111; color: white; margin-bottom: 15px;">
                         <option value="default">Standard (Dunkel)</option>
                         <option value="deep-blue">Deep Blue</option>
                         <option value="neon-pink">Neon Pink</option>
+                    </select>
+
+                    <h5 style="margin-bottom: 15px; color: #ffd700;"><i class="fas fa-icons"></i> App Icon (Plus+++)</h5>
+                    <select id="app-icon-select" class="comment-input" style="width: 100%; background: #111; color: white;">
+                        <option value="default">Standard Icon</option>
+                        <option value="gold">Goldenes Icon</option>
+                        <option value="dark">Dark Mode Icon</option>
                     </select>
                 </div>
 
@@ -668,7 +716,12 @@
                     <button class="profile-action-btn" onclick="sendSupport()" style="width:100%; background: #ffd700; color: black;"><i class="fas fa-ticket-alt"></i> Ticket erstellen</button>
                 </div>
 
-                <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050; min-height: 56px; font-size: 17px;">Abmelden / Account wechseln</button>
+                <div id="account-switcher-area" style="display:none; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
+                    <h5 style="margin-bottom: 10px; color: #ffd700;"><i class="fas fa-users"></i> Multi-Account Fast Switch (Plus+++)</h5>
+                    <button class="profile-action-btn edit-btn" onclick="document.getElementById('logout-btn').click()" style="width: 100%; margin-bottom: 10px;">Anderen Account hinzufügen</button>
+                </div>
+
+                <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050; min-height: 56px; font-size: 17px;">Abmelden</button>
             </div>
         </div>
 
