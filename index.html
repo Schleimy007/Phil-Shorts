@@ -428,6 +428,7 @@
                             <li><i class="fas fa-check"></i> Live Streaming Zugang (Beta)</li>
                             <li><i class="fas fa-check"></i> Multi-Account Fast Switch</li>
                             <li><i class="fas fa-check"></i> Geheime Profil-Badges</li>
+                            <li><i class="fas fa-check"></i> Custom Creator Rahmen (Farbe & Gradient wählbar)</li>
                         </ul>
                         <div class="plus-plan-card" onclick="buyPhilPlus(5, 40000, 3)">
                             <div>
@@ -733,6 +734,47 @@
                 <button id="close-alert-btn" class="profile-action-btn" style="width:100%; margin-top:20px; min-height: 50px;">Okay</button>
             </div>
         </div>
+
+        <div id="sub-conflict-modal" class="alert-modal-overlay">
+            <div class="alert-box" style="border-color: #ff0050;">
+                <i class="fas fa-exclamation-triangle alert-icon" style="color: #ff0050;"></i>
+                <h3>Abo Konflikt</h3>
+                <p id="sub-conflict-msg" style="margin-bottom: 20px; color: #ccc;">Du hast bereits ein aktives Phil Shorts+ Abo. Möchtest du dein neues Abo kaufen (altes wird ersetzt) oder dein aktuelles Abo kündigen?</p>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <button class="profile-action-btn" onclick="confirmSubPurchase()" style="min-height:45px; font-size:14px; background:#00f2fe; color:black;">Trotzdem Kaufen / Verlängern</button>
+                    <button class="profile-action-btn" onclick="cancelSubscription()" style="min-height:45px; font-size:14px; background:#ff4444; color:white;">Abo Abbestellen (Löschen)</button>
+                    <button class="profile-action-btn edit-btn" onclick="document.getElementById('sub-conflict-modal').classList.remove('show')" style="min-height:45px; font-size:14px;">Abbrechen</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="custom-border-modal" class="modal" style="height: auto; max-height: 80%;">
+            <div class="modal-header">
+                <h4>Custom Border (Plus+++)</h4><i class="fas fa-times close-modal" onclick="document.getElementById('custom-border-modal').classList.remove('show')"></i>
+            </div>
+            <div class="modal-body">
+                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #ffd700;">
+                    <div style="text-align:center; margin-bottom: 20px;">
+                        <div id="custom-border-preview" class="profile-image" style="width: 80px; height: 80px; background: #333; margin: 0 auto; border-radius: 50%;"></div>
+                    </div>
+                    <label style="color:#888; font-size:12px;">Farbe 1</label>
+                    <input type="color" id="cb-color1" value="#ff0050" style="width: 100%; height: 40px; border-radius: 10px; margin-bottom: 15px; cursor: pointer; border:none;">
+
+                    <div class="setting-toggle-row" style="margin-bottom: 15px;">
+                        <span>Gradient (Verlauf) aktivieren</span>
+                        <label class="switch"><input type="checkbox" id="cb-grad-toggle"><span class="slider round"></span></label>
+                    </div>
+
+                    <div id="cb-color2-container" style="display:none;">
+                        <label style="color:#888; font-size:12px;">Farbe 2</label>
+                        <input type="color" id="cb-color2" value="#00f2fe" style="width: 100%; height: 40px; border-radius: 10px; margin-bottom: 15px; cursor: pointer; border:none;">
+                    </div>
+
+                    <button class="profile-action-btn" onclick="saveCustomBorder()" style="width: 100%; background: #ffd700; color: black; margin-top: 10px;">Speichern & Ausrüsten</button>
+                </div>
+            </div>
+        </div>
+
     </div>
     <script type="module" src="script.js"></script>
 </body>

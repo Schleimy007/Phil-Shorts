@@ -164,7 +164,9 @@ function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackV
         pic: user ? user.photoURL : fallbackPic,
         verified: user ? (user.verified === true) : fallbackVerified,
         philPlusUntil: user ? user.philPlusUntil : 0,
-        philPlusTier: user ? user.philPlusTier : 0
+        philPlusTier: user ? user.philPlusTier : 0,
+        activeBorder: user ? user.activeBorder : "",
+        customBorder: user ? user.customBorder : null
     };
 }
 
@@ -261,6 +263,38 @@ function checkPhilPlusStatus(requiredTier = 1) {
 
 function applyAppTheme(themeName) { if (!themeName || themeName === 'default') { document.body.className = ''; } else { document.body.className = `theme-${themeName}`; } }
 
+function getInlineBorderStyle(activeBorder, customBorder) {
+    if (!activeBorder || activeBorder === 'none') return '';
+    if (activeBorder === 'custom' && customBorder) {
+        if (customBorder.grad) {
+            return `border: 3px solid transparent; background: linear-gradient(#000, #000) padding-box, linear-gradient(45deg, ${customBorder.c1}, ${customBorder.c2}) border-box; padding: 2px;`;
+        } else {
+            return `border: 3px solid ${customBorder.c1}; box-shadow: 0 0 10px ${customBorder.c1}, inset 0 0 5px ${customBorder.c1}; padding: 2px;`;
+        }
+    }
+    return '';
+}
+
+function getBorderClass(activeBorder) {
+    if (!activeBorder || activeBorder === 'none' || activeBorder === 'custom') return '';
+    return `border-${activeBorder}`;
+}
+
+function applyBorderStyles(el, activeBorder, customBorder) {
+    el.className = el.className.replace(/border-[^\s]+/g, '');
+    el.classList.remove('border-none', 'border-custom');
+
+    if (!activeBorder || activeBorder === 'none') {
+        el.style.cssText = '';
+        el.classList.add('border-none');
+    } else if (activeBorder === 'custom' && customBorder) {
+        el.style.cssText = getInlineBorderStyle('custom', customBorder);
+    } else {
+        el.style.cssText = '';
+        el.classList.add(`border-${activeBorder}`);
+    }
+}
+
 function initLiveUser() {
     if (!currentUser) return;
     if (userUnsubscribe) userUnsubscribe();
@@ -282,6 +316,7 @@ function initLiveUser() {
             if (!currentUser.appTheme) currentUser.appTheme = 'default';
             if (!currentUser.appIcon) currentUser.appIcon = 'default';
             if (!currentUser.philPlusTier) currentUser.philPlusTier = 0;
+            if (!currentUser.customBorder) currentUser.customBorder = { c1: '#ff0050', c2: '#00f2fe', grad: true };
 
             // TIER 2 FEATURE: 2x Coins bei täglichem Login
             const today = new Date().toDateString();
@@ -306,14 +341,15 @@ function initLiveUser() {
                 if (currentUser.activeBorder === 'chroma') {
                     currentUser.activeBorder = '';
                     needsUpdate = true;
-                    document.querySelectorAll('.profile-image').forEach(el => el.classList.remove('border-chroma'));
+                    applyBorderStyles(document.getElementById('profile-pic'), '', null);
                 }
             }
             if (!checkPhilPlusStatus(3)) {
-                if (currentUser.profileSong || currentUser.profileColor || (currentUser.appIcon && currentUser.appIcon !== 'default')) {
+                if (currentUser.profileSong || currentUser.profileColor || (currentUser.appIcon && currentUser.appIcon !== 'default') || currentUser.activeBorder === 'custom') {
                     currentUser.profileSong = '';
                     currentUser.profileColor = '';
                     currentUser.appIcon = 'default';
+                    if (currentUser.activeBorder === 'custom') currentUser.activeBorder = '';
                     needsUpdate = true;
                 }
             }
@@ -340,17 +376,17 @@ function initLiveUser() {
             if (checkPhilPlusStatus(3) && currentUser.appIcon) {
                 document.getElementById('app-icon-select').value = currentUser.appIcon;
                 const favicon = document.getElementById('dynamic-favicon');
-                if (currentUser.appIcon === 'gold') favicon.href = "https://cdn-icons-png.flaticon.com/512/189/189118.png"; // Dummy Gold Icon
-                else if (currentUser.appIcon === 'dark') favicon.href = "https://cdn-icons-png.flaticon.com/512/32/32114.png"; // Dummy Dark Icon
+                if (currentUser.appIcon === 'gold') favicon.href = "https://cdn-icons-png.flaticon.com/512/189/189118.png";
+                else if (currentUser.appIcon === 'dark') favicon.href = "https://cdn-icons-png.flaticon.com/512/32/32114.png";
                 else favicon.href = "https://i.imgur.com/JDPRzCc.png";
             }
 
-            // UI Elements
+            // UI Elements Plus+++
             if (checkPhilPlusStatus(3)) {
                 document.getElementById('tier3-settings-area').style.display = 'block';
                 document.getElementById('account-switcher-area').style.display = 'block';
                 document.getElementById('up-story-link').style.display = 'block';
-                document.getElementById('btn-live-stream').style.display = 'block';
+                document.getElementById('btn-live-stream').style.display = 'flex';
             } else {
                 document.getElementById('tier3-settings-area').style.display = 'none';
                 document.getElementById('account-switcher-area').style.display = 'none';
@@ -367,10 +403,13 @@ function initLiveUser() {
             const viewsEl = document.getElementById('my-views');
             if (viewsEl) viewsEl.innerText = currentUser.profileViews || 0;
             const actionBtn = document.getElementById('profile-action-btn');
+
             if (actionBtn && actionBtn.dataset.uid === currentUser.uid) {
                 document.getElementById('stat-followers').innerText = currentUser.followers.length;
                 document.getElementById('stat-following').innerText = currentUser.following.length;
-                updateProfileBorder(currentUser.activeBorder, 'profile-pic');
+
+                applyBorderStyles(document.getElementById('profile-pic'), currentUser.activeBorder, currentUser.customBorder);
+
                 if (checkPhilPlusStatus(1)) {
                     document.getElementById('phil-plus-badge-container').style.display = 'block';
                     let tierText = "Phil Shorts+";
@@ -385,13 +424,6 @@ function initLiveUser() {
     });
 }
 
-function updateProfileBorder(borderName, elementId) {
-    const el = document.getElementById(elementId);
-    if (!el) return;
-    el.className = 'profile-image';
-    if (borderName) el.classList.add(`border-${borderName}`);
-}
-
 function initSearchUsers() {
     onSnapshot(collection(db, "users"), (snapshot) => {
         allKnownUsers = [];
@@ -402,7 +434,6 @@ function initSearchUsers() {
             let nameClass = "";
             let tier3Badge = "";
             if (u.philPlusUntil && u.philPlusUntil > Date.now() && (u.philPlusTier || 1) >= 1) nameClass = "name-phil-plus";
-            // TIER 3 FEATURE: Geheimes Profil-Badge
             if (u.philPlusUntil && u.philPlusUntil > Date.now() && u.philPlusTier === 3) tier3Badge = ' <i class="fas fa-gem" style="color: #00f2fe; font-size: 12px;" title="Plus+++ Legende"></i>';
 
             document.querySelectorAll(`.live-name-${u.uid}`).forEach(el => {
@@ -413,11 +444,7 @@ function initSearchUsers() {
             document.querySelectorAll(`.live-username-${u.uid}`).forEach(el => el.innerText = '@' + cleanUsername);
             document.querySelectorAll(`.live-pic-${u.uid}`).forEach(el => {
                 el.src = u.photoURL;
-                if (u.activeBorder) {
-                    el.style.border = "none";
-                    el.className = el.className.replace(/border-[^\s]+/g, '');
-                    el.classList.add(`border-${u.activeBorder}`);
-                }
+                applyBorderStyles(el, u.activeBorder, u.customBorder);
             });
         });
     });
@@ -443,7 +470,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
                 nameQuery = query(collection(db, "users"), where("username", "==", finalUser));
                 nameSnap = await getDocs(nameQuery);
             }
-            const newUser = { uid: uid, displayName: rawDisplayName, username: finalUser, email: email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0, isAdmin: false, banned: false, decorations: [], activeBorder: "", stories: [], appTheme: 'default', philPlusTier: 0, lastLogin: new Date().toDateString() };
+            const newUser = { uid: uid, displayName: rawDisplayName, username: finalUser, email: email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0, isAdmin: false, banned: false, decorations: [], activeBorder: "", stories: [], appTheme: 'default', philPlusTier: 0, lastLogin: new Date().toDateString(), customBorder: { c1: '#ff0050', c2: '#00f2fe', grad: true } };
             await setDoc(userRef, newUser);
             currentUser = newUser;
         } else {
@@ -459,6 +486,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
             if (!currentUser.decorations) currentUser.decorations = [];
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             if (currentUser.coins === undefined) await updateDoc(userRef, { coins: 1000, profileViews: 0, followers: [] });
+            if (!currentUser.customBorder) await updateDoc(userRef, { customBorder: { c1: '#ff0050', c2: '#00f2fe', grad: true } });
         }
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
         document.getElementById('login-screen').classList.remove('show');
@@ -713,7 +741,10 @@ function createVideoElement(video) {
     }
     let rawPreview = (video.description || "").substring(0, 50); let previewHtml = formatText(rawPreview); if ((video.description && video.description.length > 50)) previewHtml += '... <strong>mehr anzeigen</strong>';
 
-    div.innerHTML = `<div class="video-inner is-paused"><div class="video-wrapper">${mediaHTML}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div><div class="video__footer"><h3 class="creator-name" onclick="openProfile('${video.authorUid}')"><span class="live-name-${video.authorUid} ${nameClass}">${authorData.displayName}${verifiedBadge}${tier3Badge}</span></h3><p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p><h4 class="video-title" onclick="openVideoDetails('${video.id}')">${video.title || 'Ohne Titel'}</h4><p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${previewHtml}</p></div><div class="video__sidebar"><div class="sidebar__profile" onclick="openProfile('${video.authorUid}')"><img src="${authorData.pic}" class="live-pic-${video.authorUid}" alt="Profil">${plusButton}</div><div class="videoSidebar__button like-btn ${hasLiked}" data-id="${video.id}"><i class="fas fa-heart"></i><p class="like-count">${realLikes}</p></div><div class="videoSidebar__button comment-btn" data-id="${video.id}"><i class="fas fa-comment-dots"></i><p class="comment-count-txt">${commentCount}</p></div><div class="videoSidebar__button gift-btn" data-id="${video.id}"><i class="fas fa-gift" style="color: #ffd700;"></i><p class="gift-count">${video.gifts || 0}</p></div><div class="videoSidebar__button share-btn" data-id="${video.id}"><i class="fas fa-share"></i><p>Teilen</p></div>${downloadVideoBtn}${analyticsBtn}${editVideoBtn}${deleteVideoBtn}</div></div>`;
+    const inlineStyle = getInlineBorderStyle(authorData.activeBorder, authorData.customBorder);
+    const bClass = getBorderClass(authorData.activeBorder);
+
+    div.innerHTML = `<div class="video-inner is-paused"><div class="video-wrapper">${mediaHTML}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div><div class="video__footer"><h3 class="creator-name" onclick="openProfile('${video.authorUid}')"><span class="live-name-${video.authorUid} ${nameClass}">${authorData.displayName}${verifiedBadge}${tier3Badge}</span></h3><p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p><h4 class="video-title" onclick="openVideoDetails('${video.id}')">${video.title || 'Ohne Titel'}</h4><p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${previewHtml}</p></div><div class="video__sidebar"><div class="sidebar__profile" onclick="openProfile('${video.authorUid}')"><img src="${authorData.pic}" class="live-pic-${video.authorUid} ${bClass}" style="${inlineStyle}" alt="Profil">${plusButton}</div><div class="videoSidebar__button like-btn ${hasLiked}" data-id="${video.id}"><i class="fas fa-heart"></i><p class="like-count">${realLikes}</p></div><div class="videoSidebar__button comment-btn" data-id="${video.id}"><i class="fas fa-comment-dots"></i><p class="comment-count-txt">${commentCount}</p></div><div class="videoSidebar__button gift-btn" data-id="${video.id}"><i class="fas fa-gift" style="color: #ffd700;"></i><p class="gift-count">${video.gifts || 0}</p></div><div class="videoSidebar__button share-btn" data-id="${video.id}"><i class="fas fa-share"></i><p>Teilen</p></div>${downloadVideoBtn}${analyticsBtn}${editVideoBtn}${deleteVideoBtn}</div></div>`;
     attachInteractionsToVideo(div); return div;
 }
 
@@ -1017,7 +1048,9 @@ window.openProfile = async function(targetUid) {
         }
 
         document.getElementById('profile-title').innerHTML = '@' + cleanUsername; document.getElementById('profile-name').innerHTML = `<span class="${nameClass}">${targetUser.displayName}</span>${verifiedBadge}${tier3Badge}`; document.getElementById('profile-username').innerText = '@' + cleanUsername; document.getElementById('profile-bio').innerHTML = formatText(targetUser.bio || "Keine Bio vorhanden."); document.getElementById('profile-pic').src = targetUser.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'; document.getElementById('stat-likes').innerText = totalLikes; document.getElementById('stat-followers').innerText = realFollowersCount; document.getElementById('stat-following').innerText = targetUser.following ? targetUser.following.length : 0;
-        updateProfileBorder(targetUser.activeBorder, 'profile-pic');
+        
+        applyBorderStyles(document.getElementById('profile-pic'), targetUser.activeBorder, targetUser.customBorder);
+        
         const actionBtn = document.getElementById('profile-action-btn'); const msgBtn = document.getElementById('profile-message-btn'); const shopBtn = document.getElementById('profile-shop-btn'); actionBtn.dataset.uid = targetUid; const settingsIcon = document.getElementById('open-settings'); const adminDashboardBtn = document.getElementById('open-admin-dashboard'); const privateStats = document.getElementById('private-stats'); const adminControls = document.getElementById('admin-controls'); adminControls.innerHTML = '';
         if (currentUser && (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) && targetUid !== currentUser.uid) { const isVerif = targetUser.verified || false; adminControls.innerHTML = `<button onclick="toggleVerify('${targetUid}', ${isVerif})" class="profile-action-btn" style="background: transparent; color: #00f2fe; border: 1px solid #00f2fe; margin-top: 15px; width: 100%;">👑 Admin: ${isVerif ? 'Blauen Haken entfernen' : 'Blauen Haken geben'}</button>`; }
         if (currentUser && targetUid === currentUser.uid) { msgBtn.style.display = 'none'; shopBtn.style.display = 'block'; actionBtn.innerText = "Profil bearbeiten"; actionBtn.classList.add('edit-btn'); actionBtn.onclick = () => { document.getElementById('edit-displayname-input').value = currentUser.displayName; document.getElementById('edit-username-input').value = currentUser.username || cleanUsername; document.getElementById('edit-pic-input').value = currentUser.photoURL; document.getElementById('edit-bio-input').value = currentUser.bio; document.getElementById('edit-song-input').value = currentUser.profileSong || ""; document.getElementById('edit-color-input').value = currentUser.profileColor || "#000000"; document.getElementById('settings-modal').classList.add('show'); }; settingsIcon.style.display = 'block'; settingsIcon.onclick = () => { updateNotifUI(); document.getElementById('app-settings-modal').classList.add('show'); }; adminDashboardBtn.style.display = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) ? 'block' : 'none'; privateStats.style.display = 'block'; document.getElementById('my-coins').innerText = targetUser.coins || 0; document.getElementById('my-views').innerText = targetUser.profileViews || 0; } 
@@ -1039,7 +1072,42 @@ window.openProfile = async function(targetUid) {
     }
 };
 
-const shopItems = [ { id: 'b1', name: 'Ohne', type: 'border', cost: 0, cssClass: 'none' }, { id: 'b2', name: 'Neon', type: 'border', cost: 500, cssClass: 'neon' }, { id: 'b3', name: 'Gold', type: 'border', cost: 1000, cssClass: 'gold' }, { id: 'b4', name: '3663 Pro', type: 'border', cost: 2500, cssClass: '3663' }, { id: 'b5', name: 'Diamant', type: 'border', cost: 5000, cssClass: 'diamond' }, { id: 'b6', name: 'RGB Chroma (Plus++)', type: 'border', cost: 0, cssClass: 'chroma', requiresPlusLevel: 2 } ];
+const shopItems = [ 
+    { id: 'b1', name: 'Ohne', type: 'border', cost: 0, cssClass: 'none' }, 
+    { id: 'b2', name: 'Neon Blau', type: 'border', cost: 500, cssClass: 'neon-blue' }, 
+    { id: 'b3', name: 'Gold', type: 'border', cost: 1000, cssClass: 'gold' }, 
+    { id: 'b4', name: '3663 Pro', type: 'border', cost: 2500, cssClass: '3663' }, 
+    { id: 'b5', name: 'Diamant', type: 'border', cost: 5000, cssClass: 'diamond' }, 
+    { id: 'b6', name: 'RGB Chroma (Plus++)', type: 'border', cost: 0, cssClass: 'chroma', requiresPlusLevel: 2 },
+    { id: 'b7', name: 'Rot', type: 'border', cost: 100, cssClass: 'solid-red' },
+    { id: 'b8', name: 'Blau', type: 'border', cost: 100, cssClass: 'solid-blue' },
+    { id: 'b9', name: 'Grün', type: 'border', cost: 100, cssClass: 'solid-green' },
+    { id: 'b10', name: 'Gelb', type: 'border', cost: 100, cssClass: 'solid-yellow' },
+    { id: 'b11', name: 'Lila', type: 'border', cost: 100, cssClass: 'solid-purple' },
+    { id: 'b12', name: 'Orange', type: 'border', cost: 100, cssClass: 'solid-orange' },
+    { id: 'b13', name: 'Pink', type: 'border', cost: 100, cssClass: 'solid-pink' },
+    { id: 'b14', name: 'Weiß', type: 'border', cost: 100, cssClass: 'solid-white' },
+    { id: 'b15', name: 'Neon Rot', type: 'border', cost: 800, cssClass: 'neon-red' },
+    { id: 'b16', name: 'Neon Grün', type: 'border', cost: 800, cssClass: 'neon-green' },
+    { id: 'b17', name: 'Neon Lila', type: 'border', cost: 800, cssClass: 'neon-purple' },
+    { id: 'b18', name: 'Neon Pink', type: 'border', cost: 800, cssClass: 'neon-pink' },
+    { id: 'b19', name: 'Neon Orange', type: 'border', cost: 800, cssClass: 'neon-orange' },
+    { id: 'b20', name: 'Dashed Rot', type: 'border', cost: 300, cssClass: 'dashed-red' },
+    { id: 'b21', name: 'Dashed Blau', type: 'border', cost: 300, cssClass: 'dashed-blue' },
+    { id: 'b22', name: 'Dotted Grün', type: 'border', cost: 300, cssClass: 'dotted-green' },
+    { id: 'b23', name: 'Double Lila', type: 'border', cost: 400, cssClass: 'double-purple' },
+    { id: 'b24', name: 'Double Gold', type: 'border', cost: 1500, cssClass: 'double-gold' },
+    { id: 'b25', name: 'Fire Gradient', type: 'border', cost: 2000, cssClass: 'grad-fire' },
+    { id: 'b26', name: 'Ice Gradient', type: 'border', cost: 2000, cssClass: 'grad-ice' },
+    { id: 'b27', name: 'Toxic Gradient', type: 'border', cost: 2000, cssClass: 'grad-toxic' },
+    { id: 'b28', name: 'Sunset Gradient', type: 'border', cost: 2000, cssClass: 'grad-sunset' },
+    { id: 'b29', name: 'Cyberpunk', type: 'border', cost: 3000, cssClass: 'cyberpunk' },
+    { id: 'b30', name: 'Vaporwave', type: 'border', cost: 3000, cssClass: 'vaporwave' },
+    { id: 'b31', name: 'Cosmic', type: 'border', cost: 3500, cssClass: 'cosmic' },
+    { id: 'b32', name: 'Rainbow', type: 'border', cost: 4000, cssClass: 'rainbow' },
+    { id: 'b_custom', name: 'Custom (Plus+++)', type: 'border', cost: 0, cssClass: 'custom', requiresPlusLevel: 3 }
+];
+
 document.getElementById('profile-shop-btn').addEventListener('click', () => { if(!currentUser) return; document.getElementById('shop-modal-coins').innerText = currentUser.coins; renderShopBorders(); document.getElementById('shop-modal').classList.add('show'); });
 document.querySelectorAll('.shop-tab').forEach(tab => { tab.addEventListener('click', (e) => { document.querySelectorAll('.shop-tab').forEach(t => t.classList.remove('active')); e.target.classList.add('active'); document.querySelectorAll('.shop-content-section').forEach(s => s.style.display = 'none'); document.getElementById(e.target.dataset.tab).style.display = 'block'; }); });
 document.getElementById('close-shop-modal').addEventListener('click', () => document.getElementById('shop-modal').classList.remove('show'));
@@ -1049,43 +1117,162 @@ function renderShopBorders() {
     grid.innerHTML = shopItems.filter(i => i.type === 'border').map(item => {
         const hasRequiredLevel = item.requiresPlusLevel ? checkPhilPlusStatus(item.requiresPlusLevel) : true; 
         const isOwned = currentUser.decorations && currentUser.decorations.includes(item.id) || item.cost === 0; const isEquipped = currentUser.activeBorder === item.cssClass;
-        let btnHtml = ''; if(item.requiresPlusLevel && !hasRequiredLevel) { btnHtml = `<button class="profile-action-btn edit-btn" style="width:100%; font-size:12px; min-height:30px;">Phil Shorts++ benötigt</button>`; } else if(isEquipped) { btnHtml = `<button class="profile-action-btn edit-btn" style="width:100%; font-size:12px; min-height:30px;">Ausgerüstet</button>`; } else if(isOwned) { btnHtml = `<button class="profile-action-btn" onclick="equipDecoration('${item.id}', '${item.cssClass}')" style="width:100%; font-size:12px; min-height:30px; background:#00f2fe; color:black;">Ausrüsten</button>`; } else { btnHtml = `<button class="profile-action-btn" onclick="buyDecoration('${item.id}', ${item.cost})" style="width:100%; font-size:12px; min-height:30px;"><i class="fas fa-coins"></i> ${item.cost}</button>`; }
-        return `<div class="shop-item-card"><div class="shop-item-preview border-${item.cssClass}"></div><strong style="font-size: 14px; display:block; margin-bottom:10px;">${item.name}</strong>${btnHtml}</div>`;
+        
+        let btnHtml = ''; 
+        if(item.requiresPlusLevel && !hasRequiredLevel) { 
+            btnHtml = `<button class="profile-action-btn edit-btn" style="width:100%; font-size:12px; min-height:30px;">Plus Level ${item.requiresPlusLevel} benötigt</button>`; 
+        } else if(item.cssClass === 'custom') {
+            if(isEquipped) {
+                btnHtml = `<button class="profile-action-btn" onclick="openCustomBorderConfig()" style="width:100%; font-size:12px; min-height:30px; background:#00f2fe; color:black;">Ausrüsten & Anpassen</button>`;
+            } else {
+                btnHtml = `<button class="profile-action-btn" onclick="openCustomBorderConfig()" style="width:100%; font-size:12px; min-height:30px; background:#00f2fe; color:black;">Ausrüsten & Anpassen</button>`;
+            }
+        } else if(isEquipped) { 
+            btnHtml = `<button class="profile-action-btn edit-btn" style="width:100%; font-size:12px; min-height:30px;">Ausgerüstet</button>`; 
+        } else if(isOwned) { 
+            btnHtml = `<button class="profile-action-btn" onclick="equipDecoration('${item.id}', '${item.cssClass}')" style="width:100%; font-size:12px; min-height:30px; background:#00f2fe; color:black;">Ausrüsten</button>`; 
+        } else { 
+            btnHtml = `<button class="profile-action-btn" onclick="buyDecoration('${item.id}', ${item.cost})" style="width:100%; font-size:12px; min-height:30px;"><i class="fas fa-coins"></i> ${item.cost}</button>`; 
+        }
+        
+        let previewStyle = '';
+        if(item.cssClass === 'custom' && currentUser.customBorder) {
+            previewStyle = getInlineBorderStyle('custom', currentUser.customBorder);
+        }
+
+        return `<div class="shop-item-card"><div class="shop-item-preview border-${item.cssClass}" style="${previewStyle}"></div><strong style="font-size: 14px; display:block; margin-bottom:10px;">${item.name}</strong>${btnHtml}</div>`;
     }).join('');
 }
 
 window.buyDecoration = async function(id, cost) { if(!currentUser) return; if(currentUser.coins < cost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins dafür!"); try { currentUser.coins -= cost; if(!currentUser.decorations) currentUser.decorations = []; currentUser.decorations.push(id); await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-cost), decorations: arrayUnion(id) }); document.getElementById('shop-modal-coins').innerText = currentUser.coins; document.getElementById('my-coins').innerText = currentUser.coins; renderShopBorders(); showToast("Erfolgreich gekauft!"); } catch(e) { showCustomAlert("Fehler", "Kauf fehlgeschlagen."); } }
 window.equipDecoration = async function(id, cssClass) { if(!currentUser) return; try { let finalClass = cssClass === 'none' ? "" : cssClass; currentUser.activeBorder = finalClass; await updateDoc(doc(db, "users", currentUser.uid), { activeBorder: finalClass }); renderShopBorders(); showToast("Ausgerüstet!"); } catch(e) {} }
 
+// --- CUSTOM BORDER LOGIC ---
+window.openCustomBorderConfig = function() {
+    if(!checkPhilPlusStatus(3)) return;
+    const modal = document.getElementById('custom-border-modal');
+    
+    // Load current values
+    if(currentUser.customBorder) {
+        document.getElementById('cb-color1').value = currentUser.customBorder.c1;
+        document.getElementById('cb-color2').value = currentUser.customBorder.c2;
+        document.getElementById('cb-grad-toggle').checked = currentUser.customBorder.grad;
+    }
+    updateCustomBorderPreview();
+    modal.classList.add('show');
+}
+
+function updateCustomBorderPreview() {
+    const c1 = document.getElementById('cb-color1').value;
+    const c2 = document.getElementById('cb-color2').value;
+    const grad = document.getElementById('cb-grad-toggle').checked;
+    
+    if(grad) {
+        document.getElementById('cb-color2-container').style.display = 'block';
+    } else {
+        document.getElementById('cb-color2-container').style.display = 'none';
+    }
+    
+    const preview = document.getElementById('custom-border-preview');
+    applyBorderStyles(preview, 'custom', { c1, c2, grad });
+}
+
+document.getElementById('cb-color1').addEventListener('input', updateCustomBorderPreview);
+document.getElementById('cb-color2').addEventListener('input', updateCustomBorderPreview);
+document.getElementById('cb-grad-toggle').addEventListener('change', updateCustomBorderPreview);
+
+window.saveCustomBorder = async function() {
+    if(!currentUser || !checkPhilPlusStatus(3)) return;
+    const c1 = document.getElementById('cb-color1').value;
+    const c2 = document.getElementById('cb-color2').value;
+    const grad = document.getElementById('cb-grad-toggle').checked;
+    
+    try {
+        currentUser.activeBorder = 'custom';
+        currentUser.customBorder = { c1, c2, grad };
+        await updateDoc(doc(db, "users", currentUser.uid), { 
+            activeBorder: 'custom',
+            customBorder: { c1, c2, grad }
+        });
+        document.getElementById('custom-border-modal').classList.remove('show');
+        renderShopBorders();
+        showToast("Custom Border ausgerüstet!");
+    } catch(e) {
+        showCustomAlert("Fehler", "Konnte nicht gespeichert werden.");
+    }
+}
+
+// --- ABO KONFLIKT LOGIC ---
+window.pendingSub = null;
+
 window.buyPhilPlus = async function(days, cost, tier) { 
     if(!currentUser) return; 
     
-    // Check if trying to buy a lower tier while having an active higher tier
     if(checkPhilPlusStatus(1)) {
-        if(currentUser.philPlusTier > tier) {
-            if(!confirm(`Warnung: Du besitzt aktuell Stufe ${currentUser.philPlusTier}. Möchtest du wirklich auf Stufe ${tier} wechseln?`)) return;
-        } else if (currentUser.philPlusTier === tier) {
-             if(!confirm(`Du hast bereits Stufe ${tier}. Abo um ${days} Tage verlängern?`)) return;
+        // Abo-Konflikt-Modal anzeigen
+        window.pendingSub = { days, cost, tier };
+        
+        let msg = `Du besitzt aktuell Stufe ${currentUser.philPlusTier}. Möchtest du dein neues Abo (Stufe ${tier}) kaufen und das aktuelle überschreiben, oder dein Abo komplett löschen?`;
+        if(currentUser.philPlusTier === tier) {
+            msg = `Du hast bereits Stufe ${tier}. Möchtest du dein Abo um ${days} Tage verlängern, oder das Abo abbestellen?`;
         }
+        
+        document.getElementById('sub-conflict-msg').innerText = msg;
+        document.getElementById('shop-modal').classList.remove('show');
+        document.getElementById('sub-conflict-modal').classList.add('show');
+        return;
     }
 
     if(currentUser.coins < cost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins für dieses Abo."); 
     if(confirm(`Möchtest du Phil Shorts+ (Stufe ${tier}) für ${days} Tage kaufen? Kosten: ${cost} Coins.`)) { 
-        try { 
-            currentUser.coins -= cost; 
-            let currentUntil = currentUser.philPlusUntil && currentUser.philPlusUntil > Date.now() ? currentUser.philPlusUntil : Date.now(); 
-            let newUntil = currentUntil + (days * 86400000); 
-            currentUser.philPlusUntil = newUntil; 
-            currentUser.philPlusTier = tier;
-            await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-cost), philPlusUntil: newUntil, philPlusTier: tier }); 
-            document.getElementById('shop-modal-coins').innerText = currentUser.coins; 
-            document.getElementById('my-coins').innerText = currentUser.coins; 
-            showToast(`Phil Shorts+ aktiviert! 🎉`); 
-            document.getElementById('shop-modal').classList.remove('show'); 
-            initLiveUser(); 
-        } catch(e) { showCustomAlert("Fehler", "Kauf fehlgeschlagen."); } 
+        executeSubPurchase(days, cost, tier);
     } 
 }
+
+window.confirmSubPurchase = function() {
+    if(!window.pendingSub) return;
+    const { days, cost, tier } = window.pendingSub;
+    if(currentUser.coins < cost) {
+        showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins dafür.");
+        document.getElementById('sub-conflict-modal').classList.remove('show');
+        return;
+    }
+    document.getElementById('sub-conflict-modal').classList.remove('show');
+    executeSubPurchase(days, cost, tier);
+}
+
+window.cancelSubscription = async function() {
+    if(!currentUser) return;
+    if(confirm("Möchtest du dein Phil Shorts+ Abo WIRKLICH endgültig löschen? (Keine Rückerstattung!)")) {
+        try {
+            currentUser.philPlusUntil = 0;
+            currentUser.philPlusTier = 0;
+            await updateDoc(doc(db, "users", currentUser.uid), { philPlusUntil: 0, philPlusTier: 0 });
+            document.getElementById('sub-conflict-modal').classList.remove('show');
+            showToast("Abo erfolgreich gelöscht.");
+            initLiveUser();
+        } catch(e) {
+            showCustomAlert("Fehler", "Konnte nicht gekündigt werden.");
+        }
+    }
+}
+
+async function executeSubPurchase(days, cost, tier) {
+    try { 
+        currentUser.coins -= cost; 
+        let currentUntil = currentUser.philPlusUntil && currentUser.philPlusUntil > Date.now() ? currentUser.philPlusUntil : Date.now(); 
+        let newUntil = currentUntil + (days * 86400000); 
+        currentUser.philPlusUntil = newUntil; 
+        currentUser.philPlusTier = tier;
+        await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-cost), philPlusUntil: newUntil, philPlusTier: tier }); 
+        document.getElementById('shop-modal-coins').innerText = currentUser.coins; 
+        document.getElementById('my-coins').innerText = currentUser.coins; 
+        showToast(`Phil Shorts+ aktiviert! 🎉`); 
+        document.getElementById('shop-modal').classList.remove('show'); 
+        initLiveUser(); 
+    } catch(e) { showCustomAlert("Fehler", "Kauf fehlgeschlagen."); } 
+}
+
 
 window.openStoryUpload = function() { if(!currentUser) return; document.getElementById('shop-modal').classList.remove('show'); document.getElementById('story-upload-modal').classList.add('show'); }
 document.getElementById('close-story-upload').addEventListener('click', () => document.getElementById('story-upload-modal').classList.remove('show'));
@@ -1464,7 +1651,7 @@ window.openDM = async function(targetUid, targetName, targetPic) {
                 if(isMe && checkPhilPlusStatus(2)) readReceipt = `<span style="font-size:10px; color:#00f2fe; margin-left:5px;">✓✓</span>`;
                 
                 let extraClass = '';
-                if(isMe && checkPhilPlusStatus(2)) extraClass = 'gold-bubble'; // Aus der style.css
+                if(isMe && checkPhilPlusStatus(2)) extraClass = 'gold-bubble'; 
 
                 let bubbleContent = formatText(msg.text);
                 // TIER 3 FEATURE: Bilder rendern

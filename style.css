@@ -224,13 +224,13 @@ body.theme-neon-pink .glass-nav-bottom {
 }
 
 
-/* BORDER CLASSES */
+/* --- ALLE RAHMEN (BORDERS) --- */
 
 .border-none {
     border: 2px solid transparent;
 }
 
-.border-neon {
+.border-neon-blue {
     border: 3px solid #00f2fe;
     box-shadow: 0 0 10px #00f2fe, inset 0 0 5px #00f2fe;
     padding: 2px;
@@ -268,6 +268,176 @@ body.theme-neon-pink .glass-nav-bottom {
     100% {
         filter: hue-rotate(360deg);
     }
+}
+
+
+/* Neue Solid Borders */
+
+.border-solid-red {
+    border: 3px solid #ff0000;
+    padding: 2px;
+}
+
+.border-solid-blue {
+    border: 3px solid #0000ff;
+    padding: 2px;
+}
+
+.border-solid-green {
+    border: 3px solid #00ff00;
+    padding: 2px;
+}
+
+.border-solid-yellow {
+    border: 3px solid #ffff00;
+    padding: 2px;
+}
+
+.border-solid-purple {
+    border: 3px solid #800080;
+    padding: 2px;
+}
+
+.border-solid-orange {
+    border: 3px solid #ffa500;
+    padding: 2px;
+}
+
+.border-solid-pink {
+    border: 3px solid #ffc0cb;
+    padding: 2px;
+}
+
+.border-solid-white {
+    border: 3px solid #ffffff;
+    padding: 2px;
+}
+
+
+/* Neue Neon Borders */
+
+.border-neon-red {
+    border: 3px solid #ff0000;
+    box-shadow: 0 0 10px #ff0000, inset 0 0 5px #ff0000;
+    padding: 2px;
+}
+
+.border-neon-green {
+    border: 3px solid #00ff00;
+    box-shadow: 0 0 10px #00ff00, inset 0 0 5px #00ff00;
+    padding: 2px;
+}
+
+.border-neon-purple {
+    border: 3px solid #b200ff;
+    box-shadow: 0 0 10px #b200ff, inset 0 0 5px #b200ff;
+    padding: 2px;
+}
+
+.border-neon-pink {
+    border: 3px solid #ff00ff;
+    box-shadow: 0 0 10px #ff00ff, inset 0 0 5px #ff00ff;
+    padding: 2px;
+}
+
+.border-neon-orange {
+    border: 3px solid #ff6a00;
+    box-shadow: 0 0 10px #ff6a00, inset 0 0 5px #ff6a00;
+    padding: 2px;
+}
+
+
+/* Dashed & Dotted */
+
+.border-dashed-red {
+    border: 3px dashed #ff0000;
+    padding: 2px;
+}
+
+.border-dashed-blue {
+    border: 3px dashed #0088ff;
+    padding: 2px;
+}
+
+.border-dotted-green {
+    border: 3px dotted #00ff00;
+    padding: 2px;
+}
+
+
+/* Double Borders */
+
+.border-double-purple {
+    border: 5px double #a200ff;
+    padding: 1px;
+}
+
+.border-double-gold {
+    border: 5px double #ffd700;
+    padding: 1px;
+}
+
+
+/* Gradients */
+
+.border-grad-fire {
+    border: 3px solid transparent;
+    background: linear-gradient(#000, #000) padding-box, linear-gradient(45deg, #ff0000, #ffff00) border-box;
+    padding: 2px;
+}
+
+.border-grad-ice {
+    border: 3px solid transparent;
+    background: linear-gradient(#000, #000) padding-box, linear-gradient(45deg, #00f2fe, #4facfe) border-box;
+    padding: 2px;
+}
+
+.border-grad-toxic {
+    border: 3px solid transparent;
+    background: linear-gradient(#000, #000) padding-box, linear-gradient(45deg, #00ff00, #b2ff05) border-box;
+    padding: 2px;
+}
+
+.border-grad-sunset {
+    border: 3px solid transparent;
+    background: linear-gradient(#000, #000) padding-box, linear-gradient(45deg, #ff4e50, #f9d423) border-box;
+    padding: 2px;
+}
+
+
+/* Premium Themed */
+
+.border-cyberpunk {
+    border: 3px solid transparent;
+    background: linear-gradient(#000, #000) padding-box, linear-gradient(45deg, #fcee0a, #00f2fe, #ff0050) border-box;
+    padding: 2px;
+    box-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+}
+
+.border-vaporwave {
+    border: 3px solid transparent;
+    background: linear-gradient(#000, #000) padding-box, linear-gradient(45deg, #ff71ce, #01b4e4) border-box;
+    padding: 2px;
+}
+
+.border-cosmic {
+    border: 3px solid transparent;
+    background: linear-gradient(#000, #000) padding-box, radial-gradient(circle at top right, #301847, #C10279, #F6C879) border-box;
+    padding: 2px;
+}
+
+.border-rainbow {
+    border: 3px solid transparent;
+    background: linear-gradient(#000, #000) padding-box, linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet) border-box;
+    padding: 2px;
+}
+
+
+/* Custom Fallback */
+
+.border-custom {
+    border: 3px solid transparent;
+    padding: 2px;
 }
 
 
