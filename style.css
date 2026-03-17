@@ -2579,3 +2579,25 @@ input:checked+.slider:before {
 #pending-gif-preview {
     max-width: 250px !important;
 }
+
+
+/* PRO VIDEO EDITOR STYLES */
+
+.pro-filter-btn {
+    background: #222;
+    border: 1px solid #444;
+    color: white;
+    padding: 5px 15px;
+    border-radius: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+.pro-filter-btn.active {
+    background: #00f2fe;
+    color: black;
+    border-color: #00f2fe;
+    font-weight: bold;
+}

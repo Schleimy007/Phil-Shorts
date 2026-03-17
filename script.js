@@ -25,6 +25,9 @@ if (currentUser) currentUser.verified = false;
 
 let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || { master: false, comments: true, likes: true, dms: true, follows: true };
 
+// PRO VIDEO EDITOR STATE
+let proEditorState = { filter: 'none', text: '', start: 0, end: 0 };
+
 window.sendDesktopNotification = function(title, body, type) {
     if (!("Notification" in window) || !notifSettings.master || Notification.permission !== "granted") return;
     if (type === 'comment' && !notifSettings.comments) return;
@@ -114,7 +117,6 @@ window.switchView = function(viewId) {
         v.currentTime = 0;
     });
 
-    // Profil Musik stoppen wenn Ansicht gewechselt wird
     const audioPlayer = document.getElementById('profile-audio-player');
     if (viewId !== 'profile' && audioPlayer) {
         audioPlayer.pause();
@@ -318,12 +320,11 @@ function initLiveUser() {
             if (!currentUser.philPlusTier) currentUser.philPlusTier = 0;
             if (!currentUser.customBorder) currentUser.customBorder = { c1: '#ff0050', c2: '#00f2fe', grad: true };
 
-            // TIER 2 FEATURE: 2x Coins bei täglichem Login
             const today = new Date().toDateString();
             if (currentUser.lastLogin !== today) {
-                let bonus = 100; // Normal User
-                if (checkPhilPlusStatus(3)) bonus = 500; // Tier 3
-                else if (checkPhilPlusStatus(2)) bonus = 200; // Tier 2
+                let bonus = 100;
+                if (checkPhilPlusStatus(3)) bonus = 500;
+                else if (checkPhilPlusStatus(2)) bonus = 200;
 
                 currentUser.coins += bonus;
                 currentUser.lastLogin = today;
@@ -331,7 +332,6 @@ function initLiveUser() {
                 showToast(`Täglicher Login: +${bonus} Coins erhalten!`);
             }
 
-            // Downgrade Check, falls das Abo abgelaufen ist oder die Stufe nicht mehr ausreicht
             let needsUpdate = false;
             if (!checkPhilPlusStatus(2)) {
                 if (currentUser.appTheme && currentUser.appTheme !== 'default') {
@@ -366,13 +366,11 @@ function initLiveUser() {
 
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
 
-            // Apply Theme
             if (checkPhilPlusStatus(2)) {
                 applyAppTheme(currentUser.appTheme);
                 document.getElementById('app-theme-select').value = currentUser.appTheme;
             } else { applyAppTheme('default'); }
 
-            // TIER 3 FEATURE: Exklusives App Icon
             if (checkPhilPlusStatus(3) && currentUser.appIcon) {
                 document.getElementById('app-icon-select').value = currentUser.appIcon;
                 const favicon = document.getElementById('dynamic-favicon');
@@ -381,7 +379,6 @@ function initLiveUser() {
                 else favicon.href = "https://i.imgur.com/JDPRzCc.png";
             }
 
-            // UI Elements Plus+++
             if (checkPhilPlusStatus(3)) {
                 document.getElementById('tier3-settings-area').style.display = 'block';
                 document.getElementById('account-switcher-area').style.display = 'block';
@@ -553,7 +550,6 @@ function applyAlgorithm(videos, mode) {
             let baseViralPower = Math.log(engagementScore + 1) * 30;
             let authorData = allKnownUsers.find(u => u.uid === v.authorUid);
 
-            // TIER 2 FEATURE: Boost Algorithmus
             if (authorData && authorData.philPlusUntil && authorData.philPlusUntil > Date.now() && authorData.philPlusTier >= 2) {
                 baseViralPower += 50;
             }
@@ -656,7 +652,6 @@ function renderFeed(reset = false) {
         sortedFeed.forEach(video => {
             container.appendChild(createVideoElement(video));
             count++;
-            // TIER 2 FEATURE: 100% Werbefrei - Ads einblenden, wenn nicht Plus++
             if (!checkPhilPlusStatus(2) && count % 5 === 0) {
                 container.appendChild(createAdElement());
             }
@@ -722,10 +717,8 @@ function createVideoElement(video) {
     const deleteVideoBtn = canDeleteVideo ? `<div class="videoSidebar__button" onclick="deleteVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-trash" style="color: #ff4444; font-size:24px;"></i></div>` : '';
     const editVideoBtn = isMe ? `<div class="videoSidebar__button" onclick="openEditVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-pen" style="font-size:24px;"></i></div>` : '';
 
-    // TIER 3 FEATURE: Video Download
     const downloadVideoBtn = checkPhilPlusStatus(3) ? `<div class="videoSidebar__button" onclick="window.open('${video.mediaType === 'images' ? video.urls[0] : video.url}', '_blank')" style="margin-top:15px;"><i class="fas fa-download" style="color: #00f2fe; font-size:24px;"></i><p>Speichern</p></div>` : '';
 
-    // TIER 3 FEATURE: Video Analytics für eigene Videos
     const analyticsBtn = isMe && checkPhilPlusStatus(3) ? `<div class="videoSidebar__button" onclick="openAnalytics('${video.id}')" style="margin-top:15px;"><i class="fas fa-chart-line" style="color: #ffd700; font-size:24px;"></i><p>Analytics</p></div>` : '';
 
     const mutedAttr = window.globalMuted ? 'muted' : '';
@@ -755,7 +748,6 @@ window.openAnalytics = function(id) {
     document.getElementById('analytics-likes').innerText = video.likedBy ? video.likedBy.length : 0;
     document.getElementById('analytics-gifts').innerText = video.gifts || 0;
     
-    // Einfache Dummy-Berechnung für Engagement Rate
     let views = video.views || 1;
     let eng = ((video.likedBy ? video.likedBy.length : 0) + (video.comments ? video.comments.length : 0)) / views * 100;
     document.getElementById('analytics-engagement').innerText = eng.toFixed(1) + '%';
@@ -790,7 +782,7 @@ const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         const el = e.target; const vidId = el.dataset.id;
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
-            if(el.classList.contains('dummy-ad-video')) return; // Ignore ads
+            if(el.classList.contains('dummy-ad-video')) return; 
             if (vidId && !viewedVideos.has(vidId)) { viewedVideos.add(vidId); updateDoc(doc(db, "videos", vidId), { views: increment(1) }).catch(() => {}); }
             const videoPlayer = el.querySelector('.video__player');
             if (videoPlayer) { document.querySelectorAll('.video__player').forEach(otherVid => { if (otherVid !== videoPlayer && !otherVid.paused) { otherVid.pause(); otherVid.currentTime = 0; } }); videoPlayer.muted = window.globalMuted; const playPromise = videoPlayer.play(); if (playPromise !== undefined) { playPromise.catch(error => { videoPlayer.pause(); const container = videoPlayer.closest('.video-inner'); if(container) container.classList.add('is-paused'); }); } }
@@ -804,7 +796,6 @@ window.openGiftModal = function(videoId) {
     if (!currentUser) { showCustomAlert("Fehler", "Bitte logge dich ein."); return; } window.currentGiftVideoId = videoId; document.getElementById('gift-modal-coins').innerText = currentUser.coins || 0;
     const grid = document.getElementById('gift-grid'); 
     
-    // TIER 2 FEATURE: Premium Geschenke ab 1000 Coins blockieren, wenn nicht Plus++
     grid.innerHTML = allGifts.map(g => {
         if(g.reqTier && !checkPhilPlusStatus(g.reqTier)) {
             return `<div class="gift-card" style="opacity:0.3; cursor:not-allowed;" onclick="showCustomAlert('Plus++ erforderlich', 'Dieses Geschenk ist exklusiv für Phil Shorts++ User!')"><span class="gift-emoji">${g.emoji}</span><span class="gift-name">${g.name}</span><span class="gift-price"><i class="fas fa-lock"></i> Plus++</span></div>`;
@@ -858,22 +849,18 @@ window.toggleCreatorHeart = async function(videoId, cId, rId = null) {
     else { const currentState = comments[cIndex].creatorHeart || false; comments[cIndex].creatorHeart = !currentState; renderComments(videoId); await updateDoc(doc(db, "videos", videoId), { comments: comments }); if (!currentState && comments[cIndex].uid !== currentUser.uid) addNotification(comments[cIndex].uid, "like", "hat deinem Kommentar ein Creator-Herz gegeben! ❤️", videoId); }
 };
 
-// TIER 3 FEATURE: PIN COMMENT
 window.pinComment = async function(videoId, cId) {
     if (!currentUser) return; 
     const videoIndex = allVideosData.findIndex(v => v.id === videoId); 
     if (videoIndex === -1) return; 
     const video = allVideosData[videoIndex]; 
-    if (currentUser.uid !== video.authorUid || !checkPhilPlusStatus(3)) return; // Nur Autor + Plus+++
+    if (currentUser.uid !== video.authorUid || !checkPhilPlusStatus(3)) return;
 
     let comments = video.comments || []; 
     const cIndex = comments.findIndex(c => c.cId === cId || c.cId === cId.toString()); 
     if (cIndex === -1) return;
     
-    // Toggle Pin State
     const currentState = comments[cIndex].pinned || false;
-    
-    // Reset all other pins if we only want 1 pinned comment
     comments.forEach(c => c.pinned = false);
     
     comments[cIndex].pinned = !currentState; 
@@ -882,10 +869,8 @@ window.pinComment = async function(videoId, cId) {
     showToast(!currentState ? "Kommentar angeheftet!" : "Kommentar gelöst.");
 };
 
-// TIER 3 FEATURE: AUTO TRANSLATE COMMENT
 window.translateComment = function(btnEl, cId) {
     if(!checkPhilPlusStatus(3)) { showCustomAlert("Premium", "Diese Funktion erfordert Phil Shorts+++!"); return; }
-    // Da wir keine echte Translate API anbinden, simulieren wir die Übersetzung
     const textEl = document.getElementById(`comment-text-${cId}`);
     if(textEl) {
         textEl.innerText = "[Übersetzt] " + textEl.innerText;
@@ -914,7 +899,6 @@ function renderComments(id) {
         const authorData = getUserData(video.authorUid, video.authorName, video.authorUsername || video.authorName, video.authorPic, video.authorVerified); 
         const creatorPic = authorData.pic || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback';
         
-        // Sortiere: Angeheftete zuerst
         let sortedComments = [...video.comments];
         sortedComments.sort((a, b) => {
             if(a.pinned && !b.pinned) return -1;
@@ -928,11 +912,9 @@ function renderComments(id) {
             let cCreatorHeartHtml = ''; if (c.creatorHeart) cCreatorHeartHtml = `<div class="creator-heart-wrap" onclick="toggleCreatorHeart('${id}', '${commentId}')" style="cursor:${isCreator?'pointer':'default'};" title="Vom Creator geliket"><div class="creator-heart-img" style="background-image: url('${creatorPic}')"></div><i class="fas fa-heart creator-heart-badge"></i></div>`; else if (isCreator) cCreatorHeartHtml = `<div class="creator-heart-wrap creator-heart-inactive" onclick="toggleCreatorHeart('${id}', '${commentId}')" title="Creator Herz geben"><i class="far fa-heart creator-heart-badge-outline"></i></div>`;
             let renderedGif = ''; if(c.gifUrl) renderedGif = `<img src="${c.gifUrl}" class="comment-gif" alt="GIF">`;
             
-            // TIER 3: Pin Badge & Buttons
             let pinBadgeHtml = c.pinned ? `<div style="font-size:11px; color:#aaa; margin-bottom:5px;"><i class="fas fa-thumbtack" style="color:#ffd700;"></i> Vom Ersteller angeheftet</div>` : '';
             let pinActionHtml = (isCreator && checkPhilPlusStatus(3)) ? `<span onclick="pinComment('${id}', '${commentId}')"><i class="fas fa-thumbtack"></i> ${c.pinned ? 'Lösen' : 'Anheften'}</span>` : '';
             
-            // TIER 3: Translate Button
             let translateBtnHtml = checkPhilPlusStatus(3) ? `<i class="fas fa-language translate-btn" onclick="translateComment(this, '${commentId}')" title="Übersetzen (Plus+++)" style="color:#00f2fe; margin-left:10px; cursor:pointer;"></i>` : '';
 
             let repliesHtml = '';
@@ -950,7 +932,6 @@ function renderComments(id) {
     } else { list.innerHTML = '<div class="no-comments">Sei der Erste, der kommentiert!</div>'; }
 }
 
-// --- GIPHY API LOGIK ---
 let currentPendingGifUrl = null;
 document.getElementById('btn-gif-comment').addEventListener('click', () => { if(!checkPhilPlusStatus(2)) return showCustomAlert("Phil Shorts++", "GIFs in Kommentaren sind exklusiv ab Phil Shorts++!"); document.getElementById('giphy-modal').classList.add('show'); fetchGiphyTrending(); });
 document.getElementById('close-giphy-modal').addEventListener('click', () => { document.getElementById('giphy-modal').classList.remove('show'); });
@@ -1009,7 +990,6 @@ window.renderProfileGrid = function(targetUid) {
 window.openProfile = async function(targetUid) {
     switchView('profile'); document.getElementById('profile-grid').innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
     
-    // Reset Profile BG and Song
     document.getElementById('view-profile').style.background = '';
     document.getElementById('profile-audio-player').src = '';
     document.getElementById('profile-audio-player').pause();
@@ -1037,7 +1017,6 @@ window.openProfile = async function(targetUid) {
             document.getElementById('phil-plus-badge-container').style.display = 'none'; 
         }
 
-        // TIER 3 FEATURE: Profil Song & Color
         if(targetUser.philPlusUntil && targetUser.philPlusUntil > Date.now() && targetUser.philPlusTier === 3) {
             if(targetUser.profileColor) document.getElementById('view-profile').style.background = targetUser.profileColor;
             if(targetUser.profileSong && document.getElementById('profile-audio-player').src !== targetUser.profileSong) {
@@ -1064,7 +1043,6 @@ window.openProfile = async function(targetUid) {
         window.renderProfileGrid(targetUid);
     });
     
-    // Ghost Mode check (Tier 3)
     if (currentUser && targetUid !== currentUser.uid) { 
         if(!checkPhilPlusStatus(3)) {
             updateDoc(doc(db, "users", targetUid), { profileViews: increment(1) }).catch(e => {}); 
@@ -1147,12 +1125,10 @@ function renderShopBorders() {
 window.buyDecoration = async function(id, cost) { if(!currentUser) return; if(currentUser.coins < cost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins dafür!"); try { currentUser.coins -= cost; if(!currentUser.decorations) currentUser.decorations = []; currentUser.decorations.push(id); await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-cost), decorations: arrayUnion(id) }); document.getElementById('shop-modal-coins').innerText = currentUser.coins; document.getElementById('my-coins').innerText = currentUser.coins; renderShopBorders(); showToast("Erfolgreich gekauft!"); } catch(e) { showCustomAlert("Fehler", "Kauf fehlgeschlagen."); } }
 window.equipDecoration = async function(id, cssClass) { if(!currentUser) return; try { let finalClass = cssClass === 'none' ? "" : cssClass; currentUser.activeBorder = finalClass; await updateDoc(doc(db, "users", currentUser.uid), { activeBorder: finalClass }); renderShopBorders(); showToast("Ausgerüstet!"); } catch(e) {} }
 
-// --- CUSTOM BORDER LOGIC ---
 window.openCustomBorderConfig = function() {
     if(!checkPhilPlusStatus(3)) return;
     const modal = document.getElementById('custom-border-modal');
     
-    // Load current values
     if(currentUser.customBorder) {
         document.getElementById('cb-color1').value = currentUser.customBorder.c1;
         document.getElementById('cb-color2').value = currentUser.customBorder.c2;
@@ -1202,14 +1178,12 @@ window.saveCustomBorder = async function() {
     }
 }
 
-// --- ABO KONFLIKT LOGIC ---
 window.pendingSub = null;
 
 window.buyPhilPlus = async function(days, cost, tier) { 
     if(!currentUser) return; 
     
     if(checkPhilPlusStatus(1)) {
-        // Abo-Konflikt-Modal anzeigen
         window.pendingSub = { days, cost, tier };
         
         let msg = `Du besitzt aktuell Stufe ${currentUser.philPlusTier}. Möchtest du dein neues Abo (Stufe ${tier}) kaufen und das aktuelle überschreiben, oder dein Abo komplett löschen?`;
@@ -1273,7 +1247,6 @@ async function executeSubPurchase(days, cost, tier) {
     } catch(e) { showCustomAlert("Fehler", "Kauf fehlgeschlagen."); } 
 }
 
-
 window.openStoryUpload = function() { if(!currentUser) return; document.getElementById('shop-modal').classList.remove('show'); document.getElementById('story-upload-modal').classList.add('show'); }
 document.getElementById('close-story-upload').addEventListener('click', () => document.getElementById('story-upload-modal').classList.remove('show'));
 document.getElementById('up-story-file').addEventListener('change', function(e) { const file = e.target.files[0]; if(file) { document.querySelector('#up-story-btn p').innerText = file.name; document.querySelector('#up-story-btn i').style.color = "#00f2fe"; const url = URL.createObjectURL(file); document.getElementById('story-preview-img').src = url; document.getElementById('story-preview-img').style.display = 'block'; } });
@@ -1283,7 +1256,6 @@ document.getElementById('submit-story-upload').addEventListener('click', async()
     if(!currentUser) return; 
     if(currentUser.coins < 1000) return showCustomAlert("Zu wenig Coins", "Eine Story kostet 1000 Coins."); 
     
-    // TIER 3 FEATURE: Link in Story
     const linkInput = document.getElementById('up-story-link').value.trim();
     if(linkInput && !checkPhilPlusStatus(3)) return showCustomAlert("Fehler", "Links in Stories erfordern Plus+++!");
 
@@ -1334,7 +1306,6 @@ window.viewUserStory = function(index = 0) {
     document.getElementById('sv-img').src = story.url; 
     document.getElementById('story-viewer').classList.add('show');
     
-    // TIER 3 FEATURE: Swipe Up / Link btn
     const linkBtn = document.getElementById('sv-link-btn');
     if(story.link) {
         linkBtn.href = story.link;
@@ -1383,7 +1354,6 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
         if (nameTaken) { btn.innerText = "Profil Speichern"; btn.disabled = false; return showCustomAlert("Name vergeben", "Dieser @Benutzername existiert bereits!"); }
         btn.innerText = "Speichere..."; 
         
-        // Settings Updates
         let updates = { displayName: newDisplayName, username: newUsername, bio: newBio, photoURL: newPic };
         if(checkPhilPlusStatus(3)) {
             updates.profileSong = newSong;
@@ -1474,7 +1444,6 @@ function initInboxChats() {
         chats.forEach(chat => {
             const partnerUid = chat.participants.find(uid => uid !== currentUser.uid); const partner = chat.users[partnerUid]; if (!partner) return; const nUser = getUserData(partnerUid, partner.name, partner.name, partner.pic, false); const safeName = nUser.username.replace(/'/g, "\\'"); const isVerif = getVerifiedBadge(nUser.verified); let nameClass = nUser.philPlusUntil && nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 1 ? "name-phil-plus" : "";
             
-            // Format check for image
             let previewText = chat.lastMessage;
             if(previewText && previewText.startsWith('[IMAGE]')) previewText = "📸 Bild gesendet";
 
@@ -1499,7 +1468,6 @@ window.initSupportTickets = function() {
         
         snapshot.forEach(docSnap => {
             const ticket = docSnap.data(); 
-            // JS Filter für normale Nutzer
             if (!isAdmin && ticket.uid !== currentUser.uid) return; 
             
             foundAny = true;
@@ -1630,7 +1598,6 @@ window.openDM = async function(targetUid, targetName, targetPic) {
     if (!currentUser) return; window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic }; const uids = [currentUser.uid, targetUid].sort(); window.currentChatId = `${uids[0]}_${uids[1]}`; const nUser = getUserData(targetUid, targetName, targetName, targetPic, false); const isVerif = getVerifiedBadge(nUser.verified);
     document.getElementById('dm-title').innerHTML = '@' + targetName + ' ' + isVerif; switchView('dm');
     
-    // TIER 3 FEATURE: Bilder in DM
     if(checkPhilPlusStatus(3)) document.getElementById('dm-img-btn').style.display = 'block';
     else document.getElementById('dm-img-btn').style.display = 'none';
 
@@ -1646,7 +1613,6 @@ window.openDM = async function(targetUid, targetName, targetPic) {
                 const isMe = msg.senderUid === currentUser.uid ? 'me' : ''; 
                 const pic = isMe ? currentUser.photoURL : targetPic; 
                 
-                // TIER 2 FEATURE: Lesebestätigung & Goldener DM Chat
                 let readReceipt = '';
                 if(isMe && checkPhilPlusStatus(2)) readReceipt = `<span style="font-size:10px; color:#00f2fe; margin-left:5px;">✓✓</span>`;
                 
@@ -1654,7 +1620,6 @@ window.openDM = async function(targetUid, targetName, targetPic) {
                 if(isMe && checkPhilPlusStatus(2)) extraClass = 'gold-bubble'; 
 
                 let bubbleContent = formatText(msg.text);
-                // TIER 3 FEATURE: Bilder rendern
                 if(msg.text && msg.text.startsWith('[IMAGE]')) {
                     const imgUrl = msg.text.replace('[IMAGE]', '').trim();
                     bubbleContent = `<img src="${imgUrl}" style="max-width: 200px; border-radius: 10px;">`;
@@ -1670,7 +1635,6 @@ window.openDM = async function(targetUid, targetName, targetPic) {
 document.getElementById('send-dm-btn').addEventListener('click', async() => { const input = document.getElementById('dm-input'); const text = input.value.trim(); if (!text || !window.currentChatId || !currentUser) return; input.value = ''; await addDoc(collection(db, `chats/${window.currentChatId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); await updateDoc(doc(db, "chats", window.currentChatId), { lastMessage: text, lastMessageTime: Date.now(), users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic } } }); addNotification(window.currentChatPartner.uid, "message", `hat geschrieben: "${text}"`); });
 document.getElementById('dm-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-dm-btn').click(); });
 
-// TIER 3 FEATURE: Bild in DM versenden
 document.getElementById('dm-img-btn').addEventListener('click', () => document.getElementById('dm-file-upload').click());
 document.getElementById('dm-file-upload').addEventListener('change', async(e) => {
     const file = e.target.files[0];
@@ -1691,6 +1655,7 @@ document.getElementById('dm-file-upload').addEventListener('change', async(e) =>
     document.getElementById('dm-file-upload').value = '';
 });
 
+// IMAGE ADVANCED EDITOR STATE
 let editorState = { images: [], edits: [], currentIndex: 0, activeTextId: null }; let activeDragId = null, activeResizeId = null, activeResizePos = null, startX, startY, initialObjX, initialObjY, startSize, startDist = 0; let gridVisible = false;
 document.getElementById('btn-toggle-grid').addEventListener('click', (e) => { gridVisible = !gridVisible; document.getElementById('editor-grid').style.display = gridVisible ? 'block' : 'none'; e.target.innerHTML = gridVisible ? '<i class="fas fa-border-all"></i> Raster: An' : '<i class="fas fa-border-all"></i> Raster: Aus'; });
 
@@ -1710,7 +1675,6 @@ function renderEditorImage(index) {
 function createDOMTextElement(obj) {
     const layer = document.getElementById('editor-layer'); const wrapper = document.createElement('div'); wrapper.id = 'drag-txt-' + obj.id; wrapper.className = 'draggable-text'; wrapper.style.left = obj.x + 'px'; wrapper.style.top = obj.y + 'px'; wrapper.style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`; 
     
-    // TIER 3 FEATURE: Custom Sticker rendern
     if(obj.type === 'sticker') {
         const imgEl = document.createElement('img');
         imgEl.className = 'sticker-content';
@@ -1746,7 +1710,6 @@ document.querySelectorAll('.color-dot').forEach(dot => { dot.addEventListener('c
 document.getElementById('btn-delete-text').addEventListener('click', () => { if(!editorState.activeTextId) return; editorState.edits[editorState.currentIndex] = editorState.edits[editorState.currentIndex].filter(t => t.id !== editorState.activeTextId); document.getElementById('drag-txt-' + editorState.activeTextId).remove(); editorState.activeTextId = null; document.getElementById('text-controls').style.display = 'none'; });
 document.getElementById('btn-add-text').addEventListener('click', () => { const workspace = document.getElementById('editor-workspace'); const newObj = { id: Date.now(), type: 'text', text: "Neuer Text", x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 24, rotation: 0, color: '#ffffff', font: 'Arial, sans-serif' }; editorState.edits[editorState.currentIndex].push(newObj); createDOMTextElement(newObj); selectText(newObj.id); });
 
-// TIER 3 FEATURE: STICKER UPLOAD
 document.getElementById('sticker-upload-input').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if(!file) return;
@@ -1765,29 +1728,72 @@ document.getElementById('sticker-upload-input').addEventListener('change', (e) =
 document.getElementById('btn-prev-img').addEventListener('click', () => { if (editorState.currentIndex > 0) { editorState.currentIndex--; renderEditorImage(editorState.currentIndex); } });
 document.getElementById('btn-next-img').addEventListener('click', () => { if (editorState.currentIndex < editorState.images.length - 1) { editorState.currentIndex++; renderEditorImage(editorState.currentIndex); } });
 
+
+// --- UPLOAD LOGIC PRO VIDEO & IMAGES ---
 document.getElementById('up-file').addEventListener('change', async function(e) {
-    const files = e.target.files; const txt = document.querySelector('#up-file-btn p'); const icon = document.querySelector('#up-file-btn i'); const trimmerUi = document.getElementById('trimmer-ui'); const advancedEditorUi = document.getElementById('image-advanced-editor'); const trimPreview = document.getElementById('trim-preview'); const trimStart = document.getElementById('trim-start'); const trimEnd = document.getElementById('trim-end');
-    if (!files || files.length === 0) { txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; trimmerUi.style.display = 'none'; advancedEditorUi.style.display = 'none'; return; }
+    const files = e.target.files; 
+    const txt = document.querySelector('#up-file-btn p'); 
+    const icon = document.querySelector('#up-file-btn i'); 
+    
+    // UI Elemente Video Pro Editor
+    const advancedVideoUi = document.getElementById('video-advanced-editor');
+    const proPreview = document.getElementById('pro-video-preview');
+    const proTrimStart = document.getElementById('pro-trim-start');
+    const proTrimEnd = document.getElementById('pro-trim-end');
+
+    // UI Elemente Image Editor
+    const advancedImageUi = document.getElementById('image-advanced-editor'); 
+
+    if (!files || files.length === 0) { 
+        txt.innerText = "Video oder Bilder auswählen"; 
+        icon.className = "fas fa-cloud-upload-alt"; 
+        icon.style.color = "#aaa"; 
+        advancedVideoUi.style.display = 'none'; 
+        advancedImageUi.style.display = 'none'; 
+        return; 
+    }
     const isVideo = files[0].type.startsWith('video/');
     if (isVideo) {
-        txt.innerText = files[0].name; icon.className = "fas fa-video"; icon.style.color = "#00f2fe"; trimmerUi.style.display = 'block'; advancedEditorUi.style.display = 'none';
-        const url = URL.createObjectURL(files[0]); trimPreview.src = url; trimPreview.onloadedmetadata = () => { 
-            const dur = trimPreview.duration; 
+        txt.innerText = files[0].name; 
+        icon.className = "fas fa-video"; 
+        icon.style.color = "#00f2fe"; 
+        advancedVideoUi.style.display = 'block'; 
+        advancedImageUi.style.display = 'none';
+        
+        // Load into Pro Editor
+        const url = URL.createObjectURL(files[0]); 
+        proPreview.src = url; 
+        proPreview.onloadedmetadata = () => { 
+            const dur = proPreview.duration; 
             
-            // TIER 2 FEATURE: Duration check
-            if(dur > 60 && !checkPhilPlusStatus(2)) {
-                showCustomAlert("Zu lang", "Videos über 60 Sekunden erfordern Phil Shorts++!");
+            if(dur > 180 && !checkPhilPlusStatus(2)) {
+                showCustomAlert("Zu lang", "Videos über 3 Minuten erfordern Phil Shorts++!");
                 document.getElementById('up-file').value = '';
                 txt.innerText = "Video oder Bilder auswählen";
                 icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa";
-                trimmerUi.style.display = 'none';
+                advancedVideoUi.style.display = 'none';
                 return;
             }
 
-            trimStart.max = dur; trimEnd.max = dur; trimEnd.value = dur; document.getElementById('val-end').innerText = dur.toFixed(1); 
+            document.getElementById('pro-time-total').innerText = dur.toFixed(1);
+            proTrimStart.max = dur; 
+            proTrimEnd.max = dur; 
+            proTrimEnd.value = dur; 
+            document.getElementById('pro-val-end').innerText = dur.toFixed(1);
+            proEditorState.end = dur;
+            proEditorState.start = 0;
+            proEditorState.filter = 'none';
+            proEditorState.text = '';
+            document.getElementById('pro-video-text').value = '';
+            document.getElementById('pro-video-text-overlay').innerText = '';
+            
+            // Reset filters UI
+            document.querySelectorAll('.pro-filter-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector('.pro-filter-btn[data-filter="none"]').classList.add('active');
+            proPreview.style.filter = 'none';
         };
     } else {
-        txt.innerText = `${files.length} Bild(er) ausgewählt`; icon.className = "fas fa-images"; icon.style.color = "#ffd700"; trimmerUi.style.display = 'none'; advancedEditorUi.style.display = 'block';
+        txt.innerText = `${files.length} Bild(er) ausgewählt`; icon.className = "fas fa-images"; icon.style.color = "#ffd700"; advancedVideoUi.style.display = 'none'; advancedImageUi.style.display = 'block';
         editorState.images = []; editorState.edits = []; editorState.currentIndex = 0;
         for(let i = 0; i < files.length; i++) {
             if(files[i].size > 15 * 1024 * 1024) continue;
@@ -1798,8 +1804,66 @@ document.getElementById('up-file').addEventListener('change', async function(e) 
     }
 });
 
-document.getElementById('trim-start').addEventListener('input', (e) => { const val = parseFloat(e.target.value); const endVal = parseFloat(document.getElementById('trim-end').value); if (val >= endVal) e.target.value = endVal - 0.1; document.getElementById('val-start').innerText = parseFloat(e.target.value).toFixed(1); document.getElementById('trim-preview').currentTime = parseFloat(e.target.value); });
-document.getElementById('trim-end').addEventListener('input', (e) => { const val = parseFloat(e.target.value); const startVal = parseFloat(document.getElementById('trim-start').value); if (val <= startVal) e.target.value = startVal + 0.1; document.getElementById('val-end').innerText = parseFloat(e.target.value).toFixed(1); document.getElementById('trim-preview').currentTime = parseFloat(e.target.value); });
+// PRO VIDEO EDITOR EVENTS
+document.getElementById('btn-pro-play').addEventListener('click', () => {
+    const vid = document.getElementById('pro-video-preview');
+    if (vid.paused) { 
+        vid.play(); 
+        document.getElementById('btn-pro-play').innerHTML = '<i class="fas fa-pause"></i>'; 
+    } else { 
+        vid.pause(); 
+        document.getElementById('btn-pro-play').innerHTML = '<i class="fas fa-play"></i>'; 
+    }
+});
+
+document.getElementById('pro-video-preview').addEventListener('timeupdate', (e) => {
+    document.getElementById('pro-time-current').innerText = e.target.currentTime.toFixed(1);
+    const endVal = parseFloat(document.getElementById('pro-trim-end').value) || 0;
+    const startVal = parseFloat(document.getElementById('pro-trim-start').value) || 0;
+    if(e.target.currentTime >= endVal && endVal > 0) {
+        e.target.pause();
+        document.getElementById('btn-pro-play').innerHTML = '<i class="fas fa-play"></i>';
+        e.target.currentTime = startVal;
+    }
+});
+
+document.getElementById('pro-trim-start').addEventListener('input', (e) => {
+    let val = parseFloat(e.target.value);
+    let endVal = parseFloat(document.getElementById('pro-trim-end').value);
+    if (val >= endVal) { val = endVal - 0.1; e.target.value = val; }
+    document.getElementById('pro-val-start').innerText = val.toFixed(1);
+    document.getElementById('pro-video-preview').currentTime = val;
+    proEditorState.start = val;
+});
+
+document.getElementById('pro-trim-end').addEventListener('input', (e) => {
+    let val = parseFloat(e.target.value);
+    let startVal = parseFloat(document.getElementById('pro-trim-start').value);
+    if (val <= startVal) { val = startVal + 0.1; e.target.value = val; }
+    document.getElementById('pro-val-end').innerText = val.toFixed(1);
+    document.getElementById('pro-video-preview').currentTime = val;
+    proEditorState.end = val;
+});
+
+document.querySelectorAll('.pro-filter-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.pro-filter-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        proEditorState.filter = e.target.dataset.filter;
+        const vid = document.getElementById('pro-video-preview');
+        if(proEditorState.filter === 'none') vid.style.filter = 'none';
+        if(proEditorState.filter === 'grayscale') vid.style.filter = 'grayscale(100%)';
+        if(proEditorState.filter === 'sepia') vid.style.filter = 'sepia(100%)';
+        if(proEditorState.filter === 'blur') vid.style.filter = 'blur(4px)';
+        if(proEditorState.filter === 'contrast') vid.style.filter = 'contrast(200%)';
+    });
+});
+
+document.getElementById('pro-video-text').addEventListener('input', (e) => {
+    proEditorState.text = e.target.value;
+    document.getElementById('pro-video-text-overlay').innerText = proEditorState.text;
+});
+
 
 async function renderAndUploadImages() {
     let uploadedUrls = []; const ws = document.getElementById('editor-workspace'); const Cw = ws.clientWidth; const Ch = ws.clientHeight;
@@ -1808,7 +1872,6 @@ async function renderAndUploadImages() {
         const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const Nw = img.naturalWidth; const Nh = img.naturalHeight; canvas.width = Nw; canvas.height = Nh; ctx.drawImage(img, 0, 0, Nw, Nh);
         const scale = Math.min(Cw / Nw, Ch / Nh); const Dw = Nw * scale; const Dh = Nh * scale; const Ox = (Cw - Dw) / 2; const Oy = (Ch - Dh) / 2;
         
-        // Asynchrone Loop für Sticker (damit das Image lädt)
         for (const obj of editorState.edits[i]) {
             let nativeX = (obj.x - Ox) / scale; let nativeY = (obj.y - Oy) / scale; let nativeSize = obj.size / scale;
             ctx.save(); ctx.translate(nativeX, nativeY); ctx.rotate((obj.rotation * Math.PI) / 180); 
@@ -1835,7 +1898,6 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
     const files = document.getElementById('up-file').files; const titleVal = document.getElementById('up-title').value.trim(); const desc = document.getElementById('up-desc').value.trim();
     if (!files || files.length === 0 || (!desc && !titleVal)) return showCustomAlert("Fehlende Daten", "Bitte wähle Dateien aus und schreibe einen Titel oder eine Beschreibung.");
     
-    // TIER 1 FEATURE: 100MB Upload limit (Statt 30MB)
     let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
     let isVideo = files[0].type.startsWith('video/');
     if (isVideo && files[0].size > maxSize) return showCustomAlert("Zu groß", `Videos dürfen maximal ${limitText} MB groß sein!`);
@@ -1847,16 +1909,42 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
             const formData = new FormData(); formData.append('file', files[0]); formData.append('upload_preset', UPLOAD_PRESET);
             const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: formData }); const data = await res.json();
             if (!data.secure_url) throw new Error("Upload fehlgeschlagen.");
-            const tStart = parseFloat(document.getElementById('trim-start').value); const tEnd = parseFloat(document.getElementById('trim-end').value); const dur = document.getElementById('trim-start').max;
-            let transform = 'q_auto,f_auto,vc_auto'; if (tStart > 0 || tEnd < dur) transform += `,so_${tStart},eo_${tEnd}`;
-            const finalUrl = data.secure_url.replace('/upload/', `/upload/${transform}/`);
+            
+            // PRO VIDEO EDITOR: Transformationen generieren
+            let transform = 'q_auto,f_auto,vc_auto'; 
+            const tStart = parseFloat(document.getElementById('pro-trim-start').value) || 0; 
+            const tEnd = parseFloat(document.getElementById('pro-trim-end').value) || 0; 
+            const dur = parseFloat(document.getElementById('pro-trim-start').max) || 0;
+            
+            if (tStart > 0 || tEnd < dur) {
+                transform += `,so_${tStart},eo_${tEnd}`;
+            }
+
+            let extraTransforms = [];
+            if(proEditorState.filter === 'grayscale') extraTransforms.push('e_grayscale');
+            if(proEditorState.filter === 'sepia') extraTransforms.push('e_sepia');
+            if(proEditorState.filter === 'blur') extraTransforms.push('e_blur:200');
+            if(proEditorState.filter === 'contrast') extraTransforms.push('e_contrast:50');
+
+            if(proEditorState.text && proEditorState.text.trim() !== '') {
+                const encodedText = encodeURIComponent(proEditorState.text.trim());
+                extraTransforms.push(`l_text:Arial_60_bold:${encodedText},co_white,g_center`);
+            }
+
+            let finalUrl = data.secure_url;
+            if(extraTransforms.length > 0) {
+                finalUrl = data.secure_url.replace('/upload/', `/upload/${transform}/${extraTransforms.join('/')}/`);
+            } else {
+                finalUrl = data.secure_url.replace('/upload/', `/upload/${transform}/`);
+            }
+
             await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
         } else {
             const uploadedUrls = await renderAndUploadImages(); if(uploadedUrls.length === 0) throw new Error("Keine Bilder hochgeladen.");
             await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
         }
         showToast("Erfolgreich veröffentlicht! 🎉"); document.getElementById('upload-modal').classList.remove('show');
-        document.getElementById('up-file').value = ''; document.getElementById('up-title').value = ''; document.getElementById('up-desc').value = ''; document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; document.querySelector('#up-file-btn i').style.color = "#aaa"; document.getElementById('trimmer-ui').style.display = 'none'; document.getElementById('image-advanced-editor').style.display = 'none'; editorState.images = [];
+        document.getElementById('up-file').value = ''; document.getElementById('up-title').value = ''; document.getElementById('up-desc').value = ''; document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; document.querySelector('#up-file-btn i').style.color = "#aaa"; document.getElementById('video-advanced-editor').style.display = 'none'; document.getElementById('image-advanced-editor').style.display = 'none'; editorState.images = [];
     } catch (e) { showCustomAlert("Upload Fehler", "Fehler! Evtl. falsches Format."); } finally { btn.disabled = false; status.innerText = ""; }
 });
 
