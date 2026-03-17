@@ -34,10 +34,10 @@
             document.getElementById('plus-tier-' + tier).style.display = 'block';
         }
 
-        function switchProEditorTab(tabId) {
-            document.querySelectorAll('.pro-tab-btn').forEach(t => t.classList.remove('active'));
-            document.querySelector(`.pro-tab-btn[data-tab="${tabId}"]`).classList.add('active');
-            document.querySelectorAll('.pro-tab-content').forEach(c => c.style.display = 'none');
+        function switchCCMenu(tabId) {
+            document.querySelectorAll('.cc-sidebar-item').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.cc-sidebar-item[data-target="${tabId}"]`).classList.add('active');
+            document.querySelectorAll('.cc-panel-content').forEach(c => c.style.display = 'none');
             document.getElementById(tabId).style.display = 'block';
         }
     </script>
@@ -196,21 +196,6 @@
 
                 <div id="admin-controls" style="width: 100%;"></div>
                 <button id="open-admin-dashboard" class="profile-action-btn" style="display:none; background:#ffd700; color:black; margin-top:10px; width:100%;">👑 Admin Dashboard</button>
-
-                <div id="private-stats" style="display: none; width: 100%; margin-top: 20px; background: rgba(255, 255, 255, 0.1); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(5px);">
-                    <div style="display: flex; justify-content: space-around; text-align: center;">
-                        <div>
-                            <i class="fas fa-coins" style="color: #ffd700; font-size: 20px; margin-bottom: 5px;"></i>
-                            <strong id="my-coins" style="display: block; font-size: 16px;">1000</strong>
-                            <span style="font-size: 10px; color: #ddd;">Deine Coins</span>
-                        </div>
-                        <div>
-                            <i class="fas fa-eye" style="color: #00f2fe; font-size: 20px; margin-bottom: 5px;"></i>
-                            <strong id="my-views" style="display: block; font-size: 16px;">0</strong>
-                            <span style="font-size: 10px; color: #ddd;">Profil Aufrufe</span>
-                        </div>
-                    </div>
-                </div>
             </div>
             <div class="profile-tabs" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
                 <div class="profile-tab active"><i class="fas fa-bars"></i></div>
@@ -309,7 +294,7 @@
             </div>
         </div>
 
-        <div id="shop-modal" class="modal" style="height: 85%;">
+        <div id="shop-modal" class="modal" style="height: 85%; z-index: 5000;">
             <div class="modal-header">
                 <h4><i class="fas fa-store" style="color: #ffd700;"></i> Shop</h4>
                 <div style="font-size: 14px; color: #ffd700; font-weight: bold;"><i class="fas fa-coins"></i> <span id="shop-modal-coins">0</span></div>
@@ -456,256 +441,12 @@
             </div>
         </div>
 
-        <div id="upload-modal" class="modal">
-            <div class="modal-header">
-                <h4>Post Erstellen</h4><i class="fas fa-times close-modal" id="close-upload"></i>
-            </div>
-            <div class="modal-body upload-body">
-                <div class="file-upload-wrapper">
-                    <input type="file" id="up-file" class="file-input-hidden" accept="video/*, image/*" multiple required>
-                    <div class="file-upload-design" id="up-file-btn" onclick="document.getElementById('up-file').click()">
-                        <i class="fas fa-cloud-upload-alt"></i>
-                        <p style="word-break: break-all; padding: 0 10px;">Video oder Bilder auswählen</p>
-                        <p style="font-size: 11px; color: #666; margin-top: 5px;">(Plus++: bis 3 Min. | Plus: 100MB)</p>
-                    </div>
-                </div>
-
-                <div id="video-advanced-editor" style="display:none; background: rgba(255, 255, 255, 0.05); padding:15px; border-radius:15px; border:1px solid #333; margin-top: 10px;">
-                    <label style="color:#00f2fe; font-size:14px; font-weight:bold; margin-bottom:15px; display:block;"><i class="fas fa-film"></i> Pro Video Editor</label>
-
-                    <div style="width:100%; background:#000; border-radius:10px; border: 1px solid #222; margin-bottom:15px; padding: 10px 0;">
-                        <div id="pro-editor-workspace" style="position: relative; width: 100%; height: 350px; margin: 0 auto; overflow: hidden; touch-action: none; transition: width 0.3s, aspect-ratio 0.3s;">
-                            <div id="pro-snap-v" class="snap-line-v"></div>
-                            <div id="pro-snap-h" class="snap-line-h"></div>
-
-                            <video id="pro-video-source" style="position: absolute; width: 100%; height: 100%; object-fit: contain; z-index: 1;" playsinline crossorigin="anonymous"></video>
-
-                            <div id="pro-editor-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 10;"></div>
-                        </div>
-                    </div>
-
-                    <audio id="pro-audio-player" style="display:none;"></audio>
-
-                    <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; justify-content: space-between;">
-                        <button id="btn-pro-play" class="profile-action-btn edit-btn" style="min-width: 50px; min-height: 40px; padding: 0; border-radius: 50%;"><i class="fas fa-play"></i></button>
-                        <div style="color: #aaa; font-size: 14px; font-weight: bold;">
-                            <span id="pro-time-current">0.0</span> / <span id="pro-time-total">0.0</span>s
-                        </div>
-                    </div>
-
-                    <div class="shop-tabs" style="margin-bottom: 15px; border-radius: 10px; overflow: hidden; background: rgba(0,0,0,0.5);">
-                        <div class="shop-tab pro-tab-btn active" data-tab="pro-tab-trim" onclick="switchProEditorTab('pro-tab-trim')"><i class="fas fa-cut"></i> Trim</div>
-                        <div class="shop-tab pro-tab-btn" data-tab="pro-tab-audio" onclick="switchProEditorTab('pro-tab-audio')"><i class="fas fa-music"></i> Audio</div>
-                        <div class="shop-tab pro-tab-btn" data-tab="pro-tab-fx" onclick="switchProEditorTab('pro-tab-fx')"><i class="fas fa-magic"></i> FX</div>
-                        <div class="shop-tab pro-tab-btn" data-tab="pro-tab-overlay" onclick="switchProEditorTab('pro-tab-overlay')"><i class="fas fa-layer-group"></i> Layer</div>
-                    </div>
-
-                    <div id="pro-tab-trim" class="pro-tab-content active" style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #222;">
-                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:10px;">Video Schneiden</label>
-                        <div id="pro-timeline-container" style="position: relative; height: 50px; background: #111; border-radius: 5px; margin-bottom: 15px; overflow: hidden; border: 1px solid #333;">
-                            <div id="pro-timeline-frames" style="display:flex; height: 100%; width: 100%; opacity: 0.5;"></div>
-                            <input type="range" id="pro-trim-start" min="0" value="0" step="0.1" class="trim-slider slider-blue" style="position: absolute; width: 100%; top: 20px; z-index: 2; background: transparent;">
-                            <input type="range" id="pro-trim-end" min="0" value="0" step="0.1" class="trim-slider slider-red" style="position: absolute; width: 100%; top: 20px; z-index: 1; background: transparent;">
-                        </div>
-                        <div style="display:flex; justify-content:space-between; font-size:12px; color:#aaa; font-weight: bold;">
-                            <div style="display:flex; align-items:center; gap:5px;">
-                                <button class="profile-action-btn edit-btn" style="min-height:24px; padding:0 8px;" id="pro-trim-start-minus">-</button>
-                                <span>Start: <strong id="pro-val-start" style="color:#00f2fe;">0.0</strong>s</span>
-                                <button class="profile-action-btn edit-btn" style="min-height:24px; padding:0 8px;" id="pro-trim-start-plus">+</button>
-                            </div>
-                            <div style="display:flex; align-items:center; gap:5px;">
-                                <button class="profile-action-btn edit-btn" style="min-height:24px; padding:0 8px;" id="pro-trim-end-minus">-</button>
-                                <span>Ende: <strong id="pro-val-end" style="color:#ff0050;">0.0</strong>s</span>
-                                <button class="profile-action-btn edit-btn" style="min-height:24px; padding:0 8px;" id="pro-trim-end-plus">+</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="pro-tab-audio" class="pro-tab-content" style="display:none; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #222;">
-                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;"><i class="fas fa-video"></i> Video Ton Lautstärke</label>
-                        <input type="range" id="pro-audio-orig-vol" min="0" max="1" step="0.05" value="1" class="trim-slider slider-blue" style="width: 100%; margin-bottom: 15px;">
-
-                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;"><i class="fas fa-music"></i> Eigene Musik hinzufügen</label>
-                        <input type="file" id="pro-audio-upload" accept="audio/*" style="display:none;">
-                        <button class="profile-action-btn edit-btn" onclick="document.getElementById('pro-audio-upload').click()" style="width: 100%; margin-bottom: 10px; font-size:14px;"><i class="fas fa-upload"></i> Musik wählen</button>
-                        <div id="pro-audio-bg-name" style="font-size:11px; color:#00f2fe; margin-bottom:10px; text-align:center;"></div>
-
-                        <div id="pro-audio-controls-extended" style="display:none;">
-                            <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;">Musik Lautstärke</label>
-                            <input type="range" id="pro-audio-bg-vol" min="0" max="1" step="0.05" value="0.5" class="trim-slider slider-red" style="width: 100%; margin-bottom: 15px;">
-
-                            <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;">Startpunkt der Musik</label>
-                            <input type="range" id="pro-audio-offset" min="0" value="0" step="0.1" class="trim-slider slider-blue" style="width: 100%;">
-                        </div>
-                    </div>
-
-                    <div id="pro-tab-fx" class="pro-tab-content" style="display:none; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #222;">
-                        <div style="display:flex; gap:15px; margin-bottom:15px;">
-                            <div style="flex:1;">
-                                <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Tempo</label>
-                                <select id="pro-speed-ctrl" class="comment-input" style="width: 100%; background: #111; color: white; padding: 8px; border-radius: 10px;">
-                                    <option value="0.5">0.5x (Slow)</option>
-                                    <option value="1" selected>1.0x (Normal)</option>
-                                    <option value="1.5">1.5x</option>
-                                    <option value="2">2.0x (Fast)</option>
-                                </select>
-                            </div>
-                            <div style="flex:1;">
-                                <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Format</label>
-                                <select id="pro-ratio-ctrl" class="comment-input" style="width: 100%; background: #111; color: white; padding: 8px; border-radius: 10px;">
-                                    <option value="original" selected>Original</option>
-                                    <option value="9:16">9:16 (Shorts)</option>
-                                    <option value="1:1">1:1 (Square)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:10px;"><i class="fas fa-magic"></i> Filter</label>
-                        <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px;">
-                            <div class="pro-filter-btn active" data-filter="none">Aus</div>
-                            <div class="pro-filter-btn" data-filter="grayscale">S/W</div>
-                            <div class="pro-filter-btn" data-filter="sepia">Sepia</div>
-                            <div class="pro-filter-btn" data-filter="blur">Global Blur</div>
-                            <div class="pro-filter-btn" data-filter="contrast">Kontrast</div>
-                            <div class="pro-filter-btn" data-filter="vintage">Vintage</div>
-                        </div>
-                    </div>
-
-                    <div id="pro-tab-overlay" class="pro-tab-content" style="display:none; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; border: 1px solid #222;">
-                        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                            <button id="btn-pro-add-text" class="profile-action-btn" style="flex: 1; background: white; color: black; min-height: 40px; padding:0;"><i class="fas fa-font"></i> Text</button>
-                            <button class="profile-action-btn" onclick="document.getElementById('pro-sticker-upload-input').click()" style="flex: 1; background: #ffd700; color: black; min-height: 40px; padding:0;"><i class="fas fa-sticky-note"></i> Sticker</button>
-                            <input type="file" id="pro-sticker-upload-input" accept="image/*" style="display:none;">
-                            <button id="btn-pro-add-blur" class="profile-action-btn" style="flex: 1; background: rgba(255,255,255,0.2); color: white; min-height: 40px; padding:0;"><i class="fas fa-droplet"></i> Blur</button>
-                        </div>
-
-                        <div id="pro-text-controls" style="display: none; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; border: 1px solid #444;">
-
-                            <div style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #333;">
-                                <label style="font-size: 12px; color: #00f2fe; display:block; margin-bottom:5px;"><i class="fas fa-clock"></i> Anzeigezeitraum (Frames)</label>
-                                <div style="display:flex; gap:10px; align-items: center;">
-                                    <span style="font-size:10px; color:#aaa;">Von:</span>
-                                    <input type="range" id="pro-overlay-start" min="0" step="0.1" class="trim-slider slider-blue" style="flex:1;">
-                                    <span style="font-size:10px; color:#aaa;">Bis:</span>
-                                    <input type="range" id="pro-overlay-end" min="0" step="0.1" class="trim-slider slider-red" style="flex:1;">
-                                </div>
-                            </div>
-
-                            <input type="text" id="pro-text-ctrl-input" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5);" placeholder="Textinhalt">
-
-                            <div id="pro-font-group" style="display:flex; gap:10px;">
-                                <div style="flex:1;">
-                                    <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Schriftart</label>
-                                    <select id="pro-text-ctrl-font" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5); color: white; padding: 10px; border-radius: 10px; outline: none;">
-                                        <option value="Arial, sans-serif">Arial</option>
-                                        <option value="'Courier New', Courier, monospace">Courier</option>
-                                        <option value="Impact, fantasy">Impact</option>
-                                        <option value="'Comic Sans MS', cursive, sans-serif">Comic Sans</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div id="pro-color-group">
-                                <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Farbe</label>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 15px; gap: 5px;">
-                                    <div class="pro-color-dot color-dot" style="background: white;" data-color="#ffffff"></div>
-                                    <div class="pro-color-dot color-dot" style="background: black;" data-color="#000000"></div>
-                                    <div class="pro-color-dot color-dot" style="background: #ff0050;" data-color="#ff0050"></div>
-                                    <div class="pro-color-dot color-dot" style="background: #00f2fe;" data-color="#00f2fe"></div>
-                                    <div class="pro-color-dot color-dot" style="background: #ffd700;" data-color="#ffd700"></div>
-                                    <div class="pro-color-dot color-dot" style="background: #39ff14;" data-color="#39ff14"></div>
-                                </div>
-                            </div>
-
-                            <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Größe & Rotation</label>
-                            <div style="display:flex; gap:10px; margin-bottom:15px;">
-                                <input type="range" id="pro-text-ctrl-size" min="15" max="250" value="24" class="trim-slider slider-blue" style="flex:1;">
-                                <input type="range" id="pro-text-ctrl-rot" min="-180" max="180" value="0" class="trim-slider slider-red" style="flex:1;">
-                            </div>
-
-                            <button id="btn-pro-delete-text" class="profile-action-btn" style="width: 100%; background: #ff4444; color: white; min-height: 40px;"><i class="fas fa-trash"></i> Element löschen</button>
-                        </div>
-                    </div>
-
-                </div>
-
-                <div id="image-advanced-editor" style="display:none; background: rgba(255, 255, 255, 0.05); padding:10px; border-radius:15px; border:1px solid #333;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <label style="color:#888; font-size:12px;">Bild Editor</label>
-                        <button id="btn-toggle-grid" class="profile-action-btn edit-btn" style="min-height:30px; font-size:12px; padding: 0 10px;"><i class="fas fa-border-all"></i> Raster: Aus</button>
-                    </div>
-
-                    <div id="editor-workspace" style="position: relative; width: 100%; height: 350px; background: #000; overflow: hidden; border-radius: 10px; touch-action: none;">
-                        <div id="img-snap-v" class="snap-line-v"></div>
-                        <div id="img-snap-h" class="snap-line-h"></div>
-
-                        <img id="editor-bg" style="width: 100%; height: 100%; object-fit: contain; pointer-events: none; display: block;">
-                        <div id="editor-grid" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; display:none; background-image: linear-gradient(to right, rgba(255,255,255,0.2) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.2) 1px, transparent 1px); background-size: 33.33% 33.33%; z-index: 5;"></div>
-                        <div id="editor-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 10;"></div>
-                    </div>
-
-                    <div id="editor-nav" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-                        <button id="btn-prev-img" class="profile-action-btn edit-btn" style="min-height: 36px; padding: 0 15px;"><i class="fas fa-chevron-left"></i></button>
-                        <span id="editor-img-counter" style="font-size: 14px; font-weight: bold; color: #888;">1 / 1</span>
-                        <button id="btn-next-img" class="profile-action-btn edit-btn" style="min-height: 36px; padding: 0 15px;"><i class="fas fa-chevron-right"></i></button>
-                    </div>
-
-                    <div style="display: flex; gap: 10px; margin-top: 10px;">
-                        <button id="btn-add-text" class="profile-action-btn" style="flex: 1; background: white; color: black; min-height: 40px;"><i class="fas fa-font"></i> Text</button>
-                        <button class="profile-action-btn" onclick="document.getElementById('sticker-upload-input').click()" style="flex: 1; background: #ffd700; color: black; min-height: 40px;"><i class="fas fa-sticky-note"></i> Sticker</button>
-                        <input type="file" id="sticker-upload-input" accept="image/*" style="display:none;">
-                    </div>
-
-                    <div id="text-controls" style="display: none; margin-top: 15px; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; border: 1px solid #444;">
-                        <input type="text" id="text-ctrl-input" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5);" placeholder="Textinhalt">
-
-                        <div id="img-font-group">
-                            <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Schriftart</label>
-                            <select id="text-ctrl-font" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5); color: white; padding: 10px; border-radius: 10px; border: 1px solid #444; outline: none;">
-                                <option value="Arial, sans-serif">Arial</option>
-                                <option value="'Courier New', Courier, monospace">Courier</option>
-                                <option value="'Times New Roman', Times, serif">Times New Roman</option>
-                                <option value="Impact, fantasy">Impact</option>
-                                <option value="'Comic Sans MS', cursive, sans-serif">Comic Sans</option>
-                            </select>
-                        </div>
-
-                        <div id="img-color-group">
-                            <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Farbe</label>
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 15px; gap: 5px;">
-                                <div class="color-dot" style="background: white;" data-color="#ffffff"></div>
-                                <div class="color-dot" style="background: black;" data-color="#000000"></div>
-                                <div class="color-dot" style="background: #ff0050;" data-color="#ff0050"></div>
-                                <div class="color-dot" style="background: #00f2fe;" data-color="#00f2fe"></div>
-                                <div class="color-dot" style="background: #ffd700;" data-color="#ffd700"></div>
-                                <div class="color-dot" style="background: #39ff14;" data-color="#39ff14"></div>
-                            </div>
-                        </div>
-
-                        <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Größe & Rotation</label>
-                        <div style="display:flex; gap:10px; margin-bottom:15px;">
-                            <input type="range" id="text-ctrl-size" min="15" max="300" value="24" class="trim-slider slider-blue" style="flex:1;">
-                            <input type="range" id="text-ctrl-rot" min="-180" max="180" value="0" class="trim-slider slider-red" style="flex:1;">
-                        </div>
-
-                        <button id="btn-delete-text" class="profile-action-btn" style="width: 100%; background: #ff4444; color: white; min-height: 40px;"><i class="fas fa-trash"></i> Element löschen</button>
-                    </div>
-                </div>
-
-                <hr style="border:0; border-top:1px solid #333; margin: 15px 0;">
-                <input type="text" id="up-title" class="comment-input" placeholder="Titel..." maxlength="60" style="border-radius:15px; margin-bottom:10px; width: 100%;">
-                <textarea id="up-desc" class="comment-input" placeholder="Beschreibe deinen Post... (@mention, #hashtag)" rows="4" style="resize:none; border-radius:15px; width:100%;"></textarea>
-                <p id="upload-status" style="text-align: center; font-size: 14px; font-weight: bold; color: #ff0050;"></p>
-                <button id="submit-upload" class="profile-action-btn" style="width:100%; min-height: 56px; font-size:16px;">Veröffentlichen</button>
-            </div>
-        </div>
-
         <div id="settings-modal" class="modal">
             <div class="modal-header">
                 <h4>Profil bearbeiten</h4><i class="fas fa-times close-modal" id="close-settings"></i>
             </div>
             <div class="modal-body upload-body">
-                <label style="color:#888; font-size:12px; margin-left:5px;">Profilbild URL (Auch GIFs!)</label>
+                <label style="color:#888; font-size:12px; margin-left:5px;">Profilbild URL</label>
                 <input type="text" id="edit-pic-input" class="comment-input" placeholder="https://..." style="border-radius:15px; margin-bottom:10px; width: 100%;">
                 <label style="color:#888; font-size:12px; margin-left:5px;">Anzeigename</label>
                 <input type="text" id="edit-displayname-input" class="comment-input" placeholder="Dein Name" maxlength="30" style="border-radius:15px; margin-bottom:10px; width: 100%;">
@@ -716,13 +457,13 @@
 
                 <div id="tier3-settings-area" style="display:none; background: rgba(255,215,0,0.05); padding: 15px; border-radius: 15px; border: 1px solid #ffd700;">
                     <h5 style="color: #ffd700; margin-bottom: 10px;"><i class="fas fa-crown"></i> Plus+++ Einstellungen</h5>
-                    <label style="color:#888; font-size:12px; margin-left:5px;">Profil Song (MP3/WAV URL)</label>
+                    <label style="color:#888; font-size:12px; margin-left:5px;">Profil Song (URL)</label>
                     <input type="text" id="edit-song-input" class="comment-input" placeholder="https://..." style="border-radius:15px; margin-bottom:10px; width: 100%; border-color: #ffd700;">
-                    <label style="color:#888; font-size:12px; margin-left:5px;">Custom Profile Color (Hex)</label>
+                    <label style="color:#888; font-size:12px; margin-left:5px;">Custom Profile Color</label>
                     <input type="color" id="edit-color-input" style="width: 100%; height: 40px; border-radius: 10px; border: 1px solid #ffd700; background: none; margin-bottom: 10px; cursor: pointer;">
                 </div>
 
-                <button id="save-settings-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; min-height: 56px; font-size:16px;">Profil Speichern</button>
+                <button id="save-settings-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; min-height: 56px; font-size:16px;">Speichern</button>
             </div>
         </div>
 
@@ -732,58 +473,13 @@
             </div>
             <div class="modal-body">
                 <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
-                    <h5 style="margin-bottom: 15px; color: #00f2fe;"><i class="fas fa-palette"></i> App Design (Plus++)</h5>
+                    <h5 style="margin-bottom: 15px; color: #00f2fe;"><i class="fas fa-palette"></i> App Design</h5>
                     <select id="app-theme-select" class="comment-input" style="width: 100%; background: #111; color: white; margin-bottom: 15px;">
-                        <option value="default">Standard (Dunkel)</option>
+                        <option value="default">Standard</option>
                         <option value="deep-blue">Deep Blue</option>
                         <option value="neon-pink">Neon Pink</option>
                     </select>
-
-                    <h5 style="margin-bottom: 15px; color: #ffd700;"><i class="fas fa-icons"></i> App Icon (Plus+++)</h5>
-                    <select id="app-icon-select" class="comment-input" style="width: 100%; background: #111; color: white;">
-                        <option value="default">Standard Icon</option>
-                        <option value="gold">Goldenes Icon</option>
-                        <option value="dark">Dark Mode Icon</option>
-                    </select>
                 </div>
-
-                <div class="setting-toggle-row" style="margin-bottom: 5px;">
-                    <span style="font-weight: bold; font-size: 16px;">Desktop Benachrichtigungen</span>
-                    <label class="switch"><input type="checkbox" id="notif-master"><span class="slider round"></span></label>
-                </div>
-                <p style="font-size: 11px; color: #888; margin-bottom: 15px;">Erlaube Benachrichtigungen in deinem Browser, um nichts zu verpassen.</p>
-
-                <div id="notif-sub-settings" class="sub-settings-box">
-                    <div class="setting-toggle-row">
-                        <span>Kommentare</span>
-                        <label class="switch"><input type="checkbox" id="notif-comments"><span class="slider round"></span></label>
-                    </div>
-                    <div class="setting-toggle-row">
-                        <span>Likes & Geschenke</span>
-                        <label class="switch"><input type="checkbox" id="notif-likes"><span class="slider round"></span></label>
-                    </div>
-                    <div class="setting-toggle-row">
-                        <span>Nachrichten (DMs)</span>
-                        <label class="switch"><input type="checkbox" id="notif-dms"><span class="slider round"></span></label>
-                    </div>
-                    <div class="setting-toggle-row">
-                        <span>Neue Follower</span>
-                        <label class="switch"><input type="checkbox" id="notif-follows"><span class="slider round"></span></label>
-                    </div>
-                </div>
-
-                <hr style="border:0; border-top:1px solid #222; margin: 25px 0;">
-                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
-                    <h5 style="margin-bottom: 10px; color: #888;">Support-Ticket eröffnen</h5>
-                    <textarea id="support-msg" class="comment-input" placeholder="Beschreibe dein Problem..." rows="3" style="resize:none; width:100%; margin-bottom:10px; border-color: #ffd700;"></textarea>
-                    <button class="profile-action-btn" onclick="sendSupport()" style="width:100%; background: #ffd700; color: black;"><i class="fas fa-ticket-alt"></i> Ticket erstellen</button>
-                </div>
-
-                <div id="account-switcher-area" style="display:none; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
-                    <h5 style="margin-bottom: 10px; color: #ffd700;"><i class="fas fa-users"></i> Multi-Account Fast Switch (Plus+++)</h5>
-                    <button class="profile-action-btn edit-btn" onclick="document.getElementById('logout-btn').click()" style="width: 100%; margin-bottom: 10px;">Anderen Account hinzufügen</button>
-                </div>
-
                 <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050; min-height: 56px; font-size: 17px;">Abmelden</button>
             </div>
         </div>
@@ -794,19 +490,6 @@
                 <h3 id="alert-title">Hinweis</h3>
                 <p id="alert-message">Dies ist eine Nachricht.</p>
                 <button id="close-alert-btn" class="profile-action-btn" style="width:100%; margin-top:20px; min-height: 50px;">Okay</button>
-            </div>
-        </div>
-
-        <div id="sub-conflict-modal" class="alert-modal-overlay">
-            <div class="alert-box" style="border-color: #ff0050;">
-                <i class="fas fa-exclamation-triangle alert-icon" style="color: #ff0050;"></i>
-                <h3>Abo Konflikt</h3>
-                <p id="sub-conflict-msg" style="margin-bottom: 20px; color: #ccc;">Du hast bereits ein aktives Phil Shorts+ Abo. Möchtest du dein neues Abo kaufen (altes wird ersetzt) oder dein aktuelles Abo kündigen?</p>
-                <div style="display:flex; flex-direction:column; gap:10px;">
-                    <button class="profile-action-btn" onclick="confirmSubPurchase()" style="min-height:45px; font-size:14px; background:#00f2fe; color:black;">Trotzdem Kaufen / Verlängern</button>
-                    <button class="profile-action-btn" onclick="cancelSubscription()" style="min-height:45px; font-size:14px; background:#ff4444; color:white;">Abo Abbestellen (Löschen)</button>
-                    <button class="profile-action-btn edit-btn" onclick="document.getElementById('sub-conflict-modal').classList.remove('show')" style="min-height:45px; font-size:14px;">Abbrechen</button>
-                </div>
             </div>
         </div>
 
@@ -821,20 +504,224 @@
                     </div>
                     <label style="color:#888; font-size:12px;">Farbe 1</label>
                     <input type="color" id="cb-color1" value="#ff0050" style="width: 100%; height: 40px; border-radius: 10px; margin-bottom: 15px; cursor: pointer; border:none;">
-
                     <div class="setting-toggle-row" style="margin-bottom: 15px;">
-                        <span>Gradient (Verlauf) aktivieren</span>
+                        <span>Gradient aktivieren</span>
                         <label class="switch"><input type="checkbox" id="cb-grad-toggle"><span class="slider round"></span></label>
                     </div>
-
                     <div id="cb-color2-container" style="display:none;">
                         <label style="color:#888; font-size:12px;">Farbe 2</label>
                         <input type="color" id="cb-color2" value="#00f2fe" style="width: 100%; height: 40px; border-radius: 10px; margin-bottom: 15px; cursor: pointer; border:none;">
                     </div>
-
                     <button class="profile-action-btn" onclick="saveCustomBorder()" style="width: 100%; background: #ffd700; color: black; margin-top: 10px;">Speichern & Ausrüsten</button>
                 </div>
             </div>
+        </div>
+
+        <div id="upload-modal" class="modal full-screen-modal">
+
+            <div class="cc-navbar">
+                <div class="cc-nav-left">
+                    <i class="fas fa-times" id="close-upload" style="cursor:pointer; font-size:20px;"></i>
+                    <span style="margin-left:15px; font-weight:bold;">Phil Shorts Editor</span>
+                </div>
+                <div class="cc-nav-center">
+                    <select id="cc-format-select" class="cc-select">
+                        <option value="original">Original</option>
+                        <option value="9:16" selected>9:16 (TikTok/Shorts)</option>
+                        <option value="1:1">1:1 (Instagram)</option>
+                    </select>
+                </div>
+                <div class="cc-nav-right">
+                    <button id="submit-upload" class="cc-btn-primary">Exportieren</button>
+                </div>
+            </div>
+
+            <div class="cc-main-workspace">
+
+                <div class="cc-sidebar">
+                    <div class="cc-sidebar-item active" data-target="cc-panel-media" onclick="switchCCMenu('cc-panel-media')">
+                        <i class="fas fa-folder-open"></i><span>Media</span>
+                    </div>
+                    <div class="cc-sidebar-item" data-target="cc-panel-text" onclick="switchCCMenu('cc-panel-text')">
+                        <i class="fas fa-font"></i><span>Text</span>
+                    </div>
+                    <div class="cc-sidebar-item" data-target="cc-panel-audio" onclick="switchCCMenu('cc-panel-audio')">
+                        <i class="fas fa-music"></i><span>Audio</span>
+                    </div>
+                    <div class="cc-sidebar-item" data-target="cc-panel-fx" onclick="switchCCMenu('cc-panel-fx')">
+                        <i class="fas fa-magic"></i><span>Effekte</span>
+                    </div>
+                    <div class="cc-sidebar-item" data-target="cc-panel-settings" onclick="switchCCMenu('cc-panel-settings')">
+                        <i class="fas fa-cog"></i><span>Details</span>
+                    </div>
+                </div>
+
+                <div class="cc-panel">
+
+                    <div id="cc-panel-media" class="cc-panel-content active">
+                        <h3>Importieren</h3>
+                        <div class="file-upload-design" id="up-file-btn" onclick="document.getElementById('up-file').click()" style="margin-top:15px;">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p style="word-break: break-all; padding: 0 10px;">Datei auswählen</p>
+                            <p style="font-size: 11px; color: #666; margin-top: 5px;">(Video oder Bild)</p>
+                        </div>
+                        <input type="file" id="up-file" accept="video/*, image/*" style="display:none;" required>
+                    </div>
+
+                    <div id="cc-panel-text" class="cc-panel-content" style="display:none;">
+                        <h3>Elemente</h3>
+                        <button id="btn-pro-add-text" class="cc-btn-secondary" style="width:100%; margin-top:15px;"><i class="fas fa-plus"></i> Standard Text</button>
+                        <button id="btn-pro-add-sticker" class="cc-btn-secondary" style="width:100%; margin-top:10px;" onclick="document.getElementById('pro-sticker-upload-input').click()"><i class="fas fa-sticky-note"></i> Sticker hochladen</button>
+                        <input type="file" id="pro-sticker-upload-input" accept="image/*" style="display:none;">
+
+                        <div id="pro-element-settings" style="display:none; margin-top:20px; border-top:1px solid #333; padding-top:15px;">
+                            <h4 style="margin-bottom:10px; color:#00f2fe; font-size:12px;">Element bearbeiten</h4>
+
+                            <input type="text" id="pro-text-ctrl-input" class="cc-input" style="width:100%; margin-bottom:10px;" placeholder="Text...">
+
+                            <div id="pro-text-font-group">
+                                <select id="pro-text-ctrl-font" class="cc-select" style="width:100%; margin-bottom:10px;">
+                                    <option value="Arial, sans-serif">Arial</option>
+                                    <option value="'Courier New', Courier, monospace">Courier</option>
+                                    <option value="Impact, fantasy">Impact</option>
+                                    <option value="'Comic Sans MS', cursive, sans-serif">Comic Sans</option>
+                                </select>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 15px; gap: 5px;">
+                                    <div class="pro-color-dot color-dot" style="background: white;" data-color="#ffffff"></div>
+                                    <div class="pro-color-dot color-dot" style="background: black;" data-color="#000000"></div>
+                                    <div class="pro-color-dot color-dot" style="background: #ff0050;" data-color="#ff0050"></div>
+                                    <div class="pro-color-dot color-dot" style="background: #00f2fe;" data-color="#00f2fe"></div>
+                                    <div class="pro-color-dot color-dot" style="background: #ffd700;" data-color="#ffd700"></div>
+                                    <div class="pro-color-dot color-dot" style="background: #39ff14;" data-color="#39ff14"></div>
+                                </div>
+                            </div>
+
+                            <label style="font-size: 11px; color: #888;">Größe</label>
+                            <input type="range" id="pro-text-ctrl-size" min="15" max="300" value="40" class="trim-slider slider-blue" style="width: 100%; margin-bottom: 10px;">
+
+                            <label style="font-size: 11px; color: #888;">Rotation</label>
+                            <input type="range" id="pro-text-ctrl-rot" min="-180" max="180" value="0" class="trim-slider slider-red" style="width: 100%; margin-bottom: 15px;">
+
+                            <button id="btn-pro-delete-text" class="cc-btn-secondary" style="width:100%; color:#ff4444; border-color:#330000;"><i class="fas fa-trash"></i> Löschen</button>
+                        </div>
+                    </div>
+
+                    <div id="cc-panel-audio" class="cc-panel-content" style="display:none;">
+                        <h3>Audio</h3>
+                        <label style="font-size: 12px; color: #888; display:block; margin-top:15px; margin-bottom:5px;">Original Video-Ton</label>
+                        <input type="range" id="pro-audio-orig-vol" min="0" max="1" step="0.05" value="1" class="trim-slider slider-blue" style="width: 100%; margin-bottom: 20px;">
+
+                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;">Hintergrundmusik</label>
+                        <button class="cc-btn-secondary" onclick="document.getElementById('pro-audio-upload').click()" style="width: 100%; margin-bottom: 10px;"><i class="fas fa-upload"></i> Musik wählen</button>
+                        <input type="file" id="pro-audio-upload" accept="audio/*" style="display:none;">
+                        <div id="pro-audio-bg-name" style="font-size:11px; color:#00f2fe; margin-bottom:15px; text-align:center; word-break:break-all;"></div>
+
+                        <div id="pro-audio-controls-extended" style="display:none;">
+                            <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;">Musik Lautstärke</label>
+                            <input type="range" id="pro-audio-bg-vol" min="0" max="1" step="0.05" value="0.5" class="trim-slider slider-red" style="width: 100%; margin-bottom: 15px;">
+                        </div>
+                    </div>
+
+                    <div id="cc-panel-fx" class="cc-panel-content" style="display:none;">
+                        <h3>Effekte & Filter</h3>
+                        <label style="font-size: 12px; color: #888; display:block; margin-top:15px; margin-bottom:10px;">Spezialeffekte</label>
+                        <button id="btn-pro-add-blur" class="cc-btn-secondary" style="width: 100%; margin-bottom: 20px;"><i class="fas fa-droplet"></i> Blur-Box hinzufügen</button>
+
+                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:10px;">Farbfilter</label>
+                        <div class="cc-filter-grid">
+                            <div class="pro-filter-btn active" data-filter="none">Normal</div>
+                            <div class="pro-filter-btn" data-filter="grayscale">S/W</div>
+                            <div class="pro-filter-btn" data-filter="sepia">Sepia</div>
+                            <div class="pro-filter-btn" data-filter="blur">Global Blur</div>
+                            <div class="pro-filter-btn" data-filter="contrast">Kontrast</div>
+                            <div class="pro-filter-btn" data-filter="vintage">Vintage</div>
+                        </div>
+
+                        <label style="font-size: 12px; color: #888; display:block; margin-top:20px; margin-bottom:5px;">Geschwindigkeit</label>
+                        <select id="pro-speed-ctrl" class="cc-select" style="width: 100%;">
+                            <option value="0.5">0.5x (Slow)</option>
+                            <option value="1" selected>1.0x (Normal)</option>
+                            <option value="1.5">1.5x</option>
+                            <option value="2">2.0x (Fast)</option>
+                        </select>
+                    </div>
+
+                    <div id="cc-panel-settings" class="cc-panel-content" style="display:none;">
+                        <h3>Post Details</h3>
+                        <label style="font-size: 12px; color: #888; margin-top:15px; display:block;">Titel</label>
+                        <input type="text" id="up-title" class="cc-input" placeholder="Titel..." maxlength="60" style="width: 100%; margin-bottom:15px;">
+
+                        <label style="font-size: 12px; color: #888; display:block;">Beschreibung / Hashtags</label>
+                        <textarea id="up-desc" class="cc-input" placeholder="Beschreibe deinen Post..." rows="5" style="resize:none; width:100%;"></textarea>
+
+                        <p id="upload-status" style="text-align: center; font-size: 12px; font-weight: bold; color: #00f2fe; margin-top: 15px;"></p>
+                    </div>
+
+                </div>
+
+                <div class="cc-preview-area">
+                    <div class="cc-canvas-tools">
+                        <button id="btn-toggle-grid" class="cc-tool-btn" title="Raster ein/aus"><i class="fas fa-border-all"></i></button>
+                    </div>
+
+                    <div id="pro-editor-workspace" class="cc-workspace ratio-9-16">
+                        <div id="pro-snap-v" class="snap-line-v"></div>
+                        <div id="pro-snap-h" class="snap-line-h"></div>
+
+                        <video id="pro-video-source" style="position: absolute; width: 100%; height: 100%; object-fit: contain; z-index: 1;" playsinline crossorigin="anonymous"></video>
+                        <img id="editor-bg" style="position: absolute; width: 100%; height: 100%; object-fit: contain; z-index: 1; display:none; pointer-events:none;">
+
+                        <div id="pro-editor-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 10;"></div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="cc-timeline-area">
+
+                <div class="cc-timeline-controls">
+                    <div class="cc-time-display"><span id="pro-time-current">00:00.0</span> / <span id="pro-time-total">00:00.0</span></div>
+                    <div class="cc-play-btn-wrapper">
+                        <button id="btn-pro-play" class="cc-play-btn"><i class="fas fa-play"></i></button>
+                    </div>
+                    <div style="width: 80px;"></div>
+                </div>
+
+                <div class="cc-tracks-wrapper" id="cc-tracks-wrapper">
+
+                    <div id="cc-playhead" class="cc-playhead"></div>
+
+                    <div class="cc-track-row">
+                        <div class="cc-track-label"><i class="fas fa-video"></i> Video</div>
+                        <div class="cc-track-content" id="track-video-content">
+                            <div id="timeline-video-item" class="cc-timeline-item type-video">
+                                <div id="pro-timeline-frames" class="cc-frames-bg"></div>
+                                <div class="cc-handle left-handle" id="handle-vid-start"></div>
+                                <div class="cc-handle right-handle" id="handle-vid-end"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cc-track-row">
+                        <div class="cc-track-label"><i class="fas fa-music"></i> Audio</div>
+                        <div class="cc-track-content" id="track-audio-content">
+                            <div id="timeline-audio-item" class="cc-timeline-item type-audio" style="display:none; width:100%;">
+                                <span style="padding-left:10px; font-size:10px; line-height:30px; font-weight:bold; overflow:hidden; white-space:nowrap;">Hintergrundmusik</span>
+                                <div class="cc-handle left-handle" id="handle-aud-start"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cc-track-row" style="border-bottom:none;">
+                        <div class="cc-track-label"><i class="fas fa-layer-group"></i> Layer</div>
+                        <div class="cc-track-content" id="track-overlay-content" style="position:relative; min-height:40px;">
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <audio id="pro-audio-player" style="display:none;"></audio>
         </div>
 
     </div>
