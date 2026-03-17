@@ -68,7 +68,7 @@ function updateNotifUI() {
     masterToggle.checked = notifSettings.master;
     document.getElementById('notif-comments').checked = notifSettings.comments;
     document.getElementById('notif-likes').checked = notifSettings.likes;
-    document.getElementById('notif-dms').checked = notifSettings.dms;
+    document.getElementById('notif-dms').checked = notifSettings.follows;
     document.getElementById('notif-follows').checked = notifSettings.follows;
     if (notifSettings.master) {
         subSettings.style.opacity = '1';
@@ -220,7 +220,11 @@ window.openHashtag = function(tag, event) {
 
 window.openProfileByUsername = function(username, event) {
     if (event) event.stopPropagation();
-    const user = allKnownUsers.find(u => (u.username || "").toLowerCase() === username.toLowerCase());
+    const user = allKnownUsers.find(u => {
+        // Falls kein Benutzername hinterlegt ist, nehmen wir den Fallback-Namen zum Suchen!
+        const cleanUname = u.username || (u.displayName ? u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase() : 'user');
+        return cleanUname === username.toLowerCase();
+    });
     if (user) openProfile(user.uid);
     else showToast("Nutzer @" + username + " nicht gefunden!");
 };
