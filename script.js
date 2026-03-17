@@ -243,11 +243,22 @@ document.addEventListener('input', (e) => {
 });
 
 window.showMentionSuggestions = function(inputEl, query) {
-    const matchedUsers = allKnownUsers.filter(u => (u.username || "").toLowerCase().startsWith(query) || (u.displayName || "").toLowerCase().startsWith(query)).slice(0, 5);
+    const matchedUsers = allKnownUsers.filter(u => {
+        const uname = (u.username || "").toLowerCase();
+        const dname = (u.displayName || "").toLowerCase();
+        return uname.includes(query) || dname.includes(query);
+    });
+
     const box = document.getElementById('mention-suggestions');
     if (!box) return;
     if (matchedUsers.length === 0) { box.style.display = 'none'; return; }
-    box.innerHTML = matchedUsers.map(u => `<div class="mention-item" onclick="selectMention('${u.username}')"><img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}"><span>${u.username}</span></div>`).join('');
+
+    box.innerHTML = matchedUsers.map(u => {
+        const safeUsername = u.username || (u.displayName ? u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase() : 'user');
+        const safePic = u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback';
+        return `<div class="mention-item" onclick="selectMention('${safeUsername}')"><img src="${safePic}"><span>@${safeUsername}</span></div>`;
+    }).join('');
+
     const rect = inputEl.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
     box.style.left = rect.left + 'px';
