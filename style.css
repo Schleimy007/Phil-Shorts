@@ -2601,3 +2601,11 @@ input:checked+.slider:before {
     border-color: #00f2fe;
     font-weight: bold;
 }
+
+.pro-tab-content {
+    display: none;
+}
+
+.pro-tab-content.active {
+    display: block;
+}
