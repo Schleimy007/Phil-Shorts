@@ -25,50 +25,16 @@ if (currentUser) currentUser.verified = false;
 
 let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || { master: false, comments: true, likes: true, dms: true, follows: true };
 
-// --- IMAGE EDITOR STATE ---
-let imageEditorState = {
-    images: [],
-    edits: [],
-    currentIndex: 0,
-    activeTextId: null
-};
-
-// --- PRO VIDEO EDITOR STATE (CAPCUT) ---
-let proEditorState = {
-    filter: 'none',
-    start: 0,
-    end: 0,
-    duration: 1,
-    speed: 1,
-    ratio: '9:16',
-    audioFileUrl: null,
-    origVol: 1,
-    bgVol: 0.5,
-    audioStart: 0,
-    overlays: [],
-    activeElementId: null
-};
+// --- PRO EDITOR STATE ---
+let imageEditorState = { images: [], edits: [], currentIndex: 0 };
+let proEditorState = { filter: 'none', start: 0, end: 0, speed: 1, ratio: 'original', audioFileUrl: null, origVol: 1, bgVol: 0.5, overlays: [] };
 
 let proBgAudio = new Audio();
 
-// --- DRAG STATES ---
-// Drag-State für Image Editor
-let imgDragState = {
-    activeId: null,
-    activeResizeId: null,
-    activeResizePos: null,
-    startX: 0,
-    startY: 0,
-    initialObjX: 0,
-    initialObjY: 0,
-    startSize: 0,
-    startDist: 0,
-    gridVisible: false
-};
-
-// Drag-State für Video Canvas (CapCut)
+// Zentraler Drag-State für Einrasten & Bugfixes
 let dragState = {
     activeId: null,
+    isVideo: false,
     activeResizeId: null,
     activeResizePos: null,
     startX: 0,
@@ -80,16 +46,6 @@ let dragState = {
     gridVisible: false
 };
 
-// Drag-State für Timeline Resizing (CapCut)
-let tlDragState = {
-    activeId: null,
-    handleType: null, // 'start' oder 'end'
-    trackType: null, // 'video', 'audio', 'overlay'
-    startX: 0,
-    startVal: 0
-};
-
-// --- GENERAL UI & LOGIN LOGIC ---
 window.sendDesktopNotification = function(title, body, type) {
     if (!("Notification" in window) || !notifSettings.master || Notification.permission !== "granted") return;
     if (type === 'comment' && !notifSettings.comments) return;
@@ -104,6 +60,67 @@ window.sendDesktopNotification = function(title, body, type) {
         };
     } catch (e) { console.error(e); }
 };
+
+function updateNotifUI() {
+    const masterToggle = document.getElementById('notif-master');
+    const subSettings = document.getElementById('notif-sub-settings');
+    if (!masterToggle) return;
+    masterToggle.checked = notifSettings.master;
+    document.getElementById('notif-comments').checked = notifSettings.comments;
+    document.getElementById('notif-likes').checked = notifSettings.likes;
+    document.getElementById('notif-dms').checked = notifSettings.dms;
+    document.getElementById('notif-follows').checked = notifSettings.follows;
+    if (notifSettings.master) {
+        subSettings.style.opacity = '1';
+        subSettings.style.pointerEvents = 'auto';
+    } else {
+        subSettings.style.opacity = '0.5';
+        subSettings.style.pointerEvents = 'none';
+    }
+}
+
+document.getElementById('notif-master').addEventListener('change', async(e) => {
+    if (e.target.checked) {
+        if (!("Notification" in window)) {
+            showCustomAlert("Nicht unterstützt", "Browser unterstützt keine Desktop-Benachrichtigungen.");
+            e.target.checked = false;
+            return;
+        }
+        if (Notification.permission === "denied") {
+            showCustomAlert("Blockiert!", "Du hast Benachrichtigungen blockiert.");
+            e.target.checked = false;
+            notifSettings.master = false;
+            updateNotifUI();
+            return;
+        }
+        if (Notification.permission !== "granted") {
+            const perm = await Notification.requestPermission();
+            if (perm !== "granted") {
+                e.target.checked = false;
+                notifSettings.master = false;
+                updateNotifUI();
+                return;
+            }
+        }
+    }
+    notifSettings.master = e.target.checked;
+    localStorage.setItem('phil_notif_settings', JSON.stringify(notifSettings));
+    updateNotifUI();
+});
+
+['comments', 'likes', 'dms', 'follows'].forEach(id => {
+    document.getElementById(`notif-${id}`).addEventListener('change', (e) => {
+        notifSettings[id] = e.target.checked;
+        localStorage.setItem('phil_notif_settings', JSON.stringify(notifSettings));
+    });
+});
+
+let currentFeedMode = 'foryou';
+let isInitialLoad = true;
+let sortedFeed = [];
+const viewedVideos = new Set();
+window.globalVolume = 1;
+window.globalMuted = false;
 
 window.switchView = function(viewId) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -144,10 +161,10 @@ window.jumpToVideo = function(videoId) {
 };
 
 function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.innerText = msg;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2500);
+    const toast = document.getElementById('toast');
+    toast.innerText = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2500);
 }
 
 function showCustomAlert(title, message) {
@@ -155,15 +172,9 @@ function showCustomAlert(title, message) {
     document.getElementById('alert-message').innerText = message;
     document.getElementById('custom-alert-modal').classList.add('show');
 }
-
 document.getElementById('close-alert-btn').addEventListener('click', () => { document.getElementById('custom-alert-modal').classList.remove('show'); });
 
 function parseJwt(token) { var base64Url = token.split('.')[1]; var base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/'); var jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')); return JSON.parse(jsonPayload); }
-
-function checkPhilPlusStatus(requiredTier = 1) {
-    if (!currentUser) return false;
-    return currentUser.philPlusUntil && currentUser.philPlusUntil > Date.now() && (currentUser.philPlusTier || 1) >= requiredTier;
-}
 
 function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackVerified) {
     const user = allKnownUsers.find(u => u.uid === uid);
@@ -181,18 +192,7 @@ function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackV
 
 function getVerifiedBadge(isVerif) { return isVerif ? '<i class="fas fa-check-circle verified-badge"></i>' : ''; }
 
-function timeAgo(timestamp) {
-    const now = Date.now();
-    const diff = now - Number(timestamp);
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    if (minutes < 1) return 'gerade eben';
-    if (minutes < 60) return `vor ${minutes} Min.`;
-    if (hours < 24) return `vor ${hours} Std.`;
-    if (days < 7) return `vor ${days} T.`;
-    return new Date(Number(timestamp)).toLocaleDateString('de-DE');
-}
+function timeAgo(timestamp) { const now = Date.now(); const diff = now - Number(timestamp); const minutes = Math.floor(diff / 60000); const hours = Math.floor(minutes / 60); const days = Math.floor(hours / 24); if (minutes < 1) return 'gerade eben'; if (minutes < 60) return `vor ${minutes} Min.`; if (hours < 24) return `vor ${hours} Std.`; if (days < 7) return `vor ${days} T.`; return new Date(Number(timestamp)).toLocaleDateString('de-DE'); }
 
 window.formatText = function(text) {
     if (!text) return "";
@@ -260,7 +260,6 @@ window.showMentionSuggestions = function(inputEl, query) {
     }
     box.style.display = 'block';
 };
-
 window.selectMention = function(username) {
     if (!activeMentionInput) return;
     const val = activeMentionInput.value;
@@ -268,7 +267,6 @@ window.selectMention = function(username) {
     hideMentionSuggestions();
     activeMentionInput.focus();
 };
-
 window.hideMentionSuggestions = function() {
     const box = document.getElementById('mention-suggestions');
     if (box) box.style.display = 'none';
@@ -276,12 +274,23 @@ window.hideMentionSuggestions = function() {
 };
 document.addEventListener('click', (e) => { if (!e.target.closest('#mention-suggestions') && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') hideMentionSuggestions(); });
 
+let userUnsubscribe = null;
+
+function checkPhilPlusStatus(requiredTier = 1) {
+    if (!currentUser) return false;
+    return currentUser.philPlusUntil && currentUser.philPlusUntil > Date.now() && (currentUser.philPlusTier || 1) >= requiredTier;
+}
+
 function applyAppTheme(themeName) { if (!themeName || themeName === 'default') { document.body.className = ''; } else { document.body.className = `theme-${themeName}`; } }
 
 function getInlineBorderStyle(activeBorder, customBorder) {
     if (!activeBorder || activeBorder === 'none') return '';
     if (activeBorder === 'custom' && customBorder) {
-        if (customBorder.grad) { return `border: 3px solid transparent; background: linear-gradient(#000, #000) padding-box, linear-gradient(45deg, ${customBorder.c1}, ${customBorder.c2}) border-box; padding: 2px;`; } else { return `border: 3px solid ${customBorder.c1}; box-shadow: 0 0 10px ${customBorder.c1}, inset 0 0 5px ${customBorder.c1}; padding: 2px;`; }
+        if (customBorder.grad) {
+            return `border: 3px solid transparent; background: linear-gradient(#000, #000) padding-box, linear-gradient(45deg, ${customBorder.c1}, ${customBorder.c2}) border-box; padding: 2px;`;
+        } else {
+            return `border: 3px solid ${customBorder.c1}; box-shadow: 0 0 10px ${customBorder.c1}, inset 0 0 5px ${customBorder.c1}; padding: 2px;`;
+        }
     }
     return '';
 }
@@ -294,77 +303,17 @@ function getBorderClass(activeBorder) {
 function applyBorderStyles(el, activeBorder, customBorder) {
     el.className = el.className.replace(/border-[^\s]+/g, '');
     el.classList.remove('border-none', 'border-custom');
+
     if (!activeBorder || activeBorder === 'none') {
         el.style.cssText = '';
         el.classList.add('border-none');
-    } else if (activeBorder === 'custom' && customBorder) { el.style.cssText = getInlineBorderStyle('custom', customBorder); } else {
+    } else if (activeBorder === 'custom' && customBorder) {
+        el.style.cssText = getInlineBorderStyle('custom', customBorder);
+    } else {
         el.style.cssText = '';
         el.classList.add(`border-${activeBorder}`);
     }
 }
-
-function updateNotifUI() {
-    const masterToggle = document.getElementById('notif-master');
-    const subSettings = document.getElementById('notif-sub-settings');
-    if (!masterToggle) return;
-    masterToggle.checked = notifSettings.master;
-    document.getElementById('notif-comments').checked = notifSettings.comments;
-    document.getElementById('notif-likes').checked = notifSettings.likes;
-    document.getElementById('notif-dms').checked = notifSettings.dms;
-    document.getElementById('notif-follows').checked = notifSettings.follows;
-    if (notifSettings.master) {
-        subSettings.style.opacity = '1';
-        subSettings.style.pointerEvents = 'auto';
-    } else {
-        subSettings.style.opacity = '0.5';
-        subSettings.style.pointerEvents = 'none';
-    }
-}
-
-document.getElementById('notif-master').addEventListener('change', async(e) => {
-    if (e.target.checked) {
-        if (!("Notification" in window)) {
-            showCustomAlert("Nicht unterstützt", "Browser unterstützt keine Desktop-Benachrichtigungen.");
-            e.target.checked = false;
-            return;
-        }
-        if (Notification.permission === "denied") {
-            showCustomAlert("Blockiert!", "Du hast Benachrichtigungen blockiert.");
-            e.target.checked = false;
-            notifSettings.master = false;
-            updateNotifUI();
-            return;
-        }
-        if (Notification.permission !== "granted") {
-            const perm = await Notification.requestPermission();
-            if (perm !== "granted") {
-                e.target.checked = false;
-                notifSettings.master = false;
-                updateNotifUI();
-                return;
-            }
-        }
-    }
-    notifSettings.master = e.target.checked;
-    localStorage.setItem('phil_notif_settings', JSON.stringify(notifSettings));
-    updateNotifUI();
-});
-
-['comments', 'likes', 'dms', 'follows'].forEach(id => {
-    document.getElementById(`notif-${id}`).addEventListener('change', (e) => {
-        notifSettings[id] = e.target.checked;
-        localStorage.setItem('phil_notif_settings', JSON.stringify(notifSettings));
-    });
-});
-
-let currentFeedMode = 'foryou';
-let isInitialLoad = true;
-let sortedFeed = [];
-const viewedVideos = new Set();
-window.globalVolume = 1;
-window.globalMuted = false;
-
-let userUnsubscribe = null;
 
 function initLiveUser() {
     if (!currentUser) return;
@@ -394,6 +343,7 @@ function initLiveUser() {
                 let bonus = 100;
                 if (checkPhilPlusStatus(3)) bonus = 500;
                 else if (checkPhilPlusStatus(2)) bonus = 200;
+
                 currentUser.coins += bonus;
                 currentUser.lastLogin = today;
                 updateDoc(doc(db, "users", currentUser.uid), { coins: currentUser.coins, lastLogin: today });
@@ -421,13 +371,24 @@ function initLiveUser() {
                     needsUpdate = true;
                 }
             }
-            if (needsUpdate) { updateDoc(doc(db, "users", currentUser.uid), { appTheme: currentUser.appTheme, activeBorder: currentUser.activeBorder, profileSong: currentUser.profileSong || '', profileColor: currentUser.profileColor || '', appIcon: currentUser.appIcon || 'default' }); }
+
+            if (needsUpdate) {
+                updateDoc(doc(db, "users", currentUser.uid), {
+                    appTheme: currentUser.appTheme,
+                    activeBorder: currentUser.activeBorder,
+                    profileSong: currentUser.profileSong || '',
+                    profileColor: currentUser.profileColor || '',
+                    appIcon: currentUser.appIcon || 'default'
+                });
+            }
 
             localStorage.setItem('phil_session', JSON.stringify(currentUser));
+
             if (checkPhilPlusStatus(2)) {
                 applyAppTheme(currentUser.appTheme);
                 document.getElementById('app-theme-select').value = currentUser.appTheme;
             } else { applyAppTheme('default'); }
+
             if (checkPhilPlusStatus(3) && currentUser.appIcon) {
                 document.getElementById('app-icon-select').value = currentUser.appIcon;
                 const favicon = document.getElementById('dynamic-favicon');
@@ -435,6 +396,7 @@ function initLiveUser() {
                 else if (currentUser.appIcon === 'dark') favicon.href = "https://cdn-icons-png.flaticon.com/512/32/32114.png";
                 else favicon.href = "https://i.imgur.com/JDPRzCc.png";
             }
+
             if (checkPhilPlusStatus(3)) {
                 document.getElementById('tier3-settings-area').style.display = 'block';
                 document.getElementById('account-switcher-area').style.display = 'block';
@@ -460,14 +422,18 @@ function initLiveUser() {
             if (actionBtn && actionBtn.dataset.uid === currentUser.uid) {
                 document.getElementById('stat-followers').innerText = currentUser.followers.length;
                 document.getElementById('stat-following').innerText = currentUser.following.length;
+
                 applyBorderStyles(document.getElementById('profile-pic'), currentUser.activeBorder, currentUser.customBorder);
+
                 if (checkPhilPlusStatus(1)) {
                     document.getElementById('phil-plus-badge-container').style.display = 'block';
                     let tierText = "Phil Shorts+";
                     if (currentUser.philPlusTier === 2) tierText = "Phil Shorts++";
                     if (currentUser.philPlusTier === 3) tierText = "Phil Shorts+++";
                     document.getElementById('phil-plus-badge-text').innerHTML = `<i class="fas fa-star"></i> ${tierText}`;
-                } else { document.getElementById('phil-plus-badge-container').style.display = 'none'; }
+                } else {
+                    document.getElementById('phil-plus-badge-container').style.display = 'none';
+                }
             }
         }
     });
@@ -484,6 +450,7 @@ function initSearchUsers() {
             let tier3Badge = "";
             if (u.philPlusUntil && u.philPlusUntil > Date.now() && (u.philPlusTier || 1) >= 1) nameClass = "name-phil-plus";
             if (u.philPlusUntil && u.philPlusUntil > Date.now() && u.philPlusTier === 3) tier3Badge = ' <i class="fas fa-gem" style="color: #00f2fe; font-size: 12px;" title="Plus+++ Legende"></i>';
+
             document.querySelectorAll(`.live-name-${u.uid}`).forEach(el => {
                 el.innerHTML = u.displayName + isVerif + tier3Badge;
                 if (nameClass) el.classList.add(nameClass);
@@ -565,6 +532,7 @@ window.onload = async function() {
         applyAppTheme(e.target.value);
         if (currentUser) { updateDoc(doc(db, "users", currentUser.uid), { appTheme: e.target.value }); }
     });
+
     document.getElementById('app-icon-select').addEventListener('change', (e) => {
         if (e.target.value !== 'default' && !checkPhilPlusStatus(3)) {
             showCustomAlert("Premium Feature", "Custom App Icons erfordern Phil Shorts+++!");
@@ -580,1100 +548,10 @@ document.getElementById('logout-btn').addEventListener('click', () => {
     localStorage.removeItem('phil_session');
     window.location.reload();
 });
-document.getElementById('btn-live-stream').addEventListener('click', () => { showCustomAlert("Live Streaming (Beta)", "Die Live-Streaming Funktion befindet sich aktuell in der Entwicklung. Als Plus+++ User erhältst du als Erstes Zugriff, sobald die Server online sind!"); });
 
-
-// ============================================================================
-// --- IMAGE EDITOR LOGIK ---
-// ============================================================================
-
-function renderEditorImage(index) {
-    if (imageEditorState.images.length === 0) return;
-    document.getElementById('editor-bg').src = imageEditorState.images[index];
-    document.getElementById('editor-img-counter').innerText = `${index + 1} / ${imageEditorState.images.length}`;
-    const layer = document.getElementById('editor-layer');
-    layer.innerHTML = '';
-    imageEditorState.activeTextId = null;
-    document.getElementById('text-controls').style.display = 'none';
-    imageEditorState.edits[index].forEach(obj => createDOMTextElement(obj));
-}
-
-function createDOMTextElement(obj) {
-    const layer = document.getElementById('editor-layer');
-    const wrapper = document.createElement('div');
-    wrapper.id = 'drag-txt-' + obj.id;
-    wrapper.className = 'draggable-text';
-    wrapper.style.left = obj.x + 'px';
-    wrapper.style.top = obj.y + 'px';
-    wrapper.style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`;
-
-    if (obj.type === 'sticker') {
-        const imgEl = document.createElement('img');
-        imgEl.className = 'sticker-content';
-        imgEl.src = obj.src;
-        imgEl.style.width = obj.size + 'px';
-        imgEl.style.height = 'auto';
-        imgEl.style.pointerEvents = 'none';
-        wrapper.appendChild(imgEl);
-    } else if (obj.type === 'blur') {
-        const blurEl = document.createElement('div');
-        blurEl.className = 'blur-box-content';
-        blurEl.style.width = obj.size + 'px';
-        blurEl.style.height = obj.size + 'px';
-        wrapper.appendChild(blurEl);
-    } else {
-        const textEl = document.createElement('div');
-        textEl.className = 'text-content';
-        textEl.innerText = obj.text;
-        textEl.style.fontSize = obj.size + 'px';
-        textEl.style.color = obj.color;
-        textEl.style.fontFamily = obj.font || 'Arial, sans-serif';
-        wrapper.appendChild(textEl);
-    }
-
-    ['tl', 'tr', 'bl', 'br'].forEach(pos => {
-        const h = document.createElement('div');
-        h.className = `resize-handle handle-${pos}`;
-        h.addEventListener('mousedown', (e) => startImgResize(e, obj.id, pos));
-        h.addEventListener('touchstart', (e) => startImgResize(e, obj.id, pos), { passive: false });
-        wrapper.appendChild(h);
-    });
-
-    wrapper.addEventListener('mousedown', (e) => startImgDrag(e, obj.id));
-    wrapper.addEventListener('touchstart', (e) => startImgDrag(e, obj.id), { passive: false });
-    layer.appendChild(wrapper);
-}
-
-function selectText(id) {
-    imageEditorState.activeTextId = id;
-    document.querySelectorAll('#editor-layer .draggable-text').forEach(el => el.classList.remove('active'));
-    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id);
-    if (!obj) return;
-
-    document.getElementById('drag-txt-' + id).classList.add('active');
-    document.getElementById('text-controls').style.display = 'block';
-    document.getElementById('text-ctrl-input').value = obj.text || '';
-    document.getElementById('text-ctrl-size').value = obj.size;
-    document.getElementById('text-ctrl-rot').value = obj.rotation;
-    document.getElementById('text-ctrl-font').value = obj.font || 'Arial, sans-serif';
-
-    if (obj.type === 'sticker') {
-        document.getElementById('text-ctrl-input').style.display = 'none';
-        document.getElementById('img-font-group').style.display = 'none';
-        document.getElementById('img-color-group').style.display = 'none';
-    } else {
-        document.getElementById('text-ctrl-input').style.display = 'block';
-        document.getElementById('img-font-group').style.display = 'block';
-        document.getElementById('img-color-group').style.display = 'block';
-    }
-}
-
-document.getElementById('editor-workspace') ? .addEventListener('click', (e) => {
-    if (!e.target.closest('.draggable-text')) {
-        imageEditorState.activeTextId = null;
-        document.querySelectorAll('#editor-layer .draggable-text').forEach(el => el.classList.remove('active'));
-        if (document.getElementById('text-controls')) document.getElementById('text-controls').style.display = 'none';
-    }
+document.getElementById('btn-live-stream').addEventListener('click', () => {
+    showCustomAlert("Live Streaming (Beta)", "Die Live-Streaming Funktion befindet sich aktuell in der Entwicklung. Als Plus+++ User erhältst du als Erstes Zugriff, sobald die Server online sind!");
 });
-
-document.getElementById('text-ctrl-input') ? .addEventListener('input', (e) => {
-    if (!imageEditorState.activeTextId) return;
-    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId);
-    if (obj && obj.type !== 'sticker') {
-        obj.text = e.target.value;
-        document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').innerText = obj.text;
-    }
-});
-
-document.getElementById('text-ctrl-size') ? .addEventListener('input', (e) => {
-    if (!imageEditorState.activeTextId) return;
-    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId);
-    if (obj) {
-        obj.size = e.target.value;
-        const el = document.getElementById('drag-txt-' + obj.id);
-        if (obj.type === 'sticker') {
-            el.querySelector('.sticker-content').style.width = obj.size + 'px';
-        } else {
-            el.querySelector('.text-content').style.fontSize = obj.size + 'px';
-        }
-    }
-});
-
-document.getElementById('text-ctrl-rot') ? .addEventListener('input', (e) => {
-    if (!imageEditorState.activeTextId) return;
-    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId);
-    if (obj) {
-        obj.rotation = e.target.value;
-        document.getElementById('drag-txt-' + obj.id).style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`;
-    }
-});
-
-document.getElementById('text-ctrl-font') ? .addEventListener('change', (e) => {
-    if (!imageEditorState.activeTextId) return;
-    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId);
-    if (obj && obj.type !== 'sticker') {
-        obj.font = e.target.value;
-        document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.fontFamily = obj.font;
-    }
-});
-
-document.querySelectorAll('#text-controls .color-dot').forEach(dot => {
-    dot.addEventListener('click', (e) => {
-        if (!imageEditorState.activeTextId) return;
-        const color = e.target.dataset.color;
-        const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId);
-        if (obj && obj.type !== 'sticker') {
-            obj.color = color;
-            document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.color = color;
-        }
-    });
-});
-
-document.getElementById('btn-delete-text') ? .addEventListener('click', () => {
-    if (!imageEditorState.activeTextId) return;
-    imageEditorState.edits[imageEditorState.currentIndex] = imageEditorState.edits[imageEditorState.currentIndex].filter(t => t.id !== imageEditorState.activeTextId);
-    document.getElementById('drag-txt-' + imageEditorState.activeTextId).remove();
-    imageEditorState.activeTextId = null;
-    document.getElementById('text-controls').style.display = 'none';
-});
-
-document.getElementById('btn-add-text') ? .addEventListener('click', () => {
-    const workspace = document.getElementById('editor-workspace');
-    const newObj = { id: Date.now(), type: 'text', text: "Neuer Text", x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 24, rotation: 0, color: '#ffffff', font: 'Arial, sans-serif' };
-    imageEditorState.edits[imageEditorState.currentIndex].push(newObj);
-    createDOMTextElement(newObj);
-    selectText(newObj.id);
-});
-
-document.getElementById('sticker-upload-input') ? .addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(event) {
-        const workspace = document.getElementById('editor-workspace');
-        const newObj = { id: Date.now(), type: 'sticker', src: event.target.result, x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 100, rotation: 0 };
-        imageEditorState.edits[imageEditorState.currentIndex].push(newObj);
-        createDOMTextElement(newObj);
-        selectText(newObj.id);
-        document.getElementById('sticker-upload-input').value = '';
-    }
-    reader.readAsDataURL(file);
-});
-
-document.getElementById('btn-prev-img') ? .addEventListener('click', () => {
-    if (imageEditorState.currentIndex > 0) {
-        imageEditorState.currentIndex--;
-        renderEditorImage(imageEditorState.currentIndex);
-    }
-});
-document.getElementById('btn-next-img') ? .addEventListener('click', () => {
-    if (imageEditorState.currentIndex < imageEditorState.images.length - 1) {
-        imageEditorState.currentIndex++;
-        renderEditorImage(imageEditorState.currentIndex);
-    }
-});
-
-// --- IMAGE EDITOR DRAG & DROP LOGIC ---
-function startImgDrag(e, id) {
-    if (e.target.tagName.toLowerCase() === 'input' || e.target.classList.contains('resize-handle')) return;
-    e.preventDefault();
-    e.stopPropagation();
-    imgDragState.activeId = id;
-    selectText(id);
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    imgDragState.startX = clientX;
-    imgDragState.startY = clientY;
-    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id);
-    if (obj) {
-        imgDragState.initialObjX = obj.x;
-        imgDragState.initialObjY = obj.y;
-    }
-}
-
-function startImgResize(e, id, pos) {
-    e.preventDefault();
-    e.stopPropagation();
-    imgDragState.activeResizeId = id;
-    imgDragState.activeResizePos = pos;
-    selectText(id);
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    imgDragState.startX = clientX;
-    imgDragState.startY = clientY;
-    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id);
-    if (obj) {
-        imgDragState.startSize = parseFloat(obj.size);
-        const wsRect = document.getElementById('editor-workspace').getBoundingClientRect();
-        const mouseX = clientX - wsRect.left;
-        const mouseY = clientY - wsRect.top;
-        imgDragState.startDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2));
-    }
-}
-
-function imgDragMove(e) {
-    if (imgDragState.activeId) {
-        e.preventDefault();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const dx = clientX - imgDragState.startX;
-        const dy = clientY - imgDragState.startY;
-        let rawX = imgDragState.initialObjX + dx;
-        let rawY = imgDragState.initialObjY + dy;
-
-        const ws = document.getElementById('editor-workspace');
-        if (!ws) return;
-
-        let snappedX = false;
-        let snappedY = false;
-
-        if (Math.abs(rawX - (ws.clientWidth / 2)) < 15) {
-            rawX = ws.clientWidth / 2;
-            snappedX = true;
-        }
-        if (Math.abs(rawY - (ws.clientHeight / 2)) < 15) {
-            rawY = ws.clientHeight / 2;
-            snappedY = true;
-        }
-
-        if (document.getElementById('img-snap-v')) document.getElementById('img-snap-v').style.display = snappedX ? 'block' : 'none';
-        if (document.getElementById('img-snap-h')) document.getElementById('img-snap-h').style.display = snappedY ? 'block' : 'none';
-
-        if (imgDragState.gridVisible) {
-            rawX = Math.round(rawX / 20) * 20;
-            rawY = Math.round(rawY / 20) * 20;
-        }
-
-        const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imgDragState.activeId);
-        if (obj) {
-            obj.x = rawX;
-            obj.y = rawY;
-            const el = document.getElementById('drag-txt-' + obj.id);
-            if (el) {
-                el.style.left = obj.x + 'px';
-                el.style.top = obj.y + 'px';
-            }
-        }
-    } else if (imgDragState.activeResizeId) {
-        e.preventDefault();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const wsRect = document.getElementById('editor-workspace').getBoundingClientRect();
-        const mouseX = clientX - wsRect.left;
-        const mouseY = clientY - wsRect.top;
-
-        const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imgDragState.activeResizeId);
-        if (obj) {
-            const currentDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2));
-            if (imgDragState.startDist > 0) {
-                let newSize = Math.max(15, imgDragState.startSize * (currentDist / imgDragState.startDist));
-                obj.size = newSize;
-                const el = document.getElementById('drag-txt-' + obj.id);
-                if (el) {
-                    if (obj.type === 'sticker' || obj.type === 'blur') {
-                        el.children[0].style.width = newSize + 'px';
-                        if (obj.type === 'blur') el.children[0].style.height = newSize + 'px';
-                    } else {
-                        el.querySelector('.text-content').style.fontSize = newSize + 'px';
-                    }
-                }
-                if (document.getElementById('text-ctrl-size')) document.getElementById('text-ctrl-size').value = newSize;
-            }
-        }
-    }
-}
-
-function endImgDrag() {
-    imgDragState.activeId = null;
-    imgDragState.activeResizeId = null;
-    if (document.getElementById('img-snap-v')) document.getElementById('img-snap-v').style.display = 'none';
-    if (document.getElementById('img-snap-h')) document.getElementById('img-snap-h').style.display = 'none';
-}
-
-document.addEventListener('mousemove', imgDragMove);
-document.addEventListener('touchmove', imgDragMove, { passive: false });
-document.addEventListener('mouseup', endImgDrag);
-document.addEventListener('touchend', endImgDrag);
-
-// Image Renderer to Cloudinary
-async function renderAndUploadImages() {
-    let uploadedUrls = [];
-    const ws = document.getElementById('editor-workspace');
-    const Cw = ws.clientWidth;
-    const Ch = ws.clientHeight;
-    for (let i = 0; i < imageEditorState.images.length; i++) {
-        const img = new Image();
-        await new Promise(res => {
-            img.onload = res;
-            img.src = imageEditorState.images[i];
-        });
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const Nw = img.naturalWidth;
-        const Nh = img.naturalHeight;
-        canvas.width = Nw;
-        canvas.height = Nh;
-        ctx.drawImage(img, 0, 0, Nw, Nh);
-        const scale = Math.min(Cw / Nw, Ch / Nh);
-        const Dw = Nw * scale;
-        const Dh = Nh * scale;
-        const Ox = (Cw - Dw) / 2;
-        const Oy = (Ch - Dh) / 2;
-
-        for (const obj of imageEditorState.edits[i]) {
-            let nativeX = (obj.x - Ox) / scale;
-            let nativeY = (obj.y - Oy) / scale;
-            let nativeSize = obj.size / scale;
-            ctx.save();
-            ctx.translate(nativeX, nativeY);
-            ctx.rotate((obj.rotation * Math.PI) / 180);
-
-            if (obj.type === 'sticker') {
-                const sImg = new Image();
-                await new Promise(res => {
-                    sImg.onload = res;
-                    sImg.src = obj.src;
-                });
-                const ratio = sImg.naturalHeight / sImg.naturalWidth;
-                ctx.drawImage(sImg, -nativeSize / 2, -(nativeSize * ratio) / 2, nativeSize, nativeSize * ratio);
-            } else if (obj.type === 'blur') {
-                ctx.filter = 'blur(15px)';
-                ctx.drawImage(canvas, nativeX - nativeSize / 2, nativeY - nativeSize / 2, nativeSize, nativeSize, -nativeSize / 2, -nativeSize / 2, nativeSize, nativeSize);
-                ctx.filter = 'none';
-            } else {
-                ctx.font = `bold ${nativeSize}px ${obj.font || 'Arial, sans-serif'}`;
-                ctx.fillStyle = obj.color;
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.strokeStyle = 'rgba(0,0,0,0.8)';
-                ctx.lineWidth = nativeSize * 0.1;
-                ctx.strokeText(obj.text, 0, 0);
-                ctx.fillText(obj.text, 0, 0);
-            }
-            ctx.restore();
-        }
-
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-        const formData = new FormData();
-        formData.append('file', dataUrl);
-        formData.append('upload_preset', UPLOAD_PRESET);
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`, { method: 'POST', body: formData });
-        const data = await res.json();
-        uploadedUrls.push(data.secure_url.replace('/upload/', `/upload/q_auto,f_auto/`));
-    }
-    return uploadedUrls;
-}
-
-
-// ============================================================================
-// --- CAPCUT EDITOR LOGIK ---
-// ============================================================================
-
-document.getElementById('btn-toggle-grid').addEventListener('click', (e) => {
-    dragState.gridVisible = !dragState.gridVisible;
-    imgDragState.gridVisible = dragState.gridVisible;
-    e.target.innerHTML = dragState.gridVisible ? '<i class="fas fa-border-all"></i> Raster: An' : '<i class="fas fa-border-all"></i> Raster: Aus';
-});
-
-document.getElementById('up-file').addEventListener('change', async function(e) {
-    const files = e.target.files;
-    const txt = document.querySelector('#up-file-btn p');
-    const icon = document.querySelector('#up-file-btn i');
-
-    const proPreview = document.getElementById('pro-video-source');
-    const advancedVideoUi = document.getElementById('video-advanced-editor');
-    const advancedImageUi = document.getElementById('image-advanced-editor');
-
-    if (!files || files.length === 0) return;
-
-    const isVideo = files[0].type.startsWith('video/');
-    if (isVideo) {
-        txt.innerText = files[0].name;
-        icon.className = "fas fa-check";
-        icon.style.color = "#00f2fe";
-
-        if (advancedVideoUi) advancedVideoUi.style.display = 'block';
-        if (advancedImageUi) advancedImageUi.style.display = 'none';
-
-        const url = URL.createObjectURL(files[0]);
-        proPreview.src = url;
-
-        proPreview.onloadedmetadata = () => {
-            const dur = proPreview.duration;
-            if (dur > 180 && !checkPhilPlusStatus(2)) {
-                showCustomAlert("Zu lang", "Videos über 3 Minuten erfordern Phil Shorts++!");
-                document.getElementById('up-file').value = '';
-                return;
-            }
-
-            proEditorState.duration = dur;
-            proEditorState.end = dur;
-            proEditorState.start = 0;
-            proEditorState.filter = 'none';
-            proEditorState.speed = 1;
-            proEditorState.ratio = '9:16';
-            proEditorState.audioFileUrl = null;
-            proEditorState.origVol = 1;
-            proEditorState.bgVol = 0.5;
-            proEditorState.audioStart = 0;
-            proEditorState.overlays = [];
-            proEditorState.activeElementId = null;
-
-            document.getElementById('pro-time-total').innerText = dur.toFixed(1) + "s";
-            document.getElementById('pro-editor-layer').innerHTML = '';
-            document.getElementById('pro-element-settings').style.display = 'none';
-
-            updateTimelineUI();
-            generateTimelineFrames(proPreview);
-            const ws = document.getElementById('pro-editor-workspace');
-            ws.className = 'cc-workspace ratio-9-16';
-            document.getElementById('cc-format-select').value = '9:16';
-        };
-    } else {
-        // Image Logic from File 1
-        txt.innerText = `${files.length} Bild(er) ausgewählt`;
-        icon.className = "fas fa-images";
-        icon.style.color = "#ffd700";
-
-        if (advancedVideoUi) advancedVideoUi.style.display = 'none';
-        if (advancedImageUi) advancedImageUi.style.display = 'block';
-
-        imageEditorState.images = [];
-        imageEditorState.edits = [];
-        imageEditorState.currentIndex = 0;
-
-        for (let i = 0; i < files.length; i++) {
-            if (files[i].size > 15 * 1024 * 1024) continue;
-            const reader = new FileReader();
-            await new Promise(resolve => {
-                reader.onload = (event) => {
-                    imageEditorState.images.push(event.target.result);
-                    imageEditorState.edits.push([]);
-                    resolve();
-                };
-                reader.readAsDataURL(files[i]);
-            });
-        }
-
-        if (imageEditorState.images.length === 0) {
-            showCustomAlert("Fehler", "Bilder konnten nicht geladen werden.");
-            txt.innerText = "Video oder Bilder auswählen";
-            icon.className = "fas fa-cloud-upload-alt";
-            icon.style.color = "#aaa";
-            return;
-        }
-        renderEditorImage(0);
-    }
-});
-
-function updateTimelineUI() {
-    const dur = proEditorState.duration || 1;
-    const vidItem = document.getElementById('timeline-video-item');
-    const startPct = (proEditorState.start / dur) * 100;
-    const endPct = (proEditorState.end / dur) * 100;
-    vidItem.style.left = startPct + '%';
-    vidItem.style.width = (endPct - startPct) + '%';
-    const audItem = document.getElementById('timeline-audio-item');
-    if (proBgAudio.src && proBgAudio.src !== "") {
-        audItem.style.display = 'block';
-        const aStartPct = (proEditorState.audioStart / dur) * 100;
-        audItem.style.left = aStartPct + '%';
-        audItem.style.width = (100 - aStartPct) + '%';
-    } else { audItem.style.display = 'none'; }
-    const overlayContainer = document.getElementById('track-overlay-content');
-    overlayContainer.innerHTML = '';
-    proEditorState.overlays.forEach(obj => {
-        const oStartPct = (obj.start / dur) * 100;
-        const oEndPct = (obj.end / dur) * 100;
-        const el = document.createElement('div');
-        el.className = 'cc-timeline-item type-overlay';
-        if (proEditorState.activeElementId === obj.id) el.classList.add('active');
-        el.style.left = oStartPct + '%';
-        el.style.width = (oEndPct - oStartPct) + '%';
-        let icon = obj.type === 'text' ? 'fa-font' : (obj.type === 'blur' ? 'fa-droplet' : 'fa-sticky-note');
-        el.innerHTML = `<i class="fas ${icon}"></i> ${obj.type}`;
-        el.innerHTML += `<div class="cc-handle left-handle" onmousedown="startTlDrag(event, '${obj.id}', 'start', 'overlay')" ontouchstart="startTlDrag(event, '${obj.id}', 'start', 'overlay')"></div>`;
-        el.innerHTML += `<div class="cc-handle right-handle" onmousedown="startTlDrag(event, '${obj.id}', 'end', 'overlay')" ontouchstart="startTlDrag(event, '${obj.id}', 'end', 'overlay')"></div>`;
-        el.onclick = () => selectProOverlay(obj.id);
-        overlayContainer.appendChild(el);
-    });
-}
-
-function generateTimelineFrames(videoEl) {
-    const container = document.getElementById('pro-timeline-frames');
-    container.innerHTML = '';
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = 60;
-    canvas.height = 40;
-    let times = [0, videoEl.duration * 0.25, videoEl.duration * 0.5, videoEl.duration * 0.75, videoEl.duration * 0.9];
-    let i = 0;
-    videoEl.addEventListener('seeked', function extractFrame() {
-        if (i >= times.length) {
-            videoEl.removeEventListener('seeked', extractFrame);
-            videoEl.currentTime = 0;
-            return;
-        }
-        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-        const img = document.createElement('img');
-        img.src = canvas.toDataURL();
-        img.style.flex = "1";
-        img.style.objectFit = "cover";
-        img.style.height = "100%";
-        container.appendChild(img);
-        i++;
-        if (i < times.length) videoEl.currentTime = times[i];
-    });
-    if (times.length > 0) videoEl.currentTime = times[0];
-}
-
-window.startTlDrag = function(e, id, type, trackType) {
-    e.stopPropagation();
-    e.preventDefault();
-    tlDragState.activeId = id;
-    tlDragState.handleType = type;
-    tlDragState.trackType = trackType;
-    tlDragState.startX = e.touches ? e.touches[0].clientX : e.clientX;
-    if (trackType === 'video') { tlDragState.startVal = type === 'start' ? proEditorState.start : proEditorState.end; } else if (trackType === 'audio') { tlDragState.startVal = proEditorState.audioStart; } else {
-        const obj = proEditorState.overlays.find(o => o.id === parseInt(id));
-        tlDragState.startVal = type === 'start' ? obj.start : obj.end;
-        selectProOverlay(parseInt(id));
-    }
-};
-
-document.addEventListener('mousemove', (e) => {
-    if (!tlDragState.activeId) return;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const dx = clientX - tlDragState.startX;
-    const trackWidth = document.getElementById('track-video-content').clientWidth;
-    const timeDelta = (dx / trackWidth) * proEditorState.duration;
-    let newVal = tlDragState.startVal + timeDelta;
-    newVal = Math.max(0, Math.min(proEditorState.duration, newVal));
-    if (tlDragState.trackType === 'video') {
-        if (tlDragState.handleType === 'start') {
-            proEditorState.start = Math.min(newVal, proEditorState.end - 0.5);
-            document.getElementById('pro-video-source').currentTime = proEditorState.start;
-        } else {
-            proEditorState.end = Math.max(newVal, proEditorState.start + 0.5);
-            document.getElementById('pro-video-source').currentTime = proEditorState.end - 0.1;
-        }
-    } else if (tlDragState.trackType === 'audio') { proEditorState.audioStart = Math.min(newVal, proEditorState.duration - 0.5); } else if (tlDragState.trackType === 'overlay') {
-        const obj = proEditorState.overlays.find(o => o.id === parseInt(tlDragState.activeId));
-        if (tlDragState.handleType === 'start') { obj.start = Math.min(newVal, obj.end - 0.1); } else { obj.end = Math.max(newVal, obj.start + 0.1); }
-        document.getElementById('pro-video-source').currentTime = tlDragState.handleType === 'start' ? obj.start : obj.end - 0.1;
-    }
-    updateTimelineUI();
-});
-
-document.addEventListener('mouseup', () => { tlDragState.activeId = null; });
-document.addEventListener('touchend', () => { tlDragState.activeId = null; });
-document.getElementById('handle-vid-start') ? .addEventListener('mousedown', (e) => startTlDrag(e, 'video', 'start', 'video'));
-document.getElementById('handle-vid-end') ? .addEventListener('mousedown', (e) => startTlDrag(e, 'video', 'end', 'video'));
-document.getElementById('handle-vid-start') ? .addEventListener('touchstart', (e) => startTlDrag(e, 'video', 'start', 'video'));
-document.getElementById('handle-vid-end') ? .addEventListener('touchstart', (e) => startTlDrag(e, 'video', 'end', 'video'));
-document.getElementById('handle-aud-start') ? .addEventListener('mousedown', (e) => startTlDrag(e, 'audio', 'start', 'audio'));
-document.getElementById('handle-aud-start') ? .addEventListener('touchstart', (e) => startTlDrag(e, 'audio', 'start', 'audio'));
-
-document.getElementById('btn-pro-play') ? .addEventListener('click', () => {
-    const vid = document.getElementById('pro-video-source');
-    if (vid.paused) {
-        vid.play();
-        if (proBgAudio.src && vid.currentTime >= proEditorState.audioStart) proBgAudio.play();
-        document.getElementById('btn-pro-play').innerHTML = '<i class="fas fa-pause"></i>';
-    } else {
-        vid.pause();
-        proBgAudio.pause();
-        document.getElementById('btn-pro-play').innerHTML = '<i class="fas fa-play"></i>';
-    }
-});
-
-document.getElementById('pro-video-source') ? .addEventListener('timeupdate', (e) => {
-    const curr = e.target.currentTime;
-    document.getElementById('pro-time-current').innerText = curr.toFixed(1) + "s";
-    const dur = proEditorState.duration || 1;
-    document.getElementById('cc-playhead').style.left = ((curr / dur) * 100) + '%';
-
-    if (curr >= proEditorState.end && proEditorState.end > 0) { e.target.currentTime = proEditorState.start; if (proBgAudio.src) proBgAudio.currentTime = 0; }
-    if (proBgAudio.src) { if (curr >= proEditorState.audioStart && e.target.paused === false && proBgAudio.paused) proBgAudio.play(); if (curr < proEditorState.audioStart) proBgAudio.pause(); }
-
-    proEditorState.overlays.forEach(obj => {
-        const el = document.getElementById('pro-drag-txt-' + obj.id);
-        if (el) {
-            if (curr >= obj.start && curr <= obj.end) el.style.display = 'block';
-            else el.style.display = 'none';
-        }
-    });
-});
-
-function startCanvasDrag(e, id) {
-    if (e.target.tagName.toLowerCase() === 'input' || e.target.classList.contains('resize-handle')) return;
-    e.preventDefault();
-    e.stopPropagation();
-    dragState.activeId = id;
-    selectProOverlay(id);
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    dragState.startX = clientX;
-    dragState.startY = clientY;
-    const obj = proEditorState.overlays.find(t => t.id === id);
-    if (obj) {
-        dragState.initialObjX = obj.x;
-        dragState.initialObjY = obj.y;
-    }
-}
-
-function startCanvasResize(e, id, pos) {
-    e.preventDefault();
-    e.stopPropagation();
-    dragState.activeResizeId = id;
-    dragState.activeResizePos = pos;
-    selectProOverlay(id);
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    dragState.startX = clientX;
-    dragState.startY = clientY;
-    const obj = proEditorState.overlays.find(t => t.id === id);
-    if (obj) {
-        dragState.startSize = parseFloat(obj.size);
-        const ws = document.getElementById('pro-editor-workspace').getBoundingClientRect();
-        const mouseX = clientX - ws.left;
-        const mouseY = clientY - ws.top;
-        dragState.startDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2));
-    }
-}
-
-function canvasDragMove(e) {
-    if (dragState.activeId) {
-        e.preventDefault();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const dx = clientX - dragState.startX;
-        const dy = clientY - dragState.startY;
-        let rawX = dragState.initialObjX + dx;
-        let rawY = dragState.initialObjY + dy;
-        const ws = document.getElementById('pro-editor-workspace');
-        if (!ws) return;
-
-        let snappedX = false;
-        let snappedY = false;
-        if (Math.abs(rawX - (ws.clientWidth / 2)) < 15) {
-            rawX = ws.clientWidth / 2;
-            snappedX = true;
-        }
-        if (Math.abs(rawY - (ws.clientHeight / 2)) < 15) {
-            rawY = ws.clientHeight / 2;
-            snappedY = true;
-        }
-        if (document.getElementById('pro-snap-v')) document.getElementById('pro-snap-v').style.display = snappedX ? 'block' : 'none';
-        if (document.getElementById('pro-snap-h')) document.getElementById('pro-snap-h').style.display = snappedY ? 'block' : 'none';
-
-        if (dragState.gridVisible) {
-            rawX = Math.round(rawX / 20) * 20;
-            rawY = Math.round(rawY / 20) * 20;
-        }
-        const obj = proEditorState.overlays.find(t => t.id === dragState.activeId);
-        if (obj) {
-            obj.x = rawX;
-            obj.y = rawY;
-            const el = document.getElementById('pro-drag-txt-' + obj.id);
-            if (el) {
-                el.style.left = obj.x + 'px';
-                el.style.top = obj.y + 'px';
-            }
-        }
-    } else if (dragState.activeResizeId) {
-        e.preventDefault();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const wsRect = document.getElementById('pro-editor-workspace').getBoundingClientRect();
-        const mouseX = clientX - wsRect.left;
-        const mouseY = clientY - wsRect.top;
-        const obj = proEditorState.overlays.find(t => t.id === dragState.activeResizeId);
-        if (obj) {
-            const currentDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2));
-            if (dragState.startDist > 0) {
-                let newSize = Math.max(15, dragState.startSize * (currentDist / dragState.startDist));
-                obj.size = newSize;
-                const el = document.getElementById('pro-drag-txt-' + obj.id);
-                if (el) {
-                    if (obj.type === 'sticker' || obj.type === 'blur') {
-                        el.children[0].style.width = newSize + 'px';
-                        if (obj.type === 'blur') el.children[0].style.height = newSize + 'px';
-                    } else {
-                        el.querySelector('.text-content').style.fontSize = newSize + 'px';
-                    }
-                }
-                document.getElementById('pro-text-ctrl-size').value = newSize;
-            }
-        }
-    }
-}
-
-function endCanvasDrag() {
-    dragState.activeId = null;
-    dragState.activeResizeId = null;
-    if (document.getElementById('pro-snap-v')) document.getElementById('pro-snap-v').style.display = 'none';
-    if (document.getElementById('pro-snap-h')) document.getElementById('pro-snap-h').style.display = 'none';
-}
-
-document.addEventListener('mousemove', canvasDragMove);
-document.addEventListener('touchmove', canvasDragMove, { passive: false });
-document.addEventListener('mouseup', endCanvasDrag);
-document.addEventListener('touchend', endCanvasDrag);
-
-function createProOverlayDOM(obj) {
-    const layer = document.getElementById('pro-editor-layer');
-    const wrapper = document.createElement('div');
-    wrapper.id = 'pro-drag-txt-' + obj.id;
-    wrapper.className = 'draggable-text active';
-    wrapper.style.left = obj.x + 'px';
-    wrapper.style.top = obj.y + 'px';
-    wrapper.style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`;
-    if (obj.type === 'sticker') {
-        const imgEl = document.createElement('img');
-        imgEl.className = 'sticker-content';
-        imgEl.src = obj.src;
-        imgEl.style.width = obj.size + 'px';
-        imgEl.style.pointerEvents = 'none';
-        wrapper.appendChild(imgEl);
-    } else if (obj.type === 'blur') {
-        const blurEl = document.createElement('div');
-        blurEl.className = 'blur-box-content';
-        blurEl.style.width = obj.size + 'px';
-        blurEl.style.height = obj.size + 'px';
-        wrapper.appendChild(blurEl);
-    } else {
-        const textEl = document.createElement('div');
-        textEl.className = 'text-content';
-        textEl.innerText = obj.text;
-        textEl.style.fontSize = obj.size + 'px';
-        textEl.style.color = obj.color;
-        textEl.style.fontFamily = obj.font || 'Arial, sans-serif';
-        wrapper.appendChild(textEl);
-    }
-    ['tl', 'tr', 'bl', 'br'].forEach(pos => {
-        const h = document.createElement('div');
-        h.className = `resize-handle handle-${pos}`;
-        h.addEventListener('mousedown', (e) => startCanvasResize(e, obj.id, pos));
-        h.addEventListener('touchstart', (e) => startCanvasResize(e, obj.id, pos), { passive: false });
-        wrapper.appendChild(h);
-    });
-    wrapper.addEventListener('mousedown', (e) => startCanvasDrag(e, obj.id));
-    wrapper.addEventListener('touchstart', (e) => startCanvasDrag(e, obj.id), { passive: false });
-    layer.appendChild(wrapper);
-}
-
-function selectProOverlay(id) {
-    proEditorState.activeElementId = id;
-    document.querySelectorAll('#pro-editor-layer .draggable-text').forEach(el => el.classList.remove('active'));
-    const obj = proEditorState.overlays.find(t => t.id === id);
-    if (!obj) return;
-    const el = document.getElementById('pro-drag-txt-' + id);
-    if (el) el.classList.add('active');
-
-    if (typeof switchCCMenu === 'function') switchCCMenu('cc-panel-text');
-
-    document.getElementById('pro-element-settings').style.display = 'block';
-    document.getElementById('pro-text-ctrl-input').value = obj.text || '';
-    document.getElementById('pro-text-ctrl-size').value = obj.size;
-    document.getElementById('pro-text-ctrl-rot').value = obj.rotation;
-    document.getElementById('pro-text-ctrl-font').value = obj.font || 'Arial, sans-serif';
-    if (obj.type === 'sticker' || obj.type === 'blur') {
-        document.getElementById('pro-text-ctrl-input').style.display = 'none';
-        document.getElementById('pro-text-font-group').style.display = 'none';
-    } else {
-        document.getElementById('pro-text-ctrl-input').style.display = 'block';
-        document.getElementById('pro-text-font-group').style.display = 'block';
-    }
-    updateTimelineUI();
-}
-
-document.getElementById('pro-editor-workspace') ? .addEventListener('click', (e) => {
-    if (!e.target.closest('.draggable-text')) {
-        proEditorState.activeElementId = null;
-        document.querySelectorAll('#pro-editor-layer .draggable-text').forEach(el => el.classList.remove('active'));
-        if (document.getElementById('pro-element-settings')) document.getElementById('pro-element-settings').style.display = 'none';
-        updateTimelineUI();
-    }
-});
-
-document.getElementById('btn-pro-add-text') ? .addEventListener('click', () => {
-    const ws = document.getElementById('pro-editor-workspace');
-    const newObj = { id: Date.now(), type: 'text', text: "Text hier", x: ws.clientWidth / 2, y: ws.clientHeight / 2, size: 40, rotation: 0, color: '#ffffff', font: 'Arial, sans-serif', start: proEditorState.start, end: proEditorState.end };
-    proEditorState.overlays.push(newObj);
-    createProOverlayDOM(newObj);
-    selectProOverlay(newObj.id);
-    updateTimelineUI();
-});
-
-document.getElementById('btn-pro-add-blur') ? .addEventListener('click', () => {
-    const ws = document.getElementById('pro-editor-workspace');
-    const newObj = { id: Date.now(), type: 'blur', x: ws.clientWidth / 2, y: ws.clientHeight / 2, size: 100, rotation: 0, start: proEditorState.start, end: proEditorState.end };
-    proEditorState.overlays.push(newObj);
-    createProOverlayDOM(newObj);
-    selectProOverlay(newObj.id);
-    updateTimelineUI();
-});
-
-document.getElementById('pro-sticker-upload-input') ? .addEventListener('change', (e) => {
-    if (!e.target.files[0]) return;
-    const reader = new FileReader();
-    reader.onload = function(ev) {
-        const ws = document.getElementById('pro-editor-workspace');
-        const newObj = { id: Date.now(), type: 'sticker', src: ev.target.result, x: ws.clientWidth / 2, y: ws.clientHeight / 2, size: 100, rotation: 0, start: proEditorState.start, end: proEditorState.end };
-        proEditorState.overlays.push(newObj);
-        createProOverlayDOM(newObj);
-        selectProOverlay(newObj.id);
-        document.getElementById('pro-sticker-upload-input').value = '';
-        updateTimelineUI();
-    };
-    reader.readAsDataURL(e.target.files[0]);
-});
-
-document.getElementById('pro-text-ctrl-input') ? .addEventListener('input', (e) => {
-    if (!proEditorState.activeElementId) return;
-    const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeElementId);
-    if (obj.type === 'text') {
-        obj.text = e.target.value;
-        document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').innerText = obj.text;
-    }
-});
-
-document.getElementById('pro-text-ctrl-size') ? .addEventListener('input', (e) => {
-    if (!proEditorState.activeElementId) return;
-    const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeElementId);
-    obj.size = e.target.value;
-    const el = document.getElementById('pro-drag-txt-' + obj.id);
-    if (obj.type !== 'text') { el.children[0].style.width = obj.size + 'px'; if (obj.type === 'blur') el.children[0].style.height = obj.size + 'px'; } else { el.querySelector('.text-content').style.fontSize = obj.size + 'px'; }
-});
-
-document.getElementById('pro-text-ctrl-rot') ? .addEventListener('input', (e) => {
-    if (!proEditorState.activeElementId) return;
-    const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeElementId);
-    obj.rotation = e.target.value;
-    document.getElementById('pro-drag-txt-' + obj.id).style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`;
-});
-
-document.getElementById('pro-text-ctrl-font') ? .addEventListener('change', (e) => {
-    if (!proEditorState.activeElementId) return;
-    const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeElementId);
-    if (obj.type === 'text') {
-        obj.font = e.target.value;
-        document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').style.fontFamily = obj.font;
-    }
-});
-
-document.querySelectorAll('.pro-color-dot').forEach(dot => {
-    dot.addEventListener('click', (e) => {
-        if (!proEditorState.activeElementId) return;
-        const color = e.target.dataset.color;
-        const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeElementId);
-        if (obj.type === 'text') {
-            obj.color = color;
-            document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').style.color = color;
-        }
-    });
-});
-
-document.getElementById('btn-pro-delete-text') ? .addEventListener('click', () => {
-    if (!proEditorState.activeElementId) return;
-    proEditorState.overlays = proEditorState.overlays.filter(t => t.id !== proEditorState.activeElementId);
-    document.getElementById('pro-drag-txt-' + proEditorState.activeElementId).remove();
-    proEditorState.activeElementId = null;
-    document.getElementById('pro-element-settings').style.display = 'none';
-    updateTimelineUI();
-});
-
-document.querySelectorAll('.pro-filter-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        document.querySelectorAll('.pro-filter-btn').forEach(b => b.classList.remove('active'));
-        e.target.classList.add('active');
-        proEditorState.filter = e.target.dataset.filter;
-        const vid = document.getElementById('pro-video-source');
-        if (proEditorState.filter === 'none') vid.style.filter = 'none';
-        if (proEditorState.filter === 'grayscale') vid.style.filter = 'grayscale(100%)';
-        if (proEditorState.filter === 'sepia') vid.style.filter = 'sepia(100%)';
-        if (proEditorState.filter === 'blur') vid.style.filter = 'blur(4px)';
-        if (proEditorState.filter === 'contrast') vid.style.filter = 'contrast(200%)';
-        if (proEditorState.filter === 'vintage') vid.style.filter = 'sepia(50%) contrast(150%)';
-    });
-});
-
-document.getElementById('pro-speed-ctrl') ? .addEventListener('change', (e) => {
-    proEditorState.speed = parseFloat(e.target.value);
-    document.getElementById('pro-video-source').playbackRate = proEditorState.speed;
-    proBgAudio.playbackRate = proEditorState.speed;
-});
-
-document.getElementById('cc-format-select') ? .addEventListener('change', (e) => {
-    proEditorState.ratio = e.target.value;
-    const ws = document.getElementById('pro-editor-workspace');
-    ws.className = 'cc-workspace';
-    if (proEditorState.ratio === '9:16') ws.classList.add('ratio-9-16');
-    else if (proEditorState.ratio === '1:1') ws.classList.add('ratio-1-1');
-    else ws.classList.add('ratio-original');
-});
-
-document.getElementById('pro-audio-orig-vol') ? .addEventListener('input', (e) => {
-    proEditorState.origVol = parseFloat(e.target.value);
-    document.getElementById('pro-video-source').volume = proEditorState.origVol;
-});
-
-document.getElementById('pro-audio-bg-vol') ? .addEventListener('input', (e) => {
-    proEditorState.bgVol = parseFloat(e.target.value);
-    proBgAudio.volume = proEditorState.bgVol;
-});
-
-document.getElementById('pro-audio-upload') ? .addEventListener('change', (e) => {
-    if (e.target.files.length > 0) {
-        const file = e.target.files[0];
-        document.getElementById('pro-audio-bg-name').innerText = "🎵 " + file.name;
-        document.getElementById('pro-audio-controls-extended').style.display = 'block';
-        const url = URL.createObjectURL(file);
-        proBgAudio.src = url;
-        proBgAudio.volume = proEditorState.bgVol;
-        updateTimelineUI();
-    }
-});
-
-function hexToCloudinaryColor(hex) { if (hex && hex.startsWith('#')) return 'rgb:' + hex.substring(1); return hex || 'white'; }
-
-
-// --- UPLOAD SUBMISSION (MERGED LOGIC) ---
-document.getElementById('submit-upload').addEventListener('click', async() => {
-    const files = document.getElementById('up-file').files;
-    const titleVal = document.getElementById('up-title').value.trim();
-    const desc = document.getElementById('up-desc').value.trim();
-
-    if (!files || files.length === 0 || (!desc && !titleVal)) {
-        const isVideo = files[0] && files[0].type.startsWith('video/');
-        if (isVideo && typeof switchCCMenu === 'function') switchCCMenu('cc-panel-settings');
-        return showCustomAlert("Fehlende Daten", "Bitte lade eine Datei hoch und schreibe einen Titel oder eine Beschreibung.");
-    }
-
-    let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024;
-    let limitText = checkPhilPlusStatus(1) ? "100" : "30";
-    let isVideo = files[0].type.startsWith('video/');
-
-    if (isVideo && files[0].size > maxSize) return showCustomAlert("Zu groß", `Videos dürfen maximal ${limitText} MB groß sein!`);
-
-    const btn = document.getElementById('submit-upload');
-    const status = document.getElementById('upload-status');
-    btn.disabled = true;
-
-    try {
-        if (isVideo) {
-            status.innerText = "Exportiere nach Cloudinary... Bitte warten!";
-            if (typeof switchCCMenu === 'function') switchCCMenu('cc-panel-settings');
-
-            const formData = new FormData();
-            formData.append('file', files[0]);
-            formData.append('upload_preset', UPLOAD_PRESET);
-            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: formData });
-            const data = await res.json();
-            if (!data.secure_url) throw new Error("Upload fehlgeschlagen.");
-
-            let transform = 'q_auto,f_auto,vc_auto';
-            if (proEditorState.start > 0 || proEditorState.end < proEditorState.duration) { transform += `,so_${proEditorState.start},eo_${proEditorState.end}`; }
-
-            let extraTransforms = [];
-            if (proEditorState.ratio === '9:16') extraTransforms.push('c_fill,h_1920,w_1080');
-            else if (proEditorState.ratio === '1:1') extraTransforms.push('c_fill,h_1080,w_1080');
-            if (proEditorState.filter === 'grayscale') extraTransforms.push('e_grayscale');
-            if (proEditorState.filter === 'sepia') extraTransforms.push('e_sepia');
-            if (proEditorState.filter === 'blur') extraTransforms.push('e_blur:200');
-            if (proEditorState.filter === 'contrast') extraTransforms.push('e_contrast:50');
-            if (proEditorState.filter === 'vintage') extraTransforms.push('e_sepia:50/e_contrast:50');
-            if (proEditorState.origVol < 1) {
-                let volPercent = Math.round((proEditorState.origVol - 1) * 100);
-                if (proEditorState.origVol === 0) volPercent = -100;
-                extraTransforms.push(`e_volume:${volPercent}`);
-            }
-
-            const audioFiles = document.getElementById('pro-audio-upload').files;
-            if (audioFiles.length > 0) {
-                status.innerText = "Synchronisiere Hintergrundmusik...";
-                const audioData = new FormData();
-                audioData.append('file', audioFiles[0]);
-                audioData.append('upload_preset', UPLOAD_PRESET);
-                const audioRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: audioData });
-                const aData = await audioRes.json();
-                if (aData.public_id) {
-                    let audioVolPercent = Math.round((proEditorState.bgVol - 1) * 100);
-                    if (proEditorState.bgVol === 0) audioVolPercent = -100;
-                    extraTransforms.push(`l_video:${aData.public_id.replace(/\//g, ':')}/e_volume:${audioVolPercent}/so_${proEditorState.audioStart}/fl_layer_apply`);
-                }
-                status.innerText = "Wird gerendert und verarbeitet... Bitte warten!";
-            }
-
-            const ws = document.getElementById('pro-editor-workspace');
-            proEditorState.overlays.forEach(obj => {
-                let ox = Math.round(obj.x);
-                let oy = Math.round(obj.y);
-                let timeStr = '';
-                if (obj.start > 0 || obj.end < proEditorState.duration) { timeStr = `,so_${obj.start},eo_${obj.end}`; }
-                if (obj.type === 'text') {
-                    const encodedText = encodeURIComponent(obj.text.trim());
-                    const fName = obj.font.split(',')[0].replace(/'/g, '').replace(/ /g, '_');
-                    const cColor = hexToCloudinaryColor(obj.color);
-                    extraTransforms.push(`l_text:${fName}_${obj.size}_bold:${encodedText},co_${cColor},a_${obj.rotation},g_north_west,x_${ox},y_${oy}${timeStr}`);
-                } else if (obj.type === 'blur') {
-                    let bw = Math.round(obj.size);
-                    let bh = Math.round(obj.size);
-                    let bx = Math.round(obj.x - bw / 2);
-                    let by = Math.round(obj.y - bh / 2);
-                    extraTransforms.push(`e_blur_region:800,w_${bw},h_${bh},x_${bx},y_${by}${timeStr}`);
-                }
-            });
-
-            let finalUrl = data.secure_url;
-            if (extraTransforms.length > 0) finalUrl = data.secure_url.replace('/upload/', `/upload/${transform}/${extraTransforms.join('/')}/`);
-            else finalUrl = data.secure_url.replace('/upload/', `/upload/${transform}/`);
-
-            await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
-
-        } else {
-            status.innerText = "Wird gerendert und verarbeitet... Bitte warten!";
-            const uploadedUrls = await renderAndUploadImages();
-            if (uploadedUrls.length === 0) throw new Error("Keine Bilder hochgeladen.");
-            await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
-        }
-
-        showToast("Erfolgreich veröffentlicht! 🎉");
-
-        // Cleanups
-        document.getElementById('upload-modal').classList.remove('show');
-        document.getElementById('up-file').value = '';
-        document.getElementById('up-title').value = '';
-        document.getElementById('up-desc').value = '';
-        document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen";
-        document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt";
-        document.querySelector('#up-file-btn i').style.color = "#aaa";
-        if (document.getElementById('video-advanced-editor')) document.getElementById('video-advanced-editor').style.display = 'none';
-        if (document.getElementById('image-advanced-editor')) document.getElementById('image-advanced-editor').style.display = 'none';
-
-        imageEditorState.images = [];
-        proBgAudio.pause();
-
-    } catch (e) {
-        showCustomAlert("Upload Fehler", "Fehler! Evtl. falsches Format.");
-    } finally {
-        btn.disabled = false;
-        status.innerText = "";
-    }
-});
-
-document.getElementById('open-upload').addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
-document.getElementById('close-upload').addEventListener('click', () => {
-    document.getElementById('upload-modal').classList.remove('show');
-    proBgAudio.pause();
-});
-document.getElementById('close-comments').addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
-document.getElementById('close-settings').addEventListener('click', () => document.getElementById('settings-modal').classList.remove('show'));
-document.getElementById('close-app-settings').addEventListener('click', () => document.getElementById('app-settings-modal').classList.remove('show'));
-
-
-// --- FEED & INTERACTION LOGIC ---
 
 async function addNotification(targetUid, type, text, videoId = null) {
     if (!currentUser || targetUid === currentUser.uid) return;
@@ -2470,8 +1348,13 @@ window.viewUserStory = function(index = 0) {
     storyViewerTimer = setTimeout(() => { nextStory(); }, 5000);
 }
 
-window.nextStory = function() { viewUserStory(window.currentStoryIndex + 1); }
-window.prevStory = function() { viewUserStory(window.currentStoryIndex - 1); }
+window.nextStory = function() {
+    viewUserStory(window.currentStoryIndex + 1);
+}
+window.prevStory = function() {
+    viewUserStory(window.currentStoryIndex - 1);
+}
+
 window.closeStoryViewer = function() { clearTimeout(storyViewerTimer); document.getElementById('story-viewer').classList.remove('show'); }
 
 window.sendSupport = async function() { const msg = document.getElementById('support-msg').value.trim(); if(!msg || !currentUser) return; const ticketRef = await addDoc(collection(db, "reports"), { uid: currentUser.uid, name: currentUser.displayName, hasPlus: checkPhilPlusStatus(1), tier: currentUser.philPlusTier || 0, status: 'open', timestamp: Date.now() }); await addDoc(collection(db, `reports/${ticketRef.id}/messages`), { senderUid: currentUser.uid, text: msg, timestamp: Date.now() }); showToast("Support-Ticket erstellt!"); document.getElementById('support-msg').value = ''; document.getElementById('app-settings-modal').classList.remove('show'); switchView('inbox'); document.getElementById('tab-support').click(); }
@@ -2578,7 +1461,10 @@ function initInboxChats() {
         if (chats.length === 0) { msgBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Keine Nachrichten vorhanden</p></div>'; return; }
         chats.forEach(chat => {
             const partnerUid = chat.participants.find(uid => uid !== currentUser.uid); const partner = chat.users[partnerUid]; if (!partner) return; const nUser = getUserData(partnerUid, partner.name, partner.name, partner.pic, false); const safeName = nUser.username.replace(/'/g, "\\'"); const isVerif = getVerifiedBadge(nUser.verified); let nameClass = nUser.philPlusUntil && nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 1 ? "name-phil-plus" : "";
-            let previewText = chat.lastMessage; if(previewText && previewText.startsWith('[IMAGE]')) previewText = "📸 Bild gesendet";
+            
+            let previewText = chat.lastMessage;
+            if(previewText && previewText.startsWith('[IMAGE]')) previewText = "📸 Bild gesendet";
+
             msgBox.innerHTML += `<div class="inbox-msg" onclick="openDM('${partnerUid}', '${safeName}', '${nUser.pic}')"><img src="${nUser.pic}" class="chat-avatar live-pic-${partnerUid}" style="flex-shrink:0;"><div style="flex:1; min-width:0;"><span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span class="live-name-${partnerUid} ${nameClass}">${nUser.displayName}${isVerif}</span> <span class="live-username-${partnerUid}" style="color:#888; font-weight:normal; font-size:12px;">@${nUser.username}</span></span><div class="chat-bubble" style="background: transparent; padding: 0; color: #888; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${formatText(previewText) || 'Neuer Chat...'}</div><div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(chat.lastMessageTime)}</div></div></div>`;
         });
     });
@@ -2589,23 +1475,52 @@ window.initSupportTickets = function() {
     if (!currentUser) return; 
     const supportBox = document.getElementById('inbox-support-box'); 
     const isAdmin = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
+    
     if (supportUnsubscribe) supportUnsubscribe();
+    
     let reportQuery = query(collection(db, "reports"), orderBy("timestamp", "desc"));
+    
     supportUnsubscribe = onSnapshot(reportQuery, (snapshot) => {
-        supportBox.innerHTML = ''; let foundAny = false;
+        supportBox.innerHTML = ''; 
+        let foundAny = false;
+        
         snapshot.forEach(docSnap => {
-            const ticket = docSnap.data(); if (!isAdmin && ticket.uid !== currentUser.uid) return; 
-            foundAny = true; const ticketId = docSnap.id; const isVip = ticket.hasPlus ? 'vip' : ''; 
-            let plusText = "PLUS"; if(ticket.tier === 2) plusText = "PLUS++"; if(ticket.tier === 3) plusText = "PLUS+++";
+            const ticket = docSnap.data(); 
+            if (!isAdmin && ticket.uid !== currentUser.uid) return; 
+            
+            foundAny = true;
+            const ticketId = docSnap.id; 
+            const isVip = ticket.hasPlus ? 'vip' : ''; 
+            
+            let plusText = "PLUS";
+            if(ticket.tier === 2) plusText = "PLUS++";
+            if(ticket.tier === 3) plusText = "PLUS+++";
+
             const vipBadge = ticket.hasPlus ? `<span class="phil-plus-badge" style="font-size:9px; margin-left:5px;">${plusText}</span>` : ''; 
             const uData = getUserData(ticket.uid, ticket.name, ticket.name, 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback', false);
             const safeName = uData.username.replace(/'/g, "\\'");
+            
             let adminButtons = '';
             if (isAdmin) {
-                if (ticket.status === 'closed') { adminButtons = `<button class="profile-action-btn edit-btn" onclick="deleteTicket(event, '${ticketId}')" style="min-height:26px; font-size:11px; background:transparent; border:1px solid #ff4444; color:#ff4444; padding:0 8px;"><i class="fas fa-trash"></i> Löschen</button>`; } 
-                else { adminButtons = `<button class="profile-action-btn edit-btn" onclick="resolveTicket(event, '${ticketId}')" style="min-height:26px; font-size:11px; background:transparent; border:1px solid #ffd700; color:#ffd700; padding:0 8px;"><i class="fas fa-lock"></i> Schließen</button>`; }
+                if (ticket.status === 'closed') {
+                    adminButtons = `<button class="profile-action-btn edit-btn" onclick="deleteTicket(event, '${ticketId}')" style="min-height:26px; font-size:11px; background:transparent; border:1px solid #ff4444; color:#ff4444; padding:0 8px;"><i class="fas fa-trash"></i> Löschen</button>`;
+                } else {
+                    adminButtons = `<button class="profile-action-btn edit-btn" onclick="resolveTicket(event, '${ticketId}')" style="min-height:26px; font-size:11px; background:transparent; border:1px solid #ffd700; color:#ffd700; padding:0 8px;"><i class="fas fa-lock"></i> Schließen</button>`;
+                }
             }
-            supportBox.innerHTML += `<div class="support-ticket ${isVip}" onclick="openTicketChat('${ticketId}', '${safeName}', '${ticket.uid}')" style="cursor:pointer; display:flex; flex-direction:column; gap:8px;"><div style="display:flex; justify-content:space-between; align-items:center;"><strong style="color:white; font-size:14px;">@${uData.username} ${vipBadge}</strong><span style="color:#888; font-size:11px;">${timeAgo(ticket.timestamp)}</span></div><div style="display:flex; justify-content:space-between; align-items:center;"><div style="font-size:12px; color:#aaa;"><i class="fas fa-ticket-alt"></i> Status: <span style="color:${ticket.status === 'closed' ? '#ff4444' : '#39ff14'}; font-weight:bold;">${ticket.status === 'closed' ? 'Geschlossen' : 'Offen'}</span></div>${adminButtons}</div><p style="font-size:14px; color:#ddd; background:rgba(0,0,0,0.3); padding:10px; border-radius:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Klicken um Chat zu öffnen</p></div>`;
+
+            supportBox.innerHTML += `
+            <div class="support-ticket ${isVip}" onclick="openTicketChat('${ticketId}', '${safeName}', '${ticket.uid}')" style="cursor:pointer; display:flex; flex-direction:column; gap:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong style="color:white; font-size:14px;">@${uData.username} ${vipBadge}</strong>
+                    <span style="color:#888; font-size:11px;">${timeAgo(ticket.timestamp)}</span>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-size:12px; color:#aaa;"><i class="fas fa-ticket-alt"></i> Status: <span style="color:${ticket.status === 'closed' ? '#ff4444' : '#39ff14'}; font-weight:bold;">${ticket.status === 'closed' ? 'Geschlossen' : 'Offen'}</span></div>
+                    ${adminButtons}
+                </div>
+                <p style="font-size:14px; color:#ddd; background:rgba(0,0,0,0.3); padding:10px; border-radius:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Klicken um Chat zu öffnen</p>
+            </div>`;
         });
         if (!foundAny) { supportBox.innerHTML = '<div class="empty-state" style="height:100%;"><i class="fas fa-check-circle" style="color:#00f2fe; font-size:40px; margin-bottom:10px;"></i><p>Keine Support-Tickets gefunden!</p></div>'; }
     });
@@ -2614,32 +1529,43 @@ window.initSupportTickets = function() {
 window.resolveTicket = async function(event, ticketId) {
     event.stopPropagation();
     if(confirm("Ticket als erledigt markieren und schließen?")) {
-        try { await updateDoc(doc(db, "reports", ticketId), { status: 'closed' }); showToast("Ticket geschlossen."); } catch(e) { showCustomAlert("Fehler", "Konnte nicht geschlossen werden."); }
+        try { await updateDoc(doc(db, "reports", ticketId), { status: 'closed' }); showToast("Ticket geschlossen."); } 
+        catch(e) { showCustomAlert("Fehler", "Konnte nicht geschlossen werden."); }
     }
 };
 
 window.deleteTicket = async function(event, ticketId) {
     event.stopPropagation();
     if(confirm("Ticket endgültig löschen?")) {
-        try { await deleteDoc(doc(db, "reports", ticketId)); showToast("Ticket gelöscht."); } catch(e) { showCustomAlert("Fehler", "Konnte nicht gelöscht werden."); }
+        try { await deleteDoc(doc(db, "reports", ticketId)); showToast("Ticket gelöscht."); } 
+        catch(e) { showCustomAlert("Fehler", "Konnte nicht gelöscht werden."); }
     }
 };
 
 let currentTicketSnapshot = null; let currentTicketMetaSnapshot = null; window.currentActiveTicketId = null;
+
 window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
     if (!currentUser) return; window.currentActiveTicketId = ticketId; document.getElementById('ticket-title').innerText = "Ticket: @" + username; switchView('ticket');
     const ticketBox = document.getElementById('ticket-box'); ticketBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
     const isAdmin = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
-    if (currentTicketSnapshot) currentTicketSnapshot(); if (currentTicketMetaSnapshot) currentTicketMetaSnapshot();
+    
+    if (currentTicketSnapshot) currentTicketSnapshot();
+    if (currentTicketMetaSnapshot) currentTicketMetaSnapshot();
+    
     currentTicketSnapshot = onSnapshot(query(collection(db, `reports/${ticketId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
         ticketBox.innerHTML = '';
         if (snapshot.empty) { ticketBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Keine Nachrichten</p></div>'; } 
         else {
             snapshot.forEach(docSnap => {
-                const msg = docSnap.data(); const isMe = msg.senderUid === currentUser.uid ? 'me' : ''; 
+                const msg = docSnap.data(); 
+                const isMe = msg.senderUid === currentUser.uid ? 'me' : ''; 
+                
                 const isSupportSender = msg.senderUid !== ticketOwnerUid;
                 const pic = isSupportSender ? 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin' : (msg.senderUid === currentUser.uid ? currentUser.photoURL : `https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.senderUid}`);
-                let bg = isMe ? '#ff0050' : '#333'; let adminLabel = isSupportSender ? '<div style="font-size:10px; color:#ffd700; margin-bottom:4px;"><i class="fas fa-shield-alt"></i> Support Team</div>' : '';
+                
+                let bg = isMe ? '#ff0050' : '#333'; 
+                let adminLabel = isSupportSender ? '<div style="font-size:10px; color:#ffd700; margin-bottom:4px;"><i class="fas fa-shield-alt"></i> Support Team</div>' : '';
+                
                 ticketBox.innerHTML += `<div class="chat-msg ${isMe}"><img src="${pic}" class="chat-avatar" style="flex-shrink:0;"><div style="min-width:0; max-width: 100%;"><div class="chat-bubble" style="background:${bg}; border-color:${bg};">${adminLabel}${formatText(msg.text)}</div><div class="chat-time" style="font-size: 10px; color: #666; margin-top: 4px; text-align: ${isMe ? 'right' : 'left'};">${timeAgo(msg.timestamp)}</div></div></div>`;
             });
         }
@@ -2648,22 +1574,50 @@ window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
 
     currentTicketMetaSnapshot = onSnapshot(doc(db, "reports", ticketId), (docSnap) => {
         if(docSnap.exists()) {
-            const tData = docSnap.data(); const statEl = document.getElementById('ticket-status');
-            if(tData.status === 'closed') { statEl.innerText = "Geschlossen"; statEl.style.background = "#ff4444"; statEl.style.color = "white"; document.getElementById('ticket-input-area').style.display = 'none'; document.getElementById('admin-close-ticket-btn').style.display = 'none'; } 
-            else { statEl.innerText = "Offen"; statEl.style.background = "#39ff14"; statEl.style.color = "black"; document.getElementById('ticket-input-area').style.display = 'flex'; if(isAdmin) document.getElementById('admin-close-ticket-btn').style.display = 'block'; else document.getElementById('admin-close-ticket-btn').style.display = 'none'; }
-        } else { document.getElementById('ticket-status').innerText = "Gelöscht"; document.getElementById('ticket-status').style.background = "#ff4444"; document.getElementById('ticket-input-area').style.display = 'none'; document.getElementById('admin-close-ticket-btn').style.display = 'none'; }
+            const tData = docSnap.data(); 
+            const statEl = document.getElementById('ticket-status');
+            if(tData.status === 'closed') { 
+                statEl.innerText = "Geschlossen"; 
+                statEl.style.background = "#ff4444"; 
+                statEl.style.color = "white";
+                document.getElementById('ticket-input-area').style.display = 'none'; 
+                document.getElementById('admin-close-ticket-btn').style.display = 'none'; 
+            } else { 
+                statEl.innerText = "Offen"; 
+                statEl.style.background = "#39ff14"; 
+                statEl.style.color = "black"; 
+                document.getElementById('ticket-input-area').style.display = 'flex'; 
+                if(isAdmin) document.getElementById('admin-close-ticket-btn').style.display = 'block'; 
+                else document.getElementById('admin-close-ticket-btn').style.display = 'none';
+            }
+        } else {
+            document.getElementById('ticket-status').innerText = "Gelöscht";
+            document.getElementById('ticket-status').style.background = "#ff4444";
+            document.getElementById('ticket-input-area').style.display = 'none';
+            document.getElementById('admin-close-ticket-btn').style.display = 'none'; 
+        }
     });
 };
 
 document.getElementById('send-ticket-btn').addEventListener('click', async() => { const input = document.getElementById('ticket-input'); const text = input.value.trim(); if (!text || !window.currentActiveTicketId || !currentUser) return; input.value = ''; await addDoc(collection(db, `reports/${window.currentActiveTicketId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); });
 document.getElementById('ticket-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-ticket-btn').click(); });
-document.getElementById('admin-close-ticket-btn').addEventListener('click', async() => { if(!window.currentActiveTicketId) return; if(confirm("Support Ticket schließen? (Nutzer kann nicht mehr antworten)")) { await updateDoc(doc(db, "reports", window.currentActiveTicketId), { status: 'closed' }); showToast("Ticket geschlossen."); } });
+
+document.getElementById('admin-close-ticket-btn').addEventListener('click', async() => {
+    if(!window.currentActiveTicketId) return;
+    if(confirm("Support Ticket schließen? (Nutzer kann nicht mehr antworten)")) {
+        await updateDoc(doc(db, "reports", window.currentActiveTicketId), { status: 'closed' });
+        showToast("Ticket geschlossen.");
+    }
+});
+
 
 let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
 window.openDM = async function(targetUid, targetName, targetPic) {
     if (!currentUser) return; window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic }; const uids = [currentUser.uid, targetUid].sort(); window.currentChatId = `${uids[0]}_${uids[1]}`; const nUser = getUserData(targetUid, targetName, targetName, targetPic, false); const isVerif = getVerifiedBadge(nUser.verified);
     document.getElementById('dm-title').innerHTML = '@' + targetName + ' ' + isVerif; switchView('dm');
-    if(checkPhilPlusStatus(3)) document.getElementById('dm-img-btn').style.display = 'block'; else document.getElementById('dm-img-btn').style.display = 'none';
+    
+    if(checkPhilPlusStatus(3)) document.getElementById('dm-img-btn').style.display = 'block';
+    else document.getElementById('dm-img-btn').style.display = 'none';
 
     if (currentDMSnapshot) currentDMSnapshot(); const dmBox = document.getElementById('dm-box'); dmBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
     const chatRef = doc(db, "chats", window.currentChatId); const chatSnap = await getDoc(chatRef);
@@ -2673,10 +1627,22 @@ window.openDM = async function(targetUid, targetName, targetPic) {
         if (snapshot.empty) { dmBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Schreib die erste Nachricht!</p></div>'; } 
         else { 
             snapshot.forEach(doc => { 
-                const msg = doc.data(); const isMe = msg.senderUid === currentUser.uid ? 'me' : ''; const pic = isMe ? currentUser.photoURL : targetPic; 
-                let readReceipt = ''; if(isMe && checkPhilPlusStatus(2)) readReceipt = `<span style="font-size:10px; color:#00f2fe; margin-left:5px;">✓✓</span>`;
-                let extraClass = ''; if(isMe && checkPhilPlusStatus(2)) extraClass = 'gold-bubble'; 
-                let bubbleContent = formatText(msg.text); if(msg.text && msg.text.startsWith('[IMAGE]')) { const imgUrl = msg.text.replace('[IMAGE]', '').trim(); bubbleContent = `<img src="${imgUrl}" style="max-width: 200px; border-radius: 10px;">`; }
+                const msg = doc.data(); 
+                const isMe = msg.senderUid === currentUser.uid ? 'me' : ''; 
+                const pic = isMe ? currentUser.photoURL : targetPic; 
+                
+                let readReceipt = '';
+                if(isMe && checkPhilPlusStatus(2)) readReceipt = `<span style="font-size:10px; color:#00f2fe; margin-left:5px;">✓✓</span>`;
+                
+                let extraClass = '';
+                if(isMe && checkPhilPlusStatus(2)) extraClass = 'gold-bubble'; 
+
+                let bubbleContent = formatText(msg.text);
+                if(msg.text && msg.text.startsWith('[IMAGE]')) {
+                    const imgUrl = msg.text.replace('[IMAGE]', '').trim();
+                    bubbleContent = `<img src="${imgUrl}" style="max-width: 200px; border-radius: 10px;">`;
+                }
+
                 dmBox.innerHTML += `<div class="chat-msg ${isMe}"><img src="${pic}" class="chat-avatar" style="flex-shrink:0;"><div style="min-width:0; max-width: 100%;"><div class="chat-bubble ${extraClass}">${bubbleContent}</div><div class="chat-time" style="font-size: 10px; color: #666; margin-top: 4px; text-align: ${isMe ? 'right' : 'left'};">${timeAgo(msg.timestamp)}${readReceipt}</div></div></div>`; 
             }); 
         }
@@ -2689,71 +1655,773 @@ document.getElementById('dm-input').addEventListener('keypress', (e) => { if (e.
 
 document.getElementById('dm-img-btn').addEventListener('click', () => document.getElementById('dm-file-upload').click());
 document.getElementById('dm-file-upload').addEventListener('change', async(e) => {
-    const file = e.target.files[0]; if(!file) return; showToast("Bild wird gesendet...");
+    const file = e.target.files[0];
+    if(!file) return;
+    showToast("Bild wird gesendet...");
     try {
         const formData = new FormData(); formData.append('file', file); formData.append('upload_preset', UPLOAD_PRESET);
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`, { method: 'POST', body: formData }); const data = await res.json();
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`, { method: 'POST', body: formData });
+        const data = await res.json();
         if(!data.secure_url) throw new Error();
         const text = "[IMAGE] " + data.secure_url;
         await addDoc(collection(db, `chats/${window.currentChatId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); 
         await updateDoc(doc(db, "chats", window.currentChatId), { lastMessage: text, lastMessageTime: Date.now(), users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic } } }); 
         addNotification(window.currentChatPartner.uid, "message", `hat ein Bild gesendet.`);
-    } catch(err) { showCustomAlert("Fehler", "Bild konnte nicht gesendet werden."); }
+    } catch(err) {
+        showCustomAlert("Fehler", "Bild konnte nicht gesendet werden.");
+    }
     document.getElementById('dm-file-upload').value = '';
 });
 
-function initResponsiveLayout() {
-    const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;
-    function createPCContainers() { if (!pcSidebar) { pcSidebar = document.createElement('div'); pcSidebar.id = 'pc-nav-sidebar'; pcSidebar.innerHTML = `<div class="logo-area"><img src="https://i.imgur.com/JDPRzCc.png" class="app-logo" alt="Logo">Phil Shorts</div>`; appContainer.prepend(pcSidebar); } }
-    function restructureVideoForPC(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; let infoPanel = inner.querySelector('.pc-info-panel-container'); if (!infoPanel) { infoPanel = document.createElement('div'); infoPanel.className = 'pc-info-panel-container'; inner.appendChild(infoPanel); const videoFooter = inner.querySelector('.video__footer'); const videoSidebar = inner.querySelector('.video__sidebar'); if (videoFooter) infoPanel.appendChild(videoFooter); if (videoSidebar) infoPanel.appendChild(videoSidebar); } }
-    function rollBackVideoForHandy(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; const infoPanel = inner.querySelector('.pc-info-panel-container'); if (infoPanel) { const videoFooter = infoPanel.querySelector('.video__footer'); const videoSidebar = infoPanel.querySelector('.video__sidebar'); if (videoFooter) inner.appendChild(videoFooter); if (videoSidebar) inner.appendChild(videoSidebar); infoPanel.remove(); } }
-    function checkResponsiveMode() { const isPC = window.innerWidth > 768; if (isPC && currentMode !== 'pc') { currentMode = 'pc'; createPCContainers(); if (originalNav) pcSidebar.appendChild(originalNav); document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC); } else if (!isPC && currentMode !== 'handy') { currentMode = 'handy'; if (originalNav) appContainer.appendChild(originalNav); if (pcSidebar) { pcSidebar.remove(); pcSidebar = null; } document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy); } }
-    checkResponsiveMode(); window.addEventListener('resize', checkResponsiveMode);
-    if (window.innerWidth > 768) { const videoObserver2 = new MutationObserver(function(mutations) { if (currentMode === 'pc') mutations.forEach(mutation => mutation.addedNodes.forEach(node => { if (node.classList && node.classList.contains('video')) restructureVideoForPC(node); })); }); const videoContainer = document.getElementById('video-container'); if (videoContainer) videoObserver2.observe(videoContainer, { childList: true }); }
+
+// --- DRAG & DROP LOGIK ---
+
+document.getElementById('btn-toggle-grid').addEventListener('click', (e) => { 
+    dragState.gridVisible = !dragState.gridVisible; 
+    document.getElementById('editor-grid').style.display = dragState.gridVisible ? 'block' : 'none'; 
+    e.target.innerHTML = dragState.gridVisible ? '<i class="fas fa-border-all"></i> Raster: An' : '<i class="fas fa-border-all"></i> Raster: Aus'; 
+});
+
+function startDrag(e, id, isVideo = false) { 
+    if(e.target.tagName.toLowerCase() === 'input' || e.target.classList.contains('resize-handle')) return; 
+    e.preventDefault(); e.stopPropagation(); 
+    
+    dragState.activeId = id;
+    dragState.isVideo = isVideo; 
+    
+    if(isVideo) selectProOverlay(id); else selectText(id); 
+    
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX; 
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY; 
+    dragState.startX = clientX; 
+    dragState.startY = clientY; 
+    
+    let obj;
+    if(isVideo) obj = proEditorState.overlays.find(t => t.id === id);
+    else obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id);
+    
+    if(obj) {
+        dragState.initialObjX = obj.x; 
+        dragState.initialObjY = obj.y; 
+    }
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
-        dmBox.scrollTop = dmBox.scrollHeight;
+function startResize(e, id, pos, isVideo = false) { 
+    e.preventDefault(); e.stopPropagation(); 
+    dragState.activeResizeId = id; 
+    dragState.isVideo = isVideo;
+    dragState.activeResizePos = pos; 
+    
+    if(isVideo) selectProOverlay(id); else selectText(id); 
+    
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX; 
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY; 
+    dragState.startX = clientX; 
+    dragState.startY = clientY; 
+    
+    let obj;
+    if(isVideo) obj = proEditorState.overlays.find(t => t.id === id);
+    else obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id);
+    
+    if(obj) {
+        dragState.startSize = parseFloat(obj.size); 
+        const workspaceId = isVideo ? 'pro-editor-workspace' : 'editor-workspace';
+        const workspaceRect = document.getElementById(workspaceId).getBoundingClientRect(); 
+        const mouseX = clientX - workspaceRect.left; 
+        const mouseY = clientY - workspaceRect.top; 
+        dragState.startDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2)); 
+    }
+}
+
+function dragMove(e) {
+    if (dragState.activeId) { 
+        e.preventDefault(); 
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX; 
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY; 
+        const dx = clientX - dragState.startX; 
+        const dy = clientY - dragState.startY; 
+        let rawX = dragState.initialObjX + dx; 
+        let rawY = dragState.initialObjY + dy; 
+
+        const workspaceId = dragState.isVideo ? 'pro-editor-workspace' : 'editor-workspace';
+        const ws = document.getElementById(workspaceId);
+        
+        let snappedX = false;
+        let snappedY = false;
+
+        // Snapping Logik
+        if (Math.abs(rawX - (ws.clientWidth / 2)) < 15) { rawX = ws.clientWidth / 2; snappedX = true; }
+        if (Math.abs(rawY - (ws.clientHeight / 2)) < 15) { rawY = ws.clientHeight / 2; snappedY = true; }
+
+        const snapVId = dragState.isVideo ? 'pro-snap-v' : 'img-snap-v';
+        const snapHId = dragState.isVideo ? 'pro-snap-h' : 'img-snap-h';
+        document.getElementById(snapVId).style.display = snappedX ? 'block' : 'none';
+        document.getElementById(snapHId).style.display = snappedY ? 'block' : 'none';
+        
+        if (!dragState.isVideo && dragState.gridVisible) { 
+            rawX = Math.round(rawX / 20) * 20; 
+            rawY = Math.round(rawY / 20) * 20; 
+        } 
+        
+        let obj;
+        if(dragState.isVideo) obj = proEditorState.overlays.find(t => t.id === dragState.activeId);
+        else obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === dragState.activeId);
+        
+        if (obj) { 
+            obj.x = rawX; obj.y = rawY; 
+            const prefix = dragState.isVideo ? 'pro-drag-txt-' : 'drag-txt-';
+            const el = document.getElementById(prefix + obj.id); 
+            if(el) { el.style.left = obj.x + 'px'; el.style.top = obj.y + 'px'; } 
+        } 
+    } 
+    else if (dragState.activeResizeId) { 
+        e.preventDefault(); 
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX; 
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY; 
+        const workspaceId = dragState.isVideo ? 'pro-editor-workspace' : 'editor-workspace';
+        const workspaceRect = document.getElementById(workspaceId).getBoundingClientRect(); 
+        const mouseX = clientX - workspaceRect.left; 
+        const mouseY = clientY - workspaceRect.top; 
+        
+        let obj;
+        if(dragState.isVideo) obj = proEditorState.overlays.find(t => t.id === dragState.activeResizeId);
+        else obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === dragState.activeResizeId);
+        
+        if (obj) { 
+            const currentDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2)); 
+            if (dragState.startDist > 0) { 
+                let newSize = Math.max(15, dragState.startSize * (currentDist / dragState.startDist)); 
+                obj.size = newSize; 
+                const prefix = dragState.isVideo ? 'pro-drag-txt-' : 'drag-txt-';
+                const el = document.getElementById(prefix + obj.id); 
+                if(el) { 
+                    if(obj.type === 'sticker' || obj.type === 'blur'){ 
+                        el.children[0].style.width = newSize+'px'; 
+                        if(obj.type === 'blur') el.children[0].style.height = newSize+'px'; 
+                    } 
+                    else { el.querySelector('.text-content').style.fontSize = newSize + 'px'; } 
+                } 
+                const sizeCtrl = dragState.isVideo ? 'pro-text-ctrl-size' : 'text-ctrl-size';
+                document.getElementById(sizeCtrl).value = newSize; 
+            } 
+        } 
+    }
+}
+function endDrag() { 
+    dragState.activeId = null; 
+    dragState.activeResizeId = null; 
+    document.getElementById('pro-snap-v').style.display = 'none';
+    document.getElementById('pro-snap-h').style.display = 'none';
+    document.getElementById('img-snap-v').style.display = 'none';
+    document.getElementById('img-snap-h').style.display = 'none';
+}
+
+document.addEventListener('mousemove', dragMove); 
+document.addEventListener('touchmove', dragMove, {passive: false}); 
+document.addEventListener('mouseup', endDrag); 
+document.addEventListener('touchend', endDrag);
+
+// --- IMAGE EDITOR SPEZIFISCH ---
+function renderEditorImage(index) {
+    if (imageEditorState.images.length === 0) return; 
+    document.getElementById('editor-bg').src = imageEditorState.images[index]; 
+    document.getElementById('editor-img-counter').innerText = `${index + 1} / ${imageEditorState.images.length}`; 
+    const layer = document.getElementById('editor-layer'); 
+    layer.innerHTML = ''; 
+    imageEditorState.activeTextId = null; 
+    document.getElementById('text-controls').style.display = 'none'; 
+    imageEditorState.edits[index].forEach(obj => createDOMTextElement(obj, false));
+}
+
+function createDOMTextElement(obj, isVideo = false) {
+    const layerId = isVideo ? 'pro-editor-layer' : 'editor-layer';
+    const prefix = isVideo ? 'pro-drag-txt-' : 'drag-txt-';
+    
+    const layer = document.getElementById(layerId); 
+    const wrapper = document.createElement('div'); 
+    wrapper.id = prefix + obj.id; 
+    wrapper.className = 'draggable-text'; 
+    wrapper.style.left = obj.x + 'px'; 
+    wrapper.style.top = obj.y + 'px'; 
+    wrapper.style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`; 
+    
+    if(obj.type === 'sticker') {
+        const imgEl = document.createElement('img');
+        imgEl.className = 'sticker-content';
+        imgEl.src = obj.src;
+        imgEl.style.width = obj.size + 'px';
+        imgEl.style.height = 'auto';
+        imgEl.style.pointerEvents = 'none';
+        wrapper.appendChild(imgEl);
+    } else if (obj.type === 'blur') {
+        const blurEl = document.createElement('div');
+        blurEl.className = 'blur-box-content';
+        blurEl.style.width = obj.size + 'px';
+        blurEl.style.height = obj.size + 'px';
+        wrapper.appendChild(blurEl);
+    } else {
+        const textEl = document.createElement('div'); 
+        textEl.className = 'text-content'; 
+        textEl.innerText = obj.text; 
+        textEl.style.fontSize = obj.size + 'px'; 
+        textEl.style.color = obj.color; 
+        textEl.style.fontFamily = obj.font || 'Arial, sans-serif'; 
+        wrapper.appendChild(textEl);
+    }
+
+    ['tl', 'tr', 'bl', 'br'].forEach(pos => { 
+        const h = document.createElement('div'); 
+        h.className = `resize-handle handle-${pos}`; 
+        h.addEventListener('mousedown', (e) => startResize(e, obj.id, pos, isVideo)); 
+        h.addEventListener('touchstart', (e) => startResize(e, obj.id, pos, isVideo), {passive: false}); 
+        wrapper.appendChild(h); 
     });
-};
-
-document.getElementById('send-dm-btn').addEventListener('click', async() => { const input = document.getElementById('dm-input'); const text = input.value.trim(); if (!text || !window.currentChatId || !currentUser) return; input.value = ''; await addDoc(collection(db, `chats/${window.currentChatId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); await updateDoc(doc(db, "chats", window.currentChatId), { lastMessage: text, lastMessageTime: Date.now(), users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic } } }); addNotification(window.currentChatPartner.uid, "message", `hat geschrieben: "${text}"`); });
-document.getElementById('dm-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-dm-btn').click(); });
-
-document.getElementById('dm-img-btn').addEventListener('click', () => document.getElementById('dm-file-upload').click());
-document.getElementById('dm-file-upload').addEventListener('change', async(e) => {
-    const file = e.target.files[0]; if(!file) return; showToast("Bild wird gesendet...");
-    try {
-        const formData = new FormData(); formData.append('file', file); formData.append('upload_preset', UPLOAD_PRESET);
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`, { method: 'POST', body: formData }); const data = await res.json();
-        if(!data.secure_url) throw new Error();
-        const text = "[IMAGE] " + data.secure_url;
-        await addDoc(collection(db, `chats/${window.currentChatId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); 
-        await updateDoc(doc(db, "chats", window.currentChatId), { lastMessage: text, lastMessageTime: Date.now(), users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic } } }); 
-        addNotification(window.currentChatPartner.uid, "message", `hat ein Bild gesendet.`);
-    } catch(err) { showCustomAlert("Fehler", "Bild konnte nicht gesendet werden."); }
-    document.getElementById('dm-file-upload').value = '';
-});
-
-function initResponsiveLayout() {
-    const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;
-    function createPCContainers() { if (!pcSidebar) { pcSidebar = document.createElement('div'); pcSidebar.id = 'pc-nav-sidebar'; pcSidebar.innerHTML = `<div class="logo-area"><img src="https://i.imgur.com/JDPRzCc.png" class="app-logo" alt="Logo">Phil Shorts</div>`; appContainer.prepend(pcSidebar); } }
-    function restructureVideoForPC(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; let infoPanel = inner.querySelector('.pc-info-panel-container'); if (!infoPanel) { infoPanel = document.createElement('div'); infoPanel.className = 'pc-info-panel-container'; inner.appendChild(infoPanel); const videoFooter = inner.querySelector('.video__footer'); const videoSidebar = inner.querySelector('.video__sidebar'); if (videoFooter) infoPanel.appendChild(videoFooter); if (videoSidebar) infoPanel.appendChild(videoSidebar); } }
-    function rollBackVideoForHandy(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; const infoPanel = inner.querySelector('.pc-info-panel-container'); if (infoPanel) { const videoFooter = infoPanel.querySelector('.video__footer'); const videoSidebar = infoPanel.querySelector('.video__sidebar'); if (videoFooter) inner.appendChild(videoFooter); if (videoSidebar) inner.appendChild(videoSidebar); infoPanel.remove(); } }
-    function checkResponsiveMode() { const isPC = window.innerWidth > 768; if (isPC && currentMode !== 'pc') { currentMode = 'pc'; createPCContainers(); if (originalNav) pcSidebar.appendChild(originalNav); document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC); } else if (!isPC && currentMode !== 'handy') { currentMode = 'handy'; if (originalNav) appContainer.appendChild(originalNav); if (pcSidebar) { pcSidebar.remove(); pcSidebar = null; } document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy); } }
-    checkResponsiveMode(); window.addEventListener('resize', checkResponsiveMode);
-    if (window.innerWidth > 768) { const videoObserver2 = new MutationObserver(function(mutations) { if (currentMode === 'pc') mutations.forEach(mutation => mutation.addedNodes.forEach(node => { if (node.classList && node.classList.contains('video')) restructureVideoForPC(node); })); }); const videoContainer = document.getElementById('video-container'); if (videoContainer) videoObserver2.observe(videoContainer, { childList: true }); }
+    
+    wrapper.addEventListener('mousedown', (e) => startDrag(e, obj.id, isVideo)); 
+    wrapper.addEventListener('touchstart', (e) => startDrag(e, obj.id, isVideo), {passive: false}); 
+    layer.appendChild(wrapper);
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();const data = await res.json();
-        if(!data.secure_url) throw new Error();
-        const text = "[IMAGE] " + data.secure_url;
-        await addDoc(collection(db, `chats/${window.currentChatId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); 
-        await updateDoc(doc(db, "chats", window.currentChatId), { lastMessage: text, lastMessageTime: Date.now(), users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic } } }); 
-        addNotification(window.currentChatPartner.uid, "message", `hat ein Bild gesendet.`);
-    } catch(err) { showCustomAlert("Fehler", "Bild konnte nicht gesendet werden."); }
-    document.getElementById('dm-file-upload').value = '';
+function selectText(id) { 
+    imageEditorState.activeTextId = id; 
+    document.querySelectorAll('#editor-layer .draggable-text').forEach(el => el.classList.remove('active')); 
+    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id); 
+    if(!obj) return; 
+    
+    document.getElementById('drag-txt-' + id).classList.add('active'); 
+    document.getElementById('text-controls').style.display = 'block'; 
+    document.getElementById('text-ctrl-input').value = obj.text || ''; 
+    document.getElementById('text-ctrl-size').value = obj.size; 
+    document.getElementById('text-ctrl-rot').value = obj.rotation; 
+    document.getElementById('text-ctrl-font').value = obj.font || 'Arial, sans-serif'; 
+    
+    if(obj.type === 'sticker') {
+        document.getElementById('text-ctrl-input').style.display = 'none';
+        document.getElementById('img-font-group').style.display = 'none';
+        document.getElementById('img-color-group').style.display = 'none';
+    } else {
+        document.getElementById('text-ctrl-input').style.display = 'block';
+        document.getElementById('img-font-group').style.display = 'block';
+        document.getElementById('img-color-group').style.display = 'block';
+    }
+}
+document.getElementById('editor-workspace').addEventListener('click', (e) => { if (!e.target.closest('.draggable-text')) { imageEditorState.activeTextId = null; document.querySelectorAll('#editor-layer .draggable-text').forEach(el => el.classList.remove('active')); document.getElementById('text-controls').style.display = 'none'; } });
+
+document.getElementById('text-ctrl-input').addEventListener('input', (e) => { if(!imageEditorState.activeTextId) return; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); if(obj.type!=='sticker'){ obj.text = e.target.value; document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').innerText = obj.text; } });
+document.getElementById('text-ctrl-size').addEventListener('input', (e) => { if(!imageEditorState.activeTextId) return; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); obj.size = e.target.value; const el = document.getElementById('drag-txt-' + obj.id); if(obj.type==='sticker'){ el.querySelector('.sticker-content').style.width = obj.size + 'px'; } else { el.querySelector('.text-content').style.fontSize = obj.size + 'px'; } });
+document.getElementById('text-ctrl-rot').addEventListener('input', (e) => { if(!imageEditorState.activeTextId) return; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); obj.rotation = e.target.value; document.getElementById('drag-txt-' + obj.id).style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`; });
+document.getElementById('text-ctrl-font').addEventListener('change', (e) => { if(!imageEditorState.activeTextId) return; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); if(obj.type!=='sticker'){ obj.font = e.target.value; document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.fontFamily = obj.font; } });
+document.querySelectorAll('#text-controls .color-dot').forEach(dot => { dot.addEventListener('click', (e) => { if(!imageEditorState.activeTextId) return; const color = e.target.dataset.color; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); if(obj.type!=='sticker'){ obj.color = color; document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.color = color; } }); });
+document.getElementById('btn-delete-text').addEventListener('click', () => { if(!imageEditorState.activeTextId) return; imageEditorState.edits[imageEditorState.currentIndex] = imageEditorState.edits[imageEditorState.currentIndex].filter(t => t.id !== imageEditorState.activeTextId); document.getElementById('drag-txt-' + imageEditorState.activeTextId).remove(); imageEditorState.activeTextId = null; document.getElementById('text-controls').style.display = 'none'; });
+document.getElementById('btn-add-text').addEventListener('click', () => { const workspace = document.getElementById('editor-workspace'); const newObj = { id: Date.now(), type: 'text', text: "Neuer Text", x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 24, rotation: 0, color: '#ffffff', font: 'Arial, sans-serif' }; imageEditorState.edits[imageEditorState.currentIndex].push(newObj); createDOMTextElement(newObj, false); selectText(newObj.id); });
+
+document.getElementById('sticker-upload-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        const workspace = document.getElementById('editor-workspace');
+        const newObj = { id: Date.now(), type: 'sticker', src: event.target.result, x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 100, rotation: 0 };
+        imageEditorState.edits[imageEditorState.currentIndex].push(newObj); 
+        createDOMTextElement(newObj, false); 
+        selectText(newObj.id);
+        document.getElementById('sticker-upload-input').value = '';
+    }
+    reader.readAsDataURL(file);
 });
+
+document.getElementById('btn-prev-img').addEventListener('click', () => { if (imageEditorState.currentIndex > 0) { imageEditorState.currentIndex--; renderEditorImage(imageEditorState.currentIndex); } });
+document.getElementById('btn-next-img').addEventListener('click', () => { if (imageEditorState.currentIndex < imageEditorState.images.length - 1) { imageEditorState.currentIndex++; renderEditorImage(imageEditorState.currentIndex); } });
+
+
+// --- PRO VIDEO EDITOR OVERLAYS ---
+function selectProOverlay(id) { 
+    proEditorState.activeTextId = id; 
+    document.querySelectorAll('#pro-editor-layer .draggable-text').forEach(el => el.classList.remove('active')); 
+    const obj = proEditorState.overlays.find(t => t.id === id); 
+    if(!obj) return; 
+    
+    document.getElementById('pro-drag-txt-' + id).classList.add('active'); 
+    document.getElementById('pro-text-controls').style.display = 'block'; 
+    document.getElementById('pro-text-ctrl-input').value = obj.text || ''; 
+    document.getElementById('pro-text-ctrl-size').value = obj.size; 
+    document.getElementById('pro-text-ctrl-rot').value = obj.rotation; 
+    document.getElementById('pro-text-ctrl-font').value = obj.font || 'Arial, sans-serif'; 
+    document.getElementById('pro-overlay-start').value = obj.start || 0;
+    document.getElementById('pro-overlay-end').value = obj.end || (proEditorState.end || 10);
+
+    if(obj.type === 'sticker' || obj.type === 'blur') {
+        document.getElementById('pro-text-ctrl-input').style.display = 'none';
+        document.getElementById('pro-font-group').style.display = 'none';
+        document.getElementById('pro-color-group').style.display = 'none';
+    } else {
+        document.getElementById('pro-text-ctrl-input').style.display = 'block';
+        document.getElementById('pro-font-group').style.display = 'flex';
+        document.getElementById('pro-color-group').style.display = 'block';
+    }
+}
+
+document.getElementById('pro-editor-workspace').addEventListener('click', (e) => { 
+    if (!e.target.closest('.draggable-text')) { 
+        proEditorState.activeTextId = null; 
+        document.querySelectorAll('#pro-editor-layer .draggable-text').forEach(el => el.classList.remove('active')); 
+        document.getElementById('pro-text-controls').style.display = 'none'; 
+    } 
+});
+
+document.getElementById('btn-pro-add-text').addEventListener('click', () => { 
+    const workspace = document.getElementById('pro-editor-workspace'); 
+    const newObj = { id: Date.now(), type: 'text', text: "Video Text", x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 40, rotation: 0, color: '#ffffff', font: 'Arial, sans-serif', start: 0, end: proEditorState.end || 10 }; 
+    proEditorState.overlays.push(newObj); 
+    createDOMTextElement(newObj, true); 
+    selectProOverlay(newObj.id); 
+});
+
+document.getElementById('btn-pro-add-blur').addEventListener('click', () => { 
+    const workspace = document.getElementById('pro-editor-workspace'); 
+    const newObj = { id: Date.now(), type: 'blur', x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 100, rotation: 0, start: 0, end: proEditorState.end || 10 }; 
+    proEditorState.overlays.push(newObj); 
+    createDOMTextElement(newObj, true); 
+    selectProOverlay(newObj.id); 
+});
+
+document.getElementById('pro-sticker-upload-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        const workspace = document.getElementById('pro-editor-workspace');
+        const newObj = { id: Date.now(), type: 'sticker', src: event.target.result, x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 100, rotation: 0, start: 0, end: proEditorState.end || 10 };
+        proEditorState.overlays.push(newObj); 
+        createDOMTextElement(newObj, true); 
+        selectProOverlay(newObj.id);
+        document.getElementById('pro-sticker-upload-input').value = '';
+    }
+    reader.readAsDataURL(file);
+});
+
+document.getElementById('pro-overlay-start').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); obj.start = parseFloat(e.target.value); });
+document.getElementById('pro-overlay-end').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); obj.end = parseFloat(e.target.value); });
+document.getElementById('pro-text-ctrl-input').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); if(obj.type==='text'){ obj.text = e.target.value; document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').innerText = obj.text; } });
+document.getElementById('pro-text-ctrl-size').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); obj.size = e.target.value; const el = document.getElementById('pro-drag-txt-' + obj.id); if(obj.type!=='text'){ el.children[0].style.width = obj.size + 'px'; if(obj.type==='blur') el.children[0].style.height = obj.size+'px'; } else { el.querySelector('.text-content').style.fontSize = obj.size + 'px'; } });
+document.getElementById('pro-text-ctrl-rot').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); obj.rotation = e.target.value; document.getElementById('pro-drag-txt-' + obj.id).style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`; });
+document.getElementById('pro-text-ctrl-font').addEventListener('change', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); if(obj.type==='text'){ obj.font = e.target.value; document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').style.fontFamily = obj.font; } });
+document.querySelectorAll('.pro-color-dot').forEach(dot => { dot.addEventListener('click', (e) => { if(!proEditorState.activeTextId) return; const color = e.target.dataset.color; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); if(obj.type==='text'){ obj.color = color; document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').style.color = color; } }); });
+document.getElementById('btn-pro-delete-text').addEventListener('click', () => { if(!proEditorState.activeTextId) return; proEditorState.overlays = proEditorState.overlays.filter(t => t.id !== proEditorState.activeTextId); document.getElementById('pro-drag-txt-' + proEditorState.activeTextId).remove(); proEditorState.activeTextId = null; document.getElementById('pro-text-controls').style.display = 'none'; });
+
+
+// --- UPLOAD LOGIC PRO VIDEO & IMAGES ---
+document.getElementById('up-file').addEventListener('change', async function(e) {
+    const files = e.target.files; 
+    const txt = document.querySelector('#up-file-btn p'); 
+    const icon = document.querySelector('#up-file-btn i'); 
+    
+    const advancedVideoUi = document.getElementById('video-advanced-editor');
+    const proPreview = document.getElementById('pro-video-source');
+    const proTrimStart = document.getElementById('pro-trim-start');
+    const proTrimEnd = document.getElementById('pro-trim-end');
+
+    const advancedImageUi = document.getElementById('image-advanced-editor'); 
+
+    if (!files || files.length === 0) { 
+        txt.innerText = "Video oder Bilder auswählen"; 
+        icon.className = "fas fa-cloud-upload-alt"; 
+        icon.style.color = "#aaa"; 
+        advancedVideoUi.style.display = 'none'; 
+        advancedImageUi.style.display = 'none'; 
+        return; 
+    }
+    const isVideo = files[0].type.startsWith('video/');
+    if (isVideo) {
+        txt.innerText = files[0].name; 
+        icon.className = "fas fa-video"; 
+        icon.style.color = "#00f2fe"; 
+        advancedVideoUi.style.display = 'block'; 
+        advancedImageUi.style.display = 'none';
+        
+        const url = URL.createObjectURL(files[0]); 
+        proPreview.src = url; 
+        proPreview.onloadedmetadata = () => { 
+            const dur = proPreview.duration; 
+            
+            if(dur > 180 && !checkPhilPlusStatus(2)) {
+                showCustomAlert("Zu lang", "Videos über 3 Minuten erfordern Phil Shorts++!");
+                document.getElementById('up-file').value = '';
+                txt.innerText = "Video oder Bilder auswählen";
+                icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa";
+                advancedVideoUi.style.display = 'none';
+                return;
+            }
+
+            document.getElementById('pro-time-total').innerText = dur.toFixed(1);
+            proTrimStart.max = dur; 
+            proTrimEnd.max = dur; 
+            proTrimEnd.value = dur; 
+            document.getElementById('pro-val-end').innerText = dur.toFixed(1);
+            
+            document.getElementById('pro-overlay-start').max = dur;
+            document.getElementById('pro-overlay-end').max = dur;
+
+            proEditorState.end = dur;
+            proEditorState.start = 0;
+            proEditorState.filter = 'none';
+            proEditorState.speed = 1;
+            proEditorState.ratio = 'original';
+            proEditorState.audioFileUrl = null;
+            proEditorState.origVol = 1;
+            proEditorState.bgVol = 0.5;
+            proEditorState.overlays = [];
+            proEditorState.activeTextId = null;
+            
+            document.getElementById('pro-editor-layer').innerHTML = '';
+            document.getElementById('pro-text-controls').style.display = 'none';
+            document.getElementById('pro-audio-orig-vol').value = 1;
+            document.getElementById('pro-audio-bg-vol').value = 0.5;
+            document.getElementById('pro-audio-bg-name').innerText = "";
+            document.getElementById('pro-speed-ctrl').value = "1";
+            document.getElementById('pro-ratio-ctrl').value = "original";
+            document.getElementById('pro-audio-controls-extended').style.display = 'none';
+            proBgAudio.src = "";
+            
+            document.querySelectorAll('.pro-filter-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector('.pro-filter-btn[data-filter="none"]').classList.add('active');
+            proPreview.style.filter = 'none';
+            proPreview.style.transform = 'scale(1)';
+            
+            generateTimelineFrames(proPreview);
+        };
+    } else {
+        txt.innerText = `${files.length} Bild(er) ausgewählt`; icon.className = "fas fa-images"; icon.style.color = "#ffd700"; advancedVideoUi.style.display = 'none'; advancedImageUi.style.display = 'block';
+        imageEditorState.images = []; imageEditorState.edits = []; imageEditorState.currentIndex = 0;
+        for(let i = 0; i < files.length; i++) {
+            if(files[i].size > 15 * 1024 * 1024) continue;
+            const reader = new FileReader(); await new Promise(resolve => { reader.onload = (event) => { imageEditorState.images.push(event.target.result); imageEditorState.edits.push([]); resolve(); }; reader.readAsDataURL(files[i]); });
+        }
+        if (imageEditorState.images.length === 0) { showCustomAlert("Fehler", "Bilder konnten nicht geladen werden."); txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; return; }
+        renderEditorImage(0);
+    }
+});
+
+// Timeline Frames generieren
+function generateTimelineFrames(videoEl) {
+    const container = document.getElementById('pro-timeline-frames');
+    container.innerHTML = '';
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const frameCount = 5;
+    const dur = videoEl.duration;
+    
+    canvas.width = 60;
+    canvas.height = 40;
+
+    let times = [];
+    for(let i=0; i<frameCount; i++) {
+        times.push((dur / frameCount) * i);
+    }
+
+    let i = 0;
+    videoEl.addEventListener('seeked', function extractFrame() {
+        if(i >= times.length) {
+            videoEl.removeEventListener('seeked', extractFrame);
+            videoEl.currentTime = 0;
+            return;
+        }
+        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        const img = document.createElement('img');
+        img.src = canvas.toDataURL();
+        img.style.flex = "1";
+        img.style.objectFit = "cover";
+        img.style.height = "100%";
+        container.appendChild(img);
+        i++;
+        if(i < times.length) videoEl.currentTime = times[i];
+    });
+    
+    if(times.length > 0) videoEl.currentTime = times[0];
+}
+
+
+// PRO VIDEO EDITOR EVENTS
+document.getElementById('btn-pro-play').addEventListener('click', () => {
+    const vid = document.getElementById('pro-video-source');
+    if (vid.paused) { 
+        vid.play(); 
+        proBgAudio.play();
+        document.getElementById('btn-pro-play').innerHTML = '<i class="fas fa-pause"></i>'; 
+    } else { 
+        vid.pause(); 
+        proBgAudio.pause();
+        document.getElementById('btn-pro-play').innerHTML = '<i class="fas fa-play"></i>'; 
+    }
+});
+
+document.getElementById('pro-video-source').addEventListener('timeupdate', (e) => {
+    const curr = e.target.currentTime;
+    document.getElementById('pro-time-current').innerText = curr.toFixed(1);
+    
+    const endVal = parseFloat(document.getElementById('pro-trim-end').value) || 0;
+    const startVal = parseFloat(document.getElementById('pro-trim-start').value) || 0;
+    
+    if(curr >= endVal && endVal > 0) {
+        e.target.currentTime = startVal;
+        if(proBgAudio.src) {
+            proBgAudio.currentTime = parseFloat(document.getElementById('pro-audio-offset').value) || 0;
+        }
+    }
+
+    // Keyframes Overlay Logic
+    proEditorState.overlays.forEach(obj => {
+        const el = document.getElementById('pro-drag-txt-' + obj.id);
+        if(el) {
+            if(curr >= obj.start && curr <= obj.end) {
+                el.style.display = 'block';
+            } else {
+                el.style.display = 'none';
+            }
+        }
+    });
+});
+
+function updateTrim() {
+    let s = parseFloat(document.getElementById('pro-trim-start').value);
+    let e = parseFloat(document.getElementById('pro-trim-end').value);
+    if(s >= e) { s = e - 0.1; document.getElementById('pro-trim-start').value = s; }
+    document.getElementById('pro-val-start').innerText = s.toFixed(1);
+    document.getElementById('pro-video-source').currentTime = s;
+    proEditorState.start = s;
+    
+    if(proBgAudio.src) {
+        proBgAudio.currentTime = parseFloat(document.getElementById('pro-audio-offset').value) || 0;
+    }
+}
+
+function updateTrimEnd() {
+    let s = parseFloat(document.getElementById('pro-trim-start').value);
+    let e = parseFloat(document.getElementById('pro-trim-end').value);
+    if(e <= s) { e = s + 0.1; document.getElementById('pro-trim-end').value = e; }
+    document.getElementById('pro-val-end').innerText = e.toFixed(1);
+    document.getElementById('pro-video-source').currentTime = e - 0.1;
+    proEditorState.end = e;
+}
+
+document.getElementById('pro-trim-start').addEventListener('input', updateTrim);
+document.getElementById('pro-trim-start-plus').addEventListener('click', () => { document.getElementById('pro-trim-start').value = parseFloat(document.getElementById('pro-trim-start').value) + 0.1; updateTrim(); });
+document.getElementById('pro-trim-start-minus').addEventListener('click', () => { document.getElementById('pro-trim-start').value = Math.max(0, parseFloat(document.getElementById('pro-trim-start').value) - 0.1); updateTrim(); });
+
+document.getElementById('pro-trim-end').addEventListener('input', updateTrimEnd);
+document.getElementById('pro-trim-end-plus').addEventListener('click', () => { document.getElementById('pro-trim-end').value = Math.min(parseFloat(document.getElementById('pro-trim-end').max), parseFloat(document.getElementById('pro-trim-end').value) + 0.1); updateTrimEnd(); });
+document.getElementById('pro-trim-end-minus').addEventListener('click', () => { document.getElementById('pro-trim-end').value = parseFloat(document.getElementById('pro-trim-end').value) - 0.1; updateTrimEnd(); });
+
+
+document.querySelectorAll('.pro-filter-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.pro-filter-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        proEditorState.filter = e.target.dataset.filter;
+        const vid = document.getElementById('pro-video-source');
+        if(proEditorState.filter === 'none') vid.style.filter = 'none';
+        if(proEditorState.filter === 'grayscale') vid.style.filter = 'grayscale(100%)';
+        if(proEditorState.filter === 'sepia') vid.style.filter = 'sepia(100%)';
+        if(proEditorState.filter === 'blur') vid.style.filter = 'blur(4px)';
+        if(proEditorState.filter === 'contrast') vid.style.filter = 'contrast(200%)';
+        if(proEditorState.filter === 'vintage') vid.style.filter = 'sepia(50%) contrast(150%)';
+    });
+});
+
+document.getElementById('pro-speed-ctrl').addEventListener('change', (e) => { 
+    proEditorState.speed = parseFloat(e.target.value); 
+    document.getElementById('pro-video-source').playbackRate = proEditorState.speed;
+    proBgAudio.playbackRate = proEditorState.speed;
+});
+
+document.getElementById('pro-ratio-ctrl').addEventListener('change', (e) => { 
+    proEditorState.ratio = e.target.value; 
+    const ws = document.getElementById('pro-editor-workspace');
+    if(proEditorState.ratio === '9:16') {
+        ws.style.width = '196px'; // Aspect Ratio 9:16 Preview
+    } else if (proEditorState.ratio === '1:1') {
+        ws.style.width = '350px';
+    } else {
+        ws.style.width = '100%';
+    }
+});
+
+document.getElementById('pro-audio-orig-vol').addEventListener('input', (e) => {
+    proEditorState.origVol = parseFloat(e.target.value);
+    document.getElementById('pro-video-source').volume = proEditorState.origVol;
+});
+document.getElementById('pro-audio-bg-vol').addEventListener('input', (e) => { 
+    proEditorState.bgVol = parseFloat(e.target.value); 
+    proBgAudio.volume = proEditorState.bgVol;
+});
+
+document.getElementById('pro-audio-upload').addEventListener('change', (e) => {
+    if(e.target.files.length > 0) {
+        const file = e.target.files[0];
+        document.getElementById('pro-audio-bg-name').innerText = file.name;
+        document.getElementById('pro-audio-controls-extended').style.display = 'block';
+        
+        const url = URL.createObjectURL(file);
+        proBgAudio.src = url;
+        proBgAudio.volume = proEditorState.bgVol;
+        
+        proBgAudio.onloadedmetadata = () => {
+            document.getElementById('pro-audio-offset').max = proBgAudio.duration;
+            document.getElementById('pro-audio-offset').value = 0;
+        };
+    }
+});
+
+
+async function renderAndUploadImages() {
+    let uploadedUrls = []; const ws = document.getElementById('editor-workspace'); const Cw = ws.clientWidth; const Ch = ws.clientHeight;
+    for (let i = 0; i < imageEditorState.images.length; i++) {
+        const img = new Image(); await new Promise(res => { img.onload = res; img.src = imageEditorState.images[i]; });
+        const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const Nw = img.naturalWidth; const Nh = img.naturalHeight; canvas.width = Nw; canvas.height = Nh; ctx.drawImage(img, 0, 0, Nw, Nh);
+        const scale = Math.min(Cw / Nw, Ch / Nh); const Dw = Nw * scale; const Dh = Nh * scale; const Ox = (Cw - Dw) / 2; const Oy = (Ch - Dh) / 2;
+        
+        for (const obj of imageEditorState.edits[i]) {
+            let nativeX = (obj.x - Ox) / scale; let nativeY = (obj.y - Oy) / scale; let nativeSize = obj.size / scale;
+            ctx.save(); ctx.translate(nativeX, nativeY); ctx.rotate((obj.rotation * Math.PI) / 180); 
+            
+            if(obj.type === 'sticker') {
+                const sImg = new Image(); await new Promise(res => { sImg.onload = res; sImg.src = obj.src; });
+                const ratio = sImg.naturalHeight / sImg.naturalWidth;
+                ctx.drawImage(sImg, -nativeSize/2, -(nativeSize*ratio)/2, nativeSize, nativeSize*ratio);
+            } else if (obj.type === 'blur') {
+                // Blur in Canvas Image
+                ctx.filter = 'blur(15px)';
+                ctx.drawImage(canvas, nativeX - nativeSize/2, nativeY - nativeSize/2, nativeSize, nativeSize, -nativeSize/2, -nativeSize/2, nativeSize, nativeSize);
+                ctx.filter = 'none';
+            } else {
+                ctx.font = `bold ${nativeSize}px ${obj.font || 'Arial, sans-serif'}`; ctx.fillStyle = obj.color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = nativeSize * 0.1; ctx.strokeText(obj.text, 0, 0); ctx.fillText(obj.text, 0, 0); 
+            }
+            ctx.restore();
+        }
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        const formData = new FormData(); formData.append('file', dataUrl); formData.append('upload_preset', UPLOAD_PRESET);
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`, { method: 'POST', body: formData }); const data = await res.json();
+        uploadedUrls.push(data.secure_url.replace('/upload/', `/upload/q_auto,f_auto/`));
+    }
+    return uploadedUrls;
+}
+
+function hexToCloudinaryColor(hex) {
+    if(hex && hex.startsWith('#')) return 'rgb:' + hex.substring(1);
+    return hex || 'white';
+}
+
+document.getElementById('submit-upload').addEventListener('click', async() => {
+    const files = document.getElementById('up-file').files; const titleVal = document.getElementById('up-title').value.trim(); const desc = document.getElementById('up-desc').value.trim();
+    if (!files || files.length === 0 || (!desc && !titleVal)) return showCustomAlert("Fehlende Daten", "Bitte wähle Dateien aus und schreibe einen Titel oder eine Beschreibung.");
+    
+    let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
+    let isVideo = files[0].type.startsWith('video/');
+    if (isVideo && files[0].size > maxSize) return showCustomAlert("Zu groß", `Videos dürfen maximal ${limitText} MB groß sein!`);
+    
+    const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); btn.disabled = true; status.innerText = "Wird gerendert und verarbeitet... Bitte warten!";
+    
+    try {
+        if (isVideo) {
+            const formData = new FormData(); formData.append('file', files[0]); formData.append('upload_preset', UPLOAD_PRESET);
+            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: formData }); const data = await res.json();
+            if (!data.secure_url) throw new Error("Upload fehlgeschlagen.");
+            
+            let transform = 'q_auto,f_auto,vc_auto'; 
+            const tStart = proEditorState.start; 
+            const tEnd = proEditorState.end; 
+            const dur = parseFloat(document.getElementById('pro-trim-start').max) || 0;
+            
+            if (tStart > 0 || tEnd < dur) {
+                transform += `,so_${tStart},eo_${tEnd}`;
+            }
+
+            let extraTransforms = [];
+            
+            // Format
+            if(proEditorState.ratio === '9:16') extraTransforms.push('c_fill,h_1920,w_1080');
+            else if(proEditorState.ratio === '1:1') extraTransforms.push('c_fill,h_1080,w_1080');
+
+            // Filter
+            if(proEditorState.filter === 'grayscale') extraTransforms.push('e_grayscale');
+            if(proEditorState.filter === 'sepia') extraTransforms.push('e_sepia');
+            if(proEditorState.filter === 'blur') extraTransforms.push('e_blur:200');
+            if(proEditorState.filter === 'contrast') extraTransforms.push('e_contrast:50');
+            if(proEditorState.filter === 'vintage') extraTransforms.push('e_sepia:50/e_contrast:50');
+            
+            // Volume Original
+            if(proEditorState.origVol < 1) {
+                let volPercent = Math.round((proEditorState.origVol - 1) * 100);
+                if(proEditorState.origVol === 0) volPercent = -100;
+                extraTransforms.push(`e_volume:${volPercent}`);
+            }
+
+            // Audio Upload
+            const audioFiles = document.getElementById('pro-audio-upload').files;
+            if(audioFiles.length > 0) {
+                status.innerText = "Lade Hintergrundmusik hoch...";
+                const audioData = new FormData(); audioData.append('file', audioFiles[0]); audioData.append('upload_preset', UPLOAD_PRESET);
+                const audioRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: audioData }); 
+                const aData = await audioRes.json();
+                if(aData.public_id) {
+                    let audioVolPercent = Math.round((proEditorState.bgVol - 1) * 100);
+                    if(proEditorState.bgVol === 0) audioVolPercent = -100;
+                    const aStart = parseFloat(document.getElementById('pro-audio-offset').value) || 0;
+                    extraTransforms.push(`l_video:${aData.public_id.replace(/\//g, ':')}/e_volume:${audioVolPercent}/so_${aStart}/fl_layer_apply`);
+                }
+                status.innerText = "Wird gerendert und verarbeitet... Bitte warten!";
+            }
+
+            // Overlays (Text / Blur)
+            const ws = document.getElementById('pro-editor-workspace'); 
+            const cw = ws.clientWidth; const ch = ws.clientHeight;
+            
+            proEditorState.overlays.forEach(obj => {
+                let ox = Math.round(obj.x);
+                let oy = Math.round(obj.y);
+                let timeStr = '';
+                if(obj.start > 0 || obj.end < dur) {
+                    timeStr = `,so_${obj.start},eo_${obj.end}`;
+                }
+
+                if(obj.type === 'text') {
+                    const encodedText = encodeURIComponent(obj.text.trim());
+                    const fName = obj.font.split(',')[0].replace(/'/g, '').replace(/ /g, '_');
+                    const cColor = hexToCloudinaryColor(obj.color);
+                    extraTransforms.push(`l_text:${fName}_${obj.size}_bold:${encodedText},co_${cColor},a_${obj.rotation},g_north_west,x_${ox},y_${oy}${timeStr}`);
+                } else if (obj.type === 'blur') {
+                    // Cloudinary blur region
+                    let bw = Math.round(obj.size);
+                    let bh = Math.round(obj.size);
+                    let bx = Math.round(obj.x - bw/2);
+                    let by = Math.round(obj.y - bh/2);
+                    extraTransforms.push(`e_blur_region:800,w_${bw},h_${bh},x_${bx},y_${by}${timeStr}`);
+                }
+            });
+
+            let finalUrl = data.secure_url;
+            if(extraTransforms.length > 0) {
+                finalUrl = data.secure_url.replace('/upload/', `/upload/${transform}/${extraTransforms.join('/')}/`);
+            } else {
+                finalUrl = data.secure_url.replace('/upload/', `/upload/${transform}/`);
+            }
+
+            await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
+        } else {
+            const uploadedUrls = await renderAndUploadImages(); if(uploadedUrls.length === 0) throw new Error("Keine Bilder hochgeladen.");
+            await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
+        }
+        showToast("Erfolgreich veröffentlicht! 🎉"); document.getElementById('upload-modal').classList.remove('show');
+        document.getElementById('up-file').value = ''; document.getElementById('up-title').value = ''; document.getElementById('up-desc').value = ''; document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; document.querySelector('#up-file-btn i').style.color = "#aaa"; document.getElementById('video-advanced-editor').style.display = 'none'; document.getElementById('image-advanced-editor').style.display = 'none'; imageEditorState.images = []; proBgAudio.pause();
+    } catch (e) { showCustomAlert("Upload Fehler", "Fehler! Evtl. falsches Format."); } finally { btn.disabled = false; status.innerText = ""; }
+});
+
+document.getElementById('open-upload').addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
+document.getElementById('close-upload').addEventListener('click', () => { document.getElementById('upload-modal').classList.remove('show'); proBgAudio.pause(); });
+document.getElementById('close-comments').addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
+document.getElementById('close-settings').addEventListener('click', () => document.getElementById('settings-modal').classList.remove('show'));
+document.getElementById('close-app-settings').addEventListener('click', () => document.getElementById('app-settings-modal').classList.remove('show'));
 
 function initResponsiveLayout() {
     const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;
