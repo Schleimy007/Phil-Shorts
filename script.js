@@ -25,18 +25,25 @@ if (currentUser) currentUser.verified = false;
 
 let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || { master: false, comments: true, likes: true, dms: true, follows: true };
 
-// --- PRO VIDEO EDITOR STATE ---
-let proEditorState = {
-    filter: 'none',
-    start: 0,
-    end: 0,
-    speed: 1,
-    ratio: 'original',
-    audioFileUrl: null,
-    origVol: 1,
-    bgVol: 0.5,
-    overlays: [],
-    activeTextId: null
+// --- PRO EDITOR STATE ---
+let imageEditorState = { images: [], edits: [], currentIndex: 0 };
+let proEditorState = { filter: 'none', start: 0, end: 0, speed: 1, ratio: 'original', audioFileUrl: null, origVol: 1, bgVol: 0.5, overlays: [] };
+
+let proBgAudio = new Audio();
+
+// Zentraler Drag-State für Einrasten & Bugfixes
+let dragState = {
+    activeId: null,
+    isVideo: false,
+    activeResizeId: null,
+    activeResizePos: null,
+    startX: 0,
+    startY: 0,
+    initialObjX: 0,
+    initialObjY: 0,
+    startSize: 0,
+    startDist: 0,
+    gridVisible: false
 };
 
 window.sendDesktopNotification = function(title, body, type) {
@@ -1666,110 +1673,164 @@ document.getElementById('dm-file-upload').addEventListener('change', async(e) =>
     document.getElementById('dm-file-upload').value = '';
 });
 
-// --- IMAGE & VIDEO DRAG / DROP SYSTEM (Gemeinsame Basis) ---
-let editorState = { images: [], edits: [], currentIndex: 0, activeTextId: null }; 
-let activeDragId = null, activeResizeId = null, activeResizePos = null, startX, startY, initialObjX, initialObjY, startSize, startDist = 0; 
-let gridVisible = false;
+
+// --- DRAG & DROP LOGIK ---
 
 document.getElementById('btn-toggle-grid').addEventListener('click', (e) => { 
-    gridVisible = !gridVisible; 
-    document.getElementById('editor-grid').style.display = gridVisible ? 'block' : 'none'; 
-    e.target.innerHTML = gridVisible ? '<i class="fas fa-border-all"></i> Raster: An' : '<i class="fas fa-border-all"></i> Raster: Aus'; 
+    dragState.gridVisible = !dragState.gridVisible; 
+    document.getElementById('editor-grid').style.display = dragState.gridVisible ? 'block' : 'none'; 
+    e.target.innerHTML = dragState.gridVisible ? '<i class="fas fa-border-all"></i> Raster: An' : '<i class="fas fa-border-all"></i> Raster: Aus'; 
 });
 
 function startDrag(e, id, isVideo = false) { 
     if(e.target.tagName.toLowerCase() === 'input' || e.target.classList.contains('resize-handle')) return; 
     e.preventDefault(); e.stopPropagation(); 
-    activeDragId = { id, isVideo }; 
+    
+    dragState.activeId = id;
+    dragState.isVideo = isVideo; 
+    
     if(isVideo) selectProOverlay(id); else selectText(id); 
     
     const clientX = e.touches ? e.touches[0].clientX : e.clientX; 
     const clientY = e.touches ? e.touches[0].clientY : e.clientY; 
-    startX = clientX; startY = clientY; 
+    dragState.startX = clientX; 
+    dragState.startY = clientY; 
     
     let obj;
     if(isVideo) obj = proEditorState.overlays.find(t => t.id === id);
-    else obj = editorState.edits[editorState.currentIndex].find(t => t.id === id);
+    else obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id);
     
-    initialObjX = obj.x; initialObjY = obj.y; 
+    if(obj) {
+        dragState.initialObjX = obj.x; 
+        dragState.initialObjY = obj.y; 
+    }
 }
 
 function startResize(e, id, pos, isVideo = false) { 
     e.preventDefault(); e.stopPropagation(); 
-    activeResizeId = { id, isVideo }; activeResizePos = pos; 
+    dragState.activeResizeId = id; 
+    dragState.isVideo = isVideo;
+    dragState.activeResizePos = pos; 
+    
     if(isVideo) selectProOverlay(id); else selectText(id); 
     
     const clientX = e.touches ? e.touches[0].clientX : e.clientX; 
     const clientY = e.touches ? e.touches[0].clientY : e.clientY; 
-    startX = clientX; startY = clientY; 
+    dragState.startX = clientX; 
+    dragState.startY = clientY; 
     
     let obj;
     if(isVideo) obj = proEditorState.overlays.find(t => t.id === id);
-    else obj = editorState.edits[editorState.currentIndex].find(t => t.id === id);
+    else obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id);
     
-    startSize = parseFloat(obj.size); 
-    const workspaceId = isVideo ? 'pro-editor-workspace' : 'editor-workspace';
-    const workspaceRect = document.getElementById(workspaceId).getBoundingClientRect(); 
-    const mouseX = clientX - workspaceRect.left; const mouseY = clientY - workspaceRect.top; 
-    startDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2)); 
+    if(obj) {
+        dragState.startSize = parseFloat(obj.size); 
+        const workspaceId = isVideo ? 'pro-editor-workspace' : 'editor-workspace';
+        const workspaceRect = document.getElementById(workspaceId).getBoundingClientRect(); 
+        const mouseX = clientX - workspaceRect.left; 
+        const mouseY = clientY - workspaceRect.top; 
+        dragState.startDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2)); 
+    }
 }
 
 function dragMove(e) {
-    if (activeDragId) { 
+    if (dragState.activeId) { 
         e.preventDefault(); 
         const clientX = e.touches ? e.touches[0].clientX : e.clientX; 
         const clientY = e.touches ? e.touches[0].clientY : e.clientY; 
-        const dx = clientX - startX; const dy = clientY - startY; 
-        let rawX = initialObjX + dx; let rawY = initialObjY + dy; 
+        const dx = clientX - dragState.startX; 
+        const dy = clientY - dragState.startY; 
+        let rawX = dragState.initialObjX + dx; 
+        let rawY = dragState.initialObjY + dy; 
+
+        const workspaceId = dragState.isVideo ? 'pro-editor-workspace' : 'editor-workspace';
+        const ws = document.getElementById(workspaceId);
         
-        if (!activeDragId.isVideo && gridVisible) { rawX = Math.round(rawX / 20) * 20; rawY = Math.round(rawY / 20) * 20; } 
+        let snappedX = false;
+        let snappedY = false;
+
+        // Snapping Logik
+        if (Math.abs(rawX - (ws.clientWidth / 2)) < 15) { rawX = ws.clientWidth / 2; snappedX = true; }
+        if (Math.abs(rawY - (ws.clientHeight / 2)) < 15) { rawY = ws.clientHeight / 2; snappedY = true; }
+
+        const snapVId = dragState.isVideo ? 'pro-snap-v' : 'img-snap-v';
+        const snapHId = dragState.isVideo ? 'pro-snap-h' : 'img-snap-h';
+        document.getElementById(snapVId).style.display = snappedX ? 'block' : 'none';
+        document.getElementById(snapHId).style.display = snappedY ? 'block' : 'none';
+        
+        if (!dragState.isVideo && dragState.gridVisible) { 
+            rawX = Math.round(rawX / 20) * 20; 
+            rawY = Math.round(rawY / 20) * 20; 
+        } 
         
         let obj;
-        if(activeDragId.isVideo) obj = proEditorState.overlays.find(t => t.id === activeDragId.id);
-        else obj = editorState.edits[editorState.currentIndex].find(t => t.id === activeDragId.id);
+        if(dragState.isVideo) obj = proEditorState.overlays.find(t => t.id === dragState.activeId);
+        else obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === dragState.activeId);
         
         if (obj) { 
             obj.x = rawX; obj.y = rawY; 
-            const prefix = activeDragId.isVideo ? 'pro-drag-txt-' : 'drag-txt-';
+            const prefix = dragState.isVideo ? 'pro-drag-txt-' : 'drag-txt-';
             const el = document.getElementById(prefix + obj.id); 
             if(el) { el.style.left = obj.x + 'px'; el.style.top = obj.y + 'px'; } 
         } 
     } 
-    else if (activeResizeId) { 
+    else if (dragState.activeResizeId) { 
         e.preventDefault(); 
         const clientX = e.touches ? e.touches[0].clientX : e.clientX; 
         const clientY = e.touches ? e.touches[0].clientY : e.clientY; 
-        const workspaceId = activeResizeId.isVideo ? 'pro-editor-workspace' : 'editor-workspace';
+        const workspaceId = dragState.isVideo ? 'pro-editor-workspace' : 'editor-workspace';
         const workspaceRect = document.getElementById(workspaceId).getBoundingClientRect(); 
-        const mouseX = clientX - workspaceRect.left; const mouseY = clientY - workspaceRect.top; 
+        const mouseX = clientX - workspaceRect.left; 
+        const mouseY = clientY - workspaceRect.top; 
         
         let obj;
-        if(activeResizeId.isVideo) obj = proEditorState.overlays.find(t => t.id === activeResizeId.id);
-        else obj = editorState.edits[editorState.currentIndex].find(t => t.id === activeResizeId.id);
+        if(dragState.isVideo) obj = proEditorState.overlays.find(t => t.id === dragState.activeResizeId);
+        else obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === dragState.activeResizeId);
         
         if (obj) { 
             const currentDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2)); 
-            if (startDist > 0) { 
-                let newSize = Math.max(15, startSize * (currentDist / startDist)); 
+            if (dragState.startDist > 0) { 
+                let newSize = Math.max(15, dragState.startSize * (currentDist / dragState.startDist)); 
                 obj.size = newSize; 
-                const prefix = activeResizeId.isVideo ? 'pro-drag-txt-' : 'drag-txt-';
+                const prefix = dragState.isVideo ? 'pro-drag-txt-' : 'drag-txt-';
                 const el = document.getElementById(prefix + obj.id); 
                 if(el) { 
-                    if(obj.type==='sticker'){ el.querySelector('.sticker-content').style.width = newSize+'px'; } 
+                    if(obj.type === 'sticker' || obj.type === 'blur'){ 
+                        el.children[0].style.width = newSize+'px'; 
+                        if(obj.type === 'blur') el.children[0].style.height = newSize+'px'; 
+                    } 
                     else { el.querySelector('.text-content').style.fontSize = newSize + 'px'; } 
                 } 
-                const sizeCtrl = activeResizeId.isVideo ? 'pro-text-ctrl-size' : 'text-ctrl-size';
+                const sizeCtrl = dragState.isVideo ? 'pro-text-ctrl-size' : 'text-ctrl-size';
                 document.getElementById(sizeCtrl).value = newSize; 
             } 
         } 
     }
 }
-function endDrag() { activeDragId = null; activeResizeId = null; }
-document.addEventListener('mousemove', dragMove); document.addEventListener('touchmove', dragMove, {passive: false}); document.addEventListener('mouseup', endDrag); document.addEventListener('touchend', endDrag);
+function endDrag() { 
+    dragState.activeId = null; 
+    dragState.activeResizeId = null; 
+    document.getElementById('pro-snap-v').style.display = 'none';
+    document.getElementById('pro-snap-h').style.display = 'none';
+    document.getElementById('img-snap-v').style.display = 'none';
+    document.getElementById('img-snap-h').style.display = 'none';
+}
+
+document.addEventListener('mousemove', dragMove); 
+document.addEventListener('touchmove', dragMove, {passive: false}); 
+document.addEventListener('mouseup', endDrag); 
+document.addEventListener('touchend', endDrag);
 
 // --- IMAGE EDITOR SPEZIFISCH ---
 function renderEditorImage(index) {
-    if (editorState.images.length === 0) return; document.getElementById('editor-bg').src = editorState.images[index]; document.getElementById('editor-img-counter').innerText = `${index + 1} / ${editorState.images.length}`; const layer = document.getElementById('editor-layer'); layer.innerHTML = ''; editorState.activeTextId = null; document.getElementById('text-controls').style.display = 'none'; editorState.edits[index].forEach(obj => createDOMTextElement(obj, false));
+    if (imageEditorState.images.length === 0) return; 
+    document.getElementById('editor-bg').src = imageEditorState.images[index]; 
+    document.getElementById('editor-img-counter').innerText = `${index + 1} / ${imageEditorState.images.length}`; 
+    const layer = document.getElementById('editor-layer'); 
+    layer.innerHTML = ''; 
+    imageEditorState.activeTextId = null; 
+    document.getElementById('text-controls').style.display = 'none'; 
+    imageEditorState.edits[index].forEach(obj => createDOMTextElement(obj, false));
 }
 
 function createDOMTextElement(obj, isVideo = false) {
@@ -1792,42 +1853,67 @@ function createDOMTextElement(obj, isVideo = false) {
         imgEl.style.height = 'auto';
         imgEl.style.pointerEvents = 'none';
         wrapper.appendChild(imgEl);
+    } else if (obj.type === 'blur') {
+        const blurEl = document.createElement('div');
+        blurEl.className = 'blur-box-content';
+        blurEl.style.width = obj.size + 'px';
+        blurEl.style.height = obj.size + 'px';
+        wrapper.appendChild(blurEl);
     } else {
-        const textEl = document.createElement('div'); textEl.className = 'text-content'; textEl.innerText = obj.text; textEl.style.fontSize = obj.size + 'px'; textEl.style.color = obj.color; textEl.style.fontFamily = obj.font || 'Arial, sans-serif'; wrapper.appendChild(textEl);
+        const textEl = document.createElement('div'); 
+        textEl.className = 'text-content'; 
+        textEl.innerText = obj.text; 
+        textEl.style.fontSize = obj.size + 'px'; 
+        textEl.style.color = obj.color; 
+        textEl.style.fontFamily = obj.font || 'Arial, sans-serif'; 
+        wrapper.appendChild(textEl);
     }
 
-    ['tl', 'tr', 'bl', 'br'].forEach(pos => { const h = document.createElement('div'); h.className = `resize-handle handle-${pos}`; h.addEventListener('mousedown', (e) => startResize(e, obj.id, pos, isVideo)); h.addEventListener('touchstart', (e) => startResize(e, obj.id, pos, isVideo), {passive: false}); wrapper.appendChild(h); });
-    wrapper.addEventListener('mousedown', (e) => startDrag(e, obj.id, isVideo)); wrapper.addEventListener('touchstart', (e) => startDrag(e, obj.id, isVideo), {passive: false}); layer.appendChild(wrapper);
+    ['tl', 'tr', 'bl', 'br'].forEach(pos => { 
+        const h = document.createElement('div'); 
+        h.className = `resize-handle handle-${pos}`; 
+        h.addEventListener('mousedown', (e) => startResize(e, obj.id, pos, isVideo)); 
+        h.addEventListener('touchstart', (e) => startResize(e, obj.id, pos, isVideo), {passive: false}); 
+        wrapper.appendChild(h); 
+    });
+    
+    wrapper.addEventListener('mousedown', (e) => startDrag(e, obj.id, isVideo)); 
+    wrapper.addEventListener('touchstart', (e) => startDrag(e, obj.id, isVideo), {passive: false}); 
+    layer.appendChild(wrapper);
 }
 
 function selectText(id) { 
-    editorState.activeTextId = id; 
+    imageEditorState.activeTextId = id; 
     document.querySelectorAll('#editor-layer .draggable-text').forEach(el => el.classList.remove('active')); 
-    const obj = editorState.edits[editorState.currentIndex].find(t => t.id === id); 
+    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id); 
     if(!obj) return; 
+    
     document.getElementById('drag-txt-' + id).classList.add('active'); 
     document.getElementById('text-controls').style.display = 'block'; 
     document.getElementById('text-ctrl-input').value = obj.text || ''; 
     document.getElementById('text-ctrl-size').value = obj.size; 
     document.getElementById('text-ctrl-rot').value = obj.rotation; 
     document.getElementById('text-ctrl-font').value = obj.font || 'Arial, sans-serif'; 
+    
     if(obj.type === 'sticker') {
         document.getElementById('text-ctrl-input').style.display = 'none';
-        document.getElementById('text-ctrl-font').style.display = 'none';
+        document.getElementById('img-font-group').style.display = 'none';
+        document.getElementById('img-color-group').style.display = 'none';
     } else {
         document.getElementById('text-ctrl-input').style.display = 'block';
-        document.getElementById('text-ctrl-font').style.display = 'block';
+        document.getElementById('img-font-group').style.display = 'block';
+        document.getElementById('img-color-group').style.display = 'block';
     }
 }
-document.getElementById('editor-workspace').addEventListener('click', (e) => { if (!e.target.closest('.draggable-text')) { editorState.activeTextId = null; document.querySelectorAll('#editor-layer .draggable-text').forEach(el => el.classList.remove('active')); document.getElementById('text-controls').style.display = 'none'; } });
+document.getElementById('editor-workspace').addEventListener('click', (e) => { if (!e.target.closest('.draggable-text')) { imageEditorState.activeTextId = null; document.querySelectorAll('#editor-layer .draggable-text').forEach(el => el.classList.remove('active')); document.getElementById('text-controls').style.display = 'none'; } });
 
-document.getElementById('text-ctrl-input').addEventListener('input', (e) => { if(!editorState.activeTextId) return; const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId); if(obj.type!=='sticker'){ obj.text = e.target.value; document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').innerText = obj.text; } });
-document.getElementById('text-ctrl-size').addEventListener('input', (e) => { if(!editorState.activeTextId) return; const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId); obj.size = e.target.value; const el = document.getElementById('drag-txt-' + obj.id); if(obj.type==='sticker'){ el.querySelector('.sticker-content').style.width = obj.size + 'px'; } else { el.querySelector('.text-content').style.fontSize = obj.size + 'px'; } });
-document.getElementById('text-ctrl-rot').addEventListener('input', (e) => { if(!editorState.activeTextId) return; const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId); obj.rotation = e.target.value; document.getElementById('drag-txt-' + obj.id).style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`; });
-document.getElementById('text-ctrl-font').addEventListener('change', (e) => { if(!editorState.activeTextId) return; const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId); if(obj.type!=='sticker'){ obj.font = e.target.value; document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.fontFamily = obj.font; } });
-document.querySelectorAll('#text-controls .color-dot').forEach(dot => { dot.addEventListener('click', (e) => { if(!editorState.activeTextId) return; const color = e.target.dataset.color; const obj = editorState.edits[editorState.currentIndex].find(t => t.id === editorState.activeTextId); if(obj.type!=='sticker'){ obj.color = color; document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.color = color; } }); });
-document.getElementById('btn-delete-text').addEventListener('click', () => { if(!editorState.activeTextId) return; editorState.edits[editorState.currentIndex] = editorState.edits[editorState.currentIndex].filter(t => t.id !== editorState.activeTextId); document.getElementById('drag-txt-' + editorState.activeTextId).remove(); editorState.activeTextId = null; document.getElementById('text-controls').style.display = 'none'; });
-document.getElementById('btn-add-text').addEventListener('click', () => { const workspace = document.getElementById('editor-workspace'); const newObj = { id: Date.now(), type: 'text', text: "Neuer Text", x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 24, rotation: 0, color: '#ffffff', font: 'Arial, sans-serif' }; editorState.edits[editorState.currentIndex].push(newObj); createDOMTextElement(newObj, false); selectText(newObj.id); });
+document.getElementById('text-ctrl-input').addEventListener('input', (e) => { if(!imageEditorState.activeTextId) return; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); if(obj.type!=='sticker'){ obj.text = e.target.value; document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').innerText = obj.text; } });
+document.getElementById('text-ctrl-size').addEventListener('input', (e) => { if(!imageEditorState.activeTextId) return; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); obj.size = e.target.value; const el = document.getElementById('drag-txt-' + obj.id); if(obj.type==='sticker'){ el.querySelector('.sticker-content').style.width = obj.size + 'px'; } else { el.querySelector('.text-content').style.fontSize = obj.size + 'px'; } });
+document.getElementById('text-ctrl-rot').addEventListener('input', (e) => { if(!imageEditorState.activeTextId) return; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); obj.rotation = e.target.value; document.getElementById('drag-txt-' + obj.id).style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`; });
+document.getElementById('text-ctrl-font').addEventListener('change', (e) => { if(!imageEditorState.activeTextId) return; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); if(obj.type!=='sticker'){ obj.font = e.target.value; document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.fontFamily = obj.font; } });
+document.querySelectorAll('#text-controls .color-dot').forEach(dot => { dot.addEventListener('click', (e) => { if(!imageEditorState.activeTextId) return; const color = e.target.dataset.color; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); if(obj.type!=='sticker'){ obj.color = color; document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.color = color; } }); });
+document.getElementById('btn-delete-text').addEventListener('click', () => { if(!imageEditorState.activeTextId) return; imageEditorState.edits[imageEditorState.currentIndex] = imageEditorState.edits[imageEditorState.currentIndex].filter(t => t.id !== imageEditorState.activeTextId); document.getElementById('drag-txt-' + imageEditorState.activeTextId).remove(); imageEditorState.activeTextId = null; document.getElementById('text-controls').style.display = 'none'; });
+document.getElementById('btn-add-text').addEventListener('click', () => { const workspace = document.getElementById('editor-workspace'); const newObj = { id: Date.now(), type: 'text', text: "Neuer Text", x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 24, rotation: 0, color: '#ffffff', font: 'Arial, sans-serif' }; imageEditorState.edits[imageEditorState.currentIndex].push(newObj); createDOMTextElement(newObj, false); selectText(newObj.id); });
 
 document.getElementById('sticker-upload-input').addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -1836,7 +1922,7 @@ document.getElementById('sticker-upload-input').addEventListener('change', (e) =
     reader.onload = function(event) {
         const workspace = document.getElementById('editor-workspace');
         const newObj = { id: Date.now(), type: 'sticker', src: event.target.result, x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 100, rotation: 0 };
-        editorState.edits[editorState.currentIndex].push(newObj); 
+        imageEditorState.edits[imageEditorState.currentIndex].push(newObj); 
         createDOMTextElement(newObj, false); 
         selectText(newObj.id);
         document.getElementById('sticker-upload-input').value = '';
@@ -1844,8 +1930,8 @@ document.getElementById('sticker-upload-input').addEventListener('change', (e) =
     reader.readAsDataURL(file);
 });
 
-document.getElementById('btn-prev-img').addEventListener('click', () => { if (editorState.currentIndex > 0) { editorState.currentIndex--; renderEditorImage(editorState.currentIndex); } });
-document.getElementById('btn-next-img').addEventListener('click', () => { if (editorState.currentIndex < editorState.images.length - 1) { editorState.currentIndex++; renderEditorImage(editorState.currentIndex); } });
+document.getElementById('btn-prev-img').addEventListener('click', () => { if (imageEditorState.currentIndex > 0) { imageEditorState.currentIndex--; renderEditorImage(imageEditorState.currentIndex); } });
+document.getElementById('btn-next-img').addEventListener('click', () => { if (imageEditorState.currentIndex < imageEditorState.images.length - 1) { imageEditorState.currentIndex++; renderEditorImage(imageEditorState.currentIndex); } });
 
 
 // --- PRO VIDEO EDITOR OVERLAYS ---
@@ -1854,18 +1940,24 @@ function selectProOverlay(id) {
     document.querySelectorAll('#pro-editor-layer .draggable-text').forEach(el => el.classList.remove('active')); 
     const obj = proEditorState.overlays.find(t => t.id === id); 
     if(!obj) return; 
+    
     document.getElementById('pro-drag-txt-' + id).classList.add('active'); 
     document.getElementById('pro-text-controls').style.display = 'block'; 
     document.getElementById('pro-text-ctrl-input').value = obj.text || ''; 
     document.getElementById('pro-text-ctrl-size').value = obj.size; 
     document.getElementById('pro-text-ctrl-rot').value = obj.rotation; 
     document.getElementById('pro-text-ctrl-font').value = obj.font || 'Arial, sans-serif'; 
-    if(obj.type === 'sticker') {
+    document.getElementById('pro-overlay-start').value = obj.start || 0;
+    document.getElementById('pro-overlay-end').value = obj.end || (proEditorState.end || 10);
+
+    if(obj.type === 'sticker' || obj.type === 'blur') {
         document.getElementById('pro-text-ctrl-input').style.display = 'none';
-        document.getElementById('pro-text-ctrl-font').style.display = 'none';
+        document.getElementById('pro-font-group').style.display = 'none';
+        document.getElementById('pro-color-group').style.display = 'none';
     } else {
         document.getElementById('pro-text-ctrl-input').style.display = 'block';
-        document.getElementById('pro-text-ctrl-font').style.display = 'block';
+        document.getElementById('pro-font-group').style.display = 'flex';
+        document.getElementById('pro-color-group').style.display = 'block';
     }
 }
 
@@ -1879,7 +1971,15 @@ document.getElementById('pro-editor-workspace').addEventListener('click', (e) =>
 
 document.getElementById('btn-pro-add-text').addEventListener('click', () => { 
     const workspace = document.getElementById('pro-editor-workspace'); 
-    const newObj = { id: Date.now(), type: 'text', text: "Video Text", x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 40, rotation: 0, color: '#ffffff', font: 'Arial, sans-serif' }; 
+    const newObj = { id: Date.now(), type: 'text', text: "Video Text", x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 40, rotation: 0, color: '#ffffff', font: 'Arial, sans-serif', start: 0, end: proEditorState.end || 10 }; 
+    proEditorState.overlays.push(newObj); 
+    createDOMTextElement(newObj, true); 
+    selectProOverlay(newObj.id); 
+});
+
+document.getElementById('btn-pro-add-blur').addEventListener('click', () => { 
+    const workspace = document.getElementById('pro-editor-workspace'); 
+    const newObj = { id: Date.now(), type: 'blur', x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 100, rotation: 0, start: 0, end: proEditorState.end || 10 }; 
     proEditorState.overlays.push(newObj); 
     createDOMTextElement(newObj, true); 
     selectProOverlay(newObj.id); 
@@ -1891,7 +1991,7 @@ document.getElementById('pro-sticker-upload-input').addEventListener('change', (
     const reader = new FileReader();
     reader.onload = function(event) {
         const workspace = document.getElementById('pro-editor-workspace');
-        const newObj = { id: Date.now(), type: 'sticker', src: event.target.result, x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 100, rotation: 0 };
+        const newObj = { id: Date.now(), type: 'sticker', src: event.target.result, x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 100, rotation: 0, start: 0, end: proEditorState.end || 10 };
         proEditorState.overlays.push(newObj); 
         createDOMTextElement(newObj, true); 
         selectProOverlay(newObj.id);
@@ -1900,11 +2000,13 @@ document.getElementById('pro-sticker-upload-input').addEventListener('change', (
     reader.readAsDataURL(file);
 });
 
-document.getElementById('pro-text-ctrl-input').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); if(obj.type!=='sticker'){ obj.text = e.target.value; document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').innerText = obj.text; } });
-document.getElementById('pro-text-ctrl-size').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); obj.size = e.target.value; const el = document.getElementById('pro-drag-txt-' + obj.id); if(obj.type==='sticker'){ el.querySelector('.sticker-content').style.width = obj.size + 'px'; } else { el.querySelector('.text-content').style.fontSize = obj.size + 'px'; } });
+document.getElementById('pro-overlay-start').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); obj.start = parseFloat(e.target.value); });
+document.getElementById('pro-overlay-end').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); obj.end = parseFloat(e.target.value); });
+document.getElementById('pro-text-ctrl-input').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); if(obj.type==='text'){ obj.text = e.target.value; document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').innerText = obj.text; } });
+document.getElementById('pro-text-ctrl-size').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); obj.size = e.target.value; const el = document.getElementById('pro-drag-txt-' + obj.id); if(obj.type!=='text'){ el.children[0].style.width = obj.size + 'px'; if(obj.type==='blur') el.children[0].style.height = obj.size+'px'; } else { el.querySelector('.text-content').style.fontSize = obj.size + 'px'; } });
 document.getElementById('pro-text-ctrl-rot').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); obj.rotation = e.target.value; document.getElementById('pro-drag-txt-' + obj.id).style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`; });
-document.getElementById('pro-text-ctrl-font').addEventListener('change', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); if(obj.type!=='sticker'){ obj.font = e.target.value; document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').style.fontFamily = obj.font; } });
-document.querySelectorAll('.pro-color-dot').forEach(dot => { dot.addEventListener('click', (e) => { if(!proEditorState.activeTextId) return; const color = e.target.dataset.color; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); if(obj.type!=='sticker'){ obj.color = color; document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').style.color = color; } }); });
+document.getElementById('pro-text-ctrl-font').addEventListener('change', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); if(obj.type==='text'){ obj.font = e.target.value; document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').style.fontFamily = obj.font; } });
+document.querySelectorAll('.pro-color-dot').forEach(dot => { dot.addEventListener('click', (e) => { if(!proEditorState.activeTextId) return; const color = e.target.dataset.color; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); if(obj.type==='text'){ obj.color = color; document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').style.color = color; } }); });
 document.getElementById('btn-pro-delete-text').addEventListener('click', () => { if(!proEditorState.activeTextId) return; proEditorState.overlays = proEditorState.overlays.filter(t => t.id !== proEditorState.activeTextId); document.getElementById('pro-drag-txt-' + proEditorState.activeTextId).remove(); proEditorState.activeTextId = null; document.getElementById('pro-text-controls').style.display = 'none'; });
 
 
@@ -1957,6 +2059,9 @@ document.getElementById('up-file').addEventListener('change', async function(e) 
             proTrimEnd.value = dur; 
             document.getElementById('pro-val-end').innerText = dur.toFixed(1);
             
+            document.getElementById('pro-overlay-start').max = dur;
+            document.getElementById('pro-overlay-end').max = dur;
+
             proEditorState.end = dur;
             proEditorState.start = 0;
             proEditorState.filter = 'none';
@@ -1975,21 +2080,24 @@ document.getElementById('up-file').addEventListener('change', async function(e) 
             document.getElementById('pro-audio-bg-name').innerText = "";
             document.getElementById('pro-speed-ctrl').value = "1";
             document.getElementById('pro-ratio-ctrl').value = "original";
+            document.getElementById('pro-audio-controls-extended').style.display = 'none';
+            proBgAudio.src = "";
             
             document.querySelectorAll('.pro-filter-btn').forEach(b => b.classList.remove('active'));
             document.querySelector('.pro-filter-btn[data-filter="none"]').classList.add('active');
             proPreview.style.filter = 'none';
+            proPreview.style.transform = 'scale(1)';
             
             generateTimelineFrames(proPreview);
         };
     } else {
         txt.innerText = `${files.length} Bild(er) ausgewählt`; icon.className = "fas fa-images"; icon.style.color = "#ffd700"; advancedVideoUi.style.display = 'none'; advancedImageUi.style.display = 'block';
-        editorState.images = []; editorState.edits = []; editorState.currentIndex = 0;
+        imageEditorState.images = []; imageEditorState.edits = []; imageEditorState.currentIndex = 0;
         for(let i = 0; i < files.length; i++) {
             if(files[i].size > 15 * 1024 * 1024) continue;
-            const reader = new FileReader(); await new Promise(resolve => { reader.onload = (event) => { editorState.images.push(event.target.result); editorState.edits.push([]); resolve(); }; reader.readAsDataURL(files[i]); });
+            const reader = new FileReader(); await new Promise(resolve => { reader.onload = (event) => { imageEditorState.images.push(event.target.result); imageEditorState.edits.push([]); resolve(); }; reader.readAsDataURL(files[i]); });
         }
-        if (editorState.images.length === 0) { showCustomAlert("Fehler", "Bilder konnten nicht geladen werden."); txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; return; }
+        if (imageEditorState.images.length === 0) { showCustomAlert("Fehler", "Bilder konnten nicht geladen werden."); txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; return; }
         renderEditorImage(0);
     }
 });
@@ -2038,40 +2146,60 @@ document.getElementById('btn-pro-play').addEventListener('click', () => {
     const vid = document.getElementById('pro-video-source');
     if (vid.paused) { 
         vid.play(); 
+        proBgAudio.play();
         document.getElementById('btn-pro-play').innerHTML = '<i class="fas fa-pause"></i>'; 
     } else { 
         vid.pause(); 
+        proBgAudio.pause();
         document.getElementById('btn-pro-play').innerHTML = '<i class="fas fa-play"></i>'; 
     }
 });
 
 document.getElementById('pro-video-source').addEventListener('timeupdate', (e) => {
-    document.getElementById('pro-time-current').innerText = e.target.currentTime.toFixed(1);
+    const curr = e.target.currentTime;
+    document.getElementById('pro-time-current').innerText = curr.toFixed(1);
+    
     const endVal = parseFloat(document.getElementById('pro-trim-end').value) || 0;
     const startVal = parseFloat(document.getElementById('pro-trim-start').value) || 0;
-    if(e.target.currentTime >= endVal && endVal > 0) {
-        e.target.pause();
-        document.getElementById('btn-pro-play').innerHTML = '<i class="fas fa-play"></i>';
+    
+    if(curr >= endVal && endVal > 0) {
         e.target.currentTime = startVal;
+        if(proBgAudio.src) {
+            proBgAudio.currentTime = parseFloat(document.getElementById('pro-audio-offset').value) || 0;
+        }
     }
+
+    // Keyframes Overlay Logic
+    proEditorState.overlays.forEach(obj => {
+        const el = document.getElementById('pro-drag-txt-' + obj.id);
+        if(el) {
+            if(curr >= obj.start && curr <= obj.end) {
+                el.style.display = 'block';
+            } else {
+                el.style.display = 'none';
+            }
+        }
+    });
 });
 
 function updateTrim() {
     let s = parseFloat(document.getElementById('pro-trim-start').value);
     let e = parseFloat(document.getElementById('pro-trim-end').value);
-    if(s >= e) s = e - 0.1;
+    if(s >= e) { s = e - 0.1; document.getElementById('pro-trim-start').value = s; }
     document.getElementById('pro-val-start').innerText = s.toFixed(1);
-    document.getElementById('pro-trim-start').value = s;
     document.getElementById('pro-video-source').currentTime = s;
     proEditorState.start = s;
+    
+    if(proBgAudio.src) {
+        proBgAudio.currentTime = parseFloat(document.getElementById('pro-audio-offset').value) || 0;
+    }
 }
 
 function updateTrimEnd() {
     let s = parseFloat(document.getElementById('pro-trim-start').value);
     let e = parseFloat(document.getElementById('pro-trim-end').value);
-    if(e <= s) e = s + 0.1;
+    if(e <= s) { e = s + 0.1; document.getElementById('pro-trim-end').value = e; }
     document.getElementById('pro-val-end').innerText = e.toFixed(1);
-    document.getElementById('pro-trim-end').value = e;
     document.getElementById('pro-video-source').currentTime = e - 0.1;
     proEditorState.end = e;
 }
@@ -2100,31 +2228,59 @@ document.querySelectorAll('.pro-filter-btn').forEach(btn => {
     });
 });
 
-document.getElementById('pro-speed-ctrl').addEventListener('change', (e) => { proEditorState.speed = parseFloat(e.target.value); });
-document.getElementById('pro-ratio-ctrl').addEventListener('change', (e) => { proEditorState.ratio = e.target.value; });
+document.getElementById('pro-speed-ctrl').addEventListener('change', (e) => { 
+    proEditorState.speed = parseFloat(e.target.value); 
+    document.getElementById('pro-video-source').playbackRate = proEditorState.speed;
+    proBgAudio.playbackRate = proEditorState.speed;
+});
+
+document.getElementById('pro-ratio-ctrl').addEventListener('change', (e) => { 
+    proEditorState.ratio = e.target.value; 
+    const ws = document.getElementById('pro-editor-workspace');
+    if(proEditorState.ratio === '9:16') {
+        ws.style.width = '196px'; // Aspect Ratio 9:16 Preview
+    } else if (proEditorState.ratio === '1:1') {
+        ws.style.width = '350px';
+    } else {
+        ws.style.width = '100%';
+    }
+});
 
 document.getElementById('pro-audio-orig-vol').addEventListener('input', (e) => {
     proEditorState.origVol = parseFloat(e.target.value);
     document.getElementById('pro-video-source').volume = proEditorState.origVol;
 });
-document.getElementById('pro-audio-bg-vol').addEventListener('input', (e) => { proEditorState.bgVol = parseFloat(e.target.value); });
+document.getElementById('pro-audio-bg-vol').addEventListener('input', (e) => { 
+    proEditorState.bgVol = parseFloat(e.target.value); 
+    proBgAudio.volume = proEditorState.bgVol;
+});
 
 document.getElementById('pro-audio-upload').addEventListener('change', (e) => {
     if(e.target.files.length > 0) {
-        document.getElementById('pro-audio-bg-name').innerText = e.target.files[0].name;
-        // Für den echten Upload wird das File-Objekt verwendet, wenn auf Speichern geklickt wird
+        const file = e.target.files[0];
+        document.getElementById('pro-audio-bg-name').innerText = file.name;
+        document.getElementById('pro-audio-controls-extended').style.display = 'block';
+        
+        const url = URL.createObjectURL(file);
+        proBgAudio.src = url;
+        proBgAudio.volume = proEditorState.bgVol;
+        
+        proBgAudio.onloadedmetadata = () => {
+            document.getElementById('pro-audio-offset').max = proBgAudio.duration;
+            document.getElementById('pro-audio-offset').value = 0;
+        };
     }
 });
 
 
 async function renderAndUploadImages() {
     let uploadedUrls = []; const ws = document.getElementById('editor-workspace'); const Cw = ws.clientWidth; const Ch = ws.clientHeight;
-    for (let i = 0; i < editorState.images.length; i++) {
-        const img = new Image(); await new Promise(res => { img.onload = res; img.src = editorState.images[i]; });
+    for (let i = 0; i < imageEditorState.images.length; i++) {
+        const img = new Image(); await new Promise(res => { img.onload = res; img.src = imageEditorState.images[i]; });
         const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const Nw = img.naturalWidth; const Nh = img.naturalHeight; canvas.width = Nw; canvas.height = Nh; ctx.drawImage(img, 0, 0, Nw, Nh);
         const scale = Math.min(Cw / Nw, Ch / Nh); const Dw = Nw * scale; const Dh = Nh * scale; const Ox = (Cw - Dw) / 2; const Oy = (Ch - Dh) / 2;
         
-        for (const obj of editorState.edits[i]) {
+        for (const obj of imageEditorState.edits[i]) {
             let nativeX = (obj.x - Ox) / scale; let nativeY = (obj.y - Oy) / scale; let nativeSize = obj.size / scale;
             ctx.save(); ctx.translate(nativeX, nativeY); ctx.rotate((obj.rotation * Math.PI) / 180); 
             
@@ -2132,6 +2288,11 @@ async function renderAndUploadImages() {
                 const sImg = new Image(); await new Promise(res => { sImg.onload = res; sImg.src = obj.src; });
                 const ratio = sImg.naturalHeight / sImg.naturalWidth;
                 ctx.drawImage(sImg, -nativeSize/2, -(nativeSize*ratio)/2, nativeSize, nativeSize*ratio);
+            } else if (obj.type === 'blur') {
+                // Blur in Canvas Image
+                ctx.filter = 'blur(15px)';
+                ctx.drawImage(canvas, nativeX - nativeSize/2, nativeY - nativeSize/2, nativeSize, nativeSize, -nativeSize/2, -nativeSize/2, nativeSize, nativeSize);
+                ctx.filter = 'none';
             } else {
                 ctx.font = `bold ${nativeSize}px ${obj.font || 'Arial, sans-serif'}`; ctx.fillStyle = obj.color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = nativeSize * 0.1; ctx.strokeText(obj.text, 0, 0); ctx.fillText(obj.text, 0, 0); 
             }
@@ -2146,7 +2307,6 @@ async function renderAndUploadImages() {
     return uploadedUrls;
 }
 
-// Hilfsfunktion: Wandelt Hex-Farbe in Cloudinary-Format um (#ff0050 -> rgb:ff0050)
 function hexToCloudinaryColor(hex) {
     if(hex && hex.startsWith('#')) return 'rgb:' + hex.substring(1);
     return hex || 'white';
@@ -2168,7 +2328,6 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
             const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: formData }); const data = await res.json();
             if (!data.secure_url) throw new Error("Upload fehlgeschlagen.");
             
-            // PRO VIDEO EDITOR: Transformationen generieren
             let transform = 'q_auto,f_auto,vc_auto'; 
             const tStart = proEditorState.start; 
             const tEnd = proEditorState.end; 
@@ -2198,8 +2357,7 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
                 extraTransforms.push(`e_volume:${volPercent}`);
             }
 
-            // Audio Upload (Cloudinary erlaubt L_audio, das ist aber für eine Client-Side App etwas komplex, da die Audio-Datei vorher als raw/video auf Cloudinary liegen muss.
-            // Für diese Iteration belassen wir es bei der UI-Demonstration oder laden es hoch, wenn eine Datei vorhanden ist:
+            // Audio Upload
             const audioFiles = document.getElementById('pro-audio-upload').files;
             if(audioFiles.length > 0) {
                 status.innerText = "Lade Hintergrundmusik hoch...";
@@ -2209,34 +2367,36 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
                 if(aData.public_id) {
                     let audioVolPercent = Math.round((proEditorState.bgVol - 1) * 100);
                     if(proEditorState.bgVol === 0) audioVolPercent = -100;
-                    extraTransforms.push(`l_video:${aData.public_id.replace(/\//g, ':')}/e_volume:${audioVolPercent}/fl_layer_apply`);
+                    const aStart = parseFloat(document.getElementById('pro-audio-offset').value) || 0;
+                    extraTransforms.push(`l_video:${aData.public_id.replace(/\//g, ':')}/e_volume:${audioVolPercent}/so_${aStart}/fl_layer_apply`);
                 }
                 status.innerText = "Wird gerendert und verarbeitet... Bitte warten!";
             }
 
-            // Overlays (Text / Sticker) einbrennen
-            // Da wir relative Positionen vom Canvas haben, konvertieren wir in Prozentwerte für Cloudinary
+            // Overlays (Text / Blur)
             const ws = document.getElementById('pro-editor-workspace'); 
             const cw = ws.clientWidth; const ch = ws.clientHeight;
             
             proEditorState.overlays.forEach(obj => {
-                let xPct = Math.round((obj.x / cw) * 100) / 100;
-                let yPct = Math.round((obj.y / ch) * 100) / 100;
-                // Cloudinary verlangt x/y als absolute Pixel (ausgehend vom Originalvideo) oder via Flags relativ. Wir nutzen einfache Center-Offsets oder ignorieren die exakte Skalierung für diesen Proxy.
-                // Ein robuster Weg: g_north_west, x_..., y_...
                 let ox = Math.round(obj.x);
                 let oy = Math.round(obj.y);
+                let timeStr = '';
+                if(obj.start > 0 || obj.end < dur) {
+                    timeStr = `,so_${obj.start},eo_${obj.end}`;
+                }
 
                 if(obj.type === 'text') {
                     const encodedText = encodeURIComponent(obj.text.trim());
                     const fName = obj.font.split(',')[0].replace(/'/g, '').replace(/ /g, '_');
                     const cColor = hexToCloudinaryColor(obj.color);
-                    extraTransforms.push(`l_text:${fName}_${obj.size}_bold:${encodedText},co_${cColor},a_${obj.rotation},g_north_west,x_${ox},y_${oy}`);
-                } else if(obj.type === 'sticker') {
-                    // Da Sticker base64 sind, müssten diese eigentlich zuerst nach Cloudinary geladen werden.
-                    // Für eine sofortige Integration nutzen wir das Sticker-Feature hier nur visuell im Frontend (wie im Image-Editor, wo wir canvas.toDataUrl machen).
-                    // Da wir beim Video keinen Canvas-Export machen können, müssten Sticker vorher hochgeladen werden.
-                    // Wir überspringen Sticker für den *direkten* Video-Render-Export in dieser Version, da es sonst zu komplexen asynchronen Uploads führt.
+                    extraTransforms.push(`l_text:${fName}_${obj.size}_bold:${encodedText},co_${cColor},a_${obj.rotation},g_north_west,x_${ox},y_${oy}${timeStr}`);
+                } else if (obj.type === 'blur') {
+                    // Cloudinary blur region
+                    let bw = Math.round(obj.size);
+                    let bh = Math.round(obj.size);
+                    let bx = Math.round(obj.x - bw/2);
+                    let by = Math.round(obj.y - bh/2);
+                    extraTransforms.push(`e_blur_region:800,w_${bw},h_${bh},x_${bx},y_${by}${timeStr}`);
                 }
             });
 
@@ -2253,12 +2413,12 @@ document.getElementById('submit-upload').addEventListener('click', async() => {
             await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
         }
         showToast("Erfolgreich veröffentlicht! 🎉"); document.getElementById('upload-modal').classList.remove('show');
-        document.getElementById('up-file').value = ''; document.getElementById('up-title').value = ''; document.getElementById('up-desc').value = ''; document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; document.querySelector('#up-file-btn i').style.color = "#aaa"; document.getElementById('video-advanced-editor').style.display = 'none'; document.getElementById('image-advanced-editor').style.display = 'none'; editorState.images = [];
+        document.getElementById('up-file').value = ''; document.getElementById('up-title').value = ''; document.getElementById('up-desc').value = ''; document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; document.querySelector('#up-file-btn i').style.color = "#aaa"; document.getElementById('video-advanced-editor').style.display = 'none'; document.getElementById('image-advanced-editor').style.display = 'none'; imageEditorState.images = []; proBgAudio.pause();
     } catch (e) { showCustomAlert("Upload Fehler", "Fehler! Evtl. falsches Format."); } finally { btn.disabled = false; status.innerText = ""; }
 });
 
 document.getElementById('open-upload').addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
-document.getElementById('close-upload').addEventListener('click', () => document.getElementById('upload-modal').classList.remove('show'));
+document.getElementById('close-upload').addEventListener('click', () => { document.getElementById('upload-modal').classList.remove('show'); proBgAudio.pause(); });
 document.getElementById('close-comments').addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
 document.getElementById('close-settings').addEventListener('click', () => document.getElementById('settings-modal').classList.remove('show'));
 document.getElementById('close-app-settings').addEventListener('click', () => document.getElementById('app-settings-modal').classList.remove('show'));

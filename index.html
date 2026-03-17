@@ -15,16 +15,6 @@
     <title>Phil Shorts</title>
     <meta name="description" content="Entdecke angesagte Kurzvideos, teile deine Stories und werde Teil der Community auf Phil Shorts!">
 
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://phil-shorts.vercel.app/">
-    <meta property="og:title" content="Phil Shorts">
-    <meta property="og:description" content="Entdecke angesagte Kurzvideos, teile deine Stories und werde Teil der Community auf Phil Shorts!">
-    <meta property="og:image" content="https://i.imgur.com/l1luc1q.png">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:url" content="https://phil-shorts.vercel.app/">
-    <meta name="twitter:title" content="Phil Shorts">
-    <meta name="twitter:description" content="Entdecke angesagte Kurzvideos, teile deine Stories und werde Teil der Community auf Phil Shorts!">
-    <meta name="twitter:image" content="https://i.imgur.com/l1luc1q.png">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <meta name="google-site-verification" content="zbjLs6-a2zAdVq8Jbm-vtjvE2vEfJ7QDa4Ac32eSdaI" />
@@ -65,8 +55,7 @@
                 <img src="https://i.imgur.com/l1luc1q.png" class="app-logo" alt="Logo">
                 <h2>Willkommen bei Phil Shorts</h2>
                 <p id="login-text" style="color: #aaa; margin-bottom: 30px; font-size: 14px;">Logge dich mit deinem offiziellen Google Account ein.</p>
-                <div id="g_id_onload" data-client_id="825368838802-830ev6a720t4hb5qrb7jo5de7orb4pr0.apps.googleusercontent.com" data-context="signin" data-ux_mode="popup" data-callback="handleGoogleLogin" data-auto_prompt="false">
-                </div>
+                <div id="g_id_onload" data-client_id="825368838802-830ev6a720t4hb5qrb7jo5de7orb4pr0.apps.googleusercontent.com" data-context="signin" data-ux_mode="popup" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
                 <div style="display: flex; justify-content: center; width: 100%;">
                     <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_black" data-text="signin_with" data-size="large" data-width="250"></div>
                 </div>
@@ -175,7 +164,6 @@
 
         <div id="view-profile" class="view">
             <audio id="profile-audio-player" loop style="display:none;"></audio>
-
             <div class="top-bar glass-nav" style="background: transparent; border-bottom: none;">
                 <i class="fas fa-chevron-left back-btn" onclick="switchView('feed')"></i>
                 <h3 id="profile-title" style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; text-shadow: 0 2px 5px black;">@username</h3>
@@ -278,8 +266,7 @@
             </div>
             <div class="modal-body" style="display: flex; flex-direction: column;">
                 <input type="text" id="giphy-search-input" class="comment-input" placeholder="GIF Suchen (Giphy)..." style="width: 100%; margin-bottom: 15px;">
-                <div id="giphy-results" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-                </div>
+                <div id="giphy-results" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;"></div>
             </div>
         </div>
 
@@ -290,8 +277,7 @@
                 <i class="fas fa-times close-modal" id="close-gift-modal"></i>
             </div>
             <div class="modal-body" style="background: rgba(0,0,0,0.5);">
-                <div class="gift-grid" id="gift-grid">
-                </div>
+                <div class="gift-grid" id="gift-grid"></div>
             </div>
         </div>
 
@@ -335,12 +321,10 @@
                 <div class="shop-tab" data-tab="shop-plus">Abonnements</div>
             </div>
             <div class="modal-body" style="background: rgba(0,0,0,0.5); padding: 15px;">
-
                 <div id="shop-borders" class="shop-content-section active">
                     <h4 style="margin-bottom: 15px; color: #aaa; font-size: 14px; text-transform: uppercase;">Profilrahmen</h4>
                     <div class="shop-items-grid" id="shop-borders-grid"></div>
                 </div>
-
                 <div id="shop-stories" class="shop-content-section" style="display: none; text-align: center;">
                     <div class="story-shop-card">
                         <i class="fas fa-camera-retro" style="font-size: 50px; color: #00f2fe; margin-bottom: 15px;"></i>
@@ -349,27 +333,15 @@
                         <button class="profile-action-btn" onclick="openStoryUpload()" style="width: 100%; font-size: 16px;"><i class="fas fa-coins" style="color: #ffd700;"></i> 1000 Coins</button>
                     </div>
                 </div>
-
                 <div id="shop-plus" class="shop-content-section" style="display: none;">
-                    <div class="phil-plus-banner">
-                        <i class="fas fa-star"></i> Phil Shorts+
-                    </div>
-
+                    <div class="phil-plus-banner"><i class="fas fa-star"></i> Phil Shorts+</div>
                     <div class="plus-tier-tabs">
                         <div class="plus-tier-tab active" onclick="switchPlusTier(1)">Plus</div>
                         <div class="plus-tier-tab" onclick="switchPlusTier(2)">Plus++</div>
                         <div class="plus-tier-tab" onclick="switchPlusTier(3)">Plus+++</div>
                     </div>
-
                     <div id="plus-tier-1" class="plus-tier-content active">
-                        <p style="text-align:center; color:#888; font-size:13px; margin-bottom:10px;">Der perfekte Einstieg (5 Features)</p>
-                        <ul class="plus-features-list">
-                            <li><i class="fas fa-check"></i> Exklusives Stern-Badge</li>
-                            <li><i class="fas fa-check"></i> Rot/Blauer Gradient-Name</li>
-                            <li><i class="fas fa-check"></i> 100 MB Video-Upload (statt 30 MB)</li>
-                            <li><i class="fas fa-check"></i> 48h Stories (statt 24h)</li>
-                            <li><i class="fas fa-check"></i> Priority VIP Support Tickets</li>
-                        </ul>
+                        <p style="text-align:center; color:#888; font-size:13px; margin-bottom:10px;">Der perfekte Einstieg</p>
                         <div class="plus-plan-card" onclick="buyPhilPlus(5, 5000, 1)">
                             <div>
                                 <h4>5 Tage</h4>
@@ -377,38 +349,9 @@
                             </div>
                             <div class="plus-price"><i class="fas fa-coins"></i> 5.000</div>
                         </div>
-                        <div class="plus-plan-card popular" onclick="buyPhilPlus(14, 12000, 1)">
-                            <div class="popular-badge">Beliebt</div>
-                            <div>
-                                <h4>14 Tage</h4>
-                                <p>Plus Stufe 1</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 12.000</div>
-                        </div>
-                        <div class="plus-plan-card" onclick="buyPhilPlus(30, 25000, 1)">
-                            <div>
-                                <h4>1 Monat</h4>
-                                <p>Plus Stufe 1</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 25.000</div>
-                        </div>
                     </div>
-
                     <div id="plus-tier-2" class="plus-tier-content" style="display:none;">
-                        <p style="text-align:center; color:#888; font-size:13px; margin-bottom:10px;">Für echte Creator (15 Features)</p>
-                        <ul class="plus-features-list">
-                            <li style="color:#00f2fe;"><i class="fas fa-plus-circle"></i> Alle Plus Features enthalten</li>
-                            <li><i class="fas fa-check"></i> Premium App-Themes (Deep Blue, Neon)</li>
-                            <li><i class="fas fa-check"></i> Exklusiver RGB Chroma Rahmen</li>
-                            <li><i class="fas fa-check"></i> GIFs (Giphy) in Kommentaren nutzen</li>
-                            <li><i class="fas fa-check"></i> Priorisierter Feed (Boost Algorithmus)</li>
-                            <li><i class="fas fa-check"></i> Längere Videos (bis zu 3 Minuten)</li>
-                            <li><i class="fas fa-check"></i> 2x Coins bei täglichen Belohnungen</li>
-                            <li><i class="fas fa-check"></i> Goldener DM Chat</li>
-                            <li><i class="fas fa-check"></i> 100% Werbefrei</li>
-                            <li><i class="fas fa-check"></i> Lesebestätigungen in DMs</li>
-                            <li><i class="fas fa-check"></i> Spezielle "Plus++"-Geschenke im Shop</li>
-                        </ul>
+                        <p style="text-align:center; color:#888; font-size:13px; margin-bottom:10px;">Für echte Creator</p>
                         <div class="plus-plan-card" onclick="buyPhilPlus(5, 15000, 2)">
                             <div>
                                 <h4>5 Tage</h4>
@@ -416,44 +359,9 @@
                             </div>
                             <div class="plus-price"><i class="fas fa-coins"></i> 15.000</div>
                         </div>
-                        <div class="plus-plan-card popular" onclick="buyPhilPlus(14, 35000, 2)">
-                            <div class="popular-badge">Beliebt</div>
-                            <div>
-                                <h4>14 Tage</h4>
-                                <p>Plus Stufe 2</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 35.000</div>
-                        </div>
-                        <div class="plus-plan-card" onclick="buyPhilPlus(30, 70000, 2)">
-                            <div>
-                                <h4>1 Monat</h4>
-                                <p>Plus Stufe 2</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 70.000</div>
-                        </div>
                     </div>
-
                     <div id="plus-tier-3" class="plus-tier-content" style="display:none;">
-                        <p style="text-align:center; color:#888; font-size:13px; margin-bottom:10px;">Werde zur Legende (30 Features)</p>
-                        <ul class="plus-features-list">
-                            <li style="color:#ffd700;"><i class="fas fa-plus-circle"></i> Alle Plus & Plus++ Features</li>
-                            <li><i class="fas fa-check"></i> Ghost Mode (Unsichtbare Profilaufrufe)</li>
-                            <li><i class="fas fa-check"></i> Pinned Comments (Kommentare anheften)</li>
-                            <li><i class="fas fa-check"></i> Animierte Profilbilder (GIFs)</li>
-                            <li><i class="fas fa-check"></i> Eigene Custom-Sticker</li>
-                            <li><i class="fas fa-check"></i> Erweiterte Video-Analytics</li>
-                            <li><i class="fas fa-check"></i> Profil-Song (Autoplay)</li>
-                            <li><i class="fas fa-check"></i> Custom Profile Colors</li>
-                            <li><i class="fas fa-check"></i> Auto-Translate Comments</li>
-                            <li><i class="fas fa-check"></i> Exklusives App Icon</li>
-                            <li><i class="fas fa-check"></i> Videos ohne Watermark speichern</li>
-                            <li><i class="fas fa-check"></i> Links in Stories (Swipe Up)</li>
-                            <li><i class="fas fa-check"></i> Bilder in DMs versenden</li>
-                            <li><i class="fas fa-check"></i> Live Streaming Zugang (Beta)</li>
-                            <li><i class="fas fa-check"></i> Multi-Account Fast Switch</li>
-                            <li><i class="fas fa-check"></i> Geheime Profil-Badges</li>
-                            <li><i class="fas fa-check"></i> Custom Creator Rahmen (Farbe & Gradient wählbar)</li>
-                        </ul>
+                        <p style="text-align:center; color:#888; font-size:13px; margin-bottom:10px;">Werde zur Legende</p>
                         <div class="plus-plan-card" onclick="buyPhilPlus(5, 40000, 3)">
                             <div>
                                 <h4>5 Tage</h4>
@@ -461,24 +369,8 @@
                             </div>
                             <div class="plus-price"><i class="fas fa-coins"></i> 40.000</div>
                         </div>
-                        <div class="plus-plan-card popular" onclick="buyPhilPlus(14, 90000, 3)">
-                            <div class="popular-badge">Legende</div>
-                            <div>
-                                <h4>14 Tage</h4>
-                                <p>Plus Stufe 3</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 90.000</div>
-                        </div>
-                        <div class="plus-plan-card" onclick="buyPhilPlus(30, 180000, 3)">
-                            <div>
-                                <h4>1 Monat</h4>
-                                <p>Plus Stufe 3</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 180.000</div>
-                        </div>
                     </div>
                 </div>
-
             </div>
         </div>
 
@@ -496,7 +388,6 @@
                     </div>
                 </div>
                 <input type="text" id="up-story-link" class="comment-input" placeholder="Link hinzufügen (nur Plus+++)..." style="width: 100%; margin-top: 10px; display: none;">
-
                 <img id="story-preview-img" style="width: 100%; height: 200px; object-fit: contain; border-radius: 10px; display: none; margin-bottom: 15px; border: 1px solid #333; margin-top: 15px;">
                 <p id="story-upload-status" style="text-align: center; font-size: 14px; font-weight: bold; color: #ff0050;"></p>
                 <button id="submit-story-upload" class="profile-action-btn" style="width:100%; min-height: 56px; font-size:16px;">Story posten</button>
@@ -517,10 +408,8 @@
             <div style="position: absolute; top: 0; left: 0; width: 30%; height: 100%; z-index: 4002;" onclick="prevStory()"></div>
             <div style="position: absolute; top: 0; right: 0; width: 70%; height: 100%; z-index: 4002;" onclick="nextStory()"></div>
             <img id="sv-img" src="" style="width: 100%; height: 80%; object-fit: contain; margin-top: 60px; position: relative; z-index: 4001;">
-
             <a id="sv-link-btn" href="#" target="_blank" class="profile-action-btn" style="position: absolute; bottom: 30px; z-index: 4006; display: none; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); color: white; border: 1px solid white;"><i class="fas fa-link"></i> Link öffnen</a>
         </div>
-
 
         <div id="video-details-modal" class="modal">
             <div class="modal-header">
@@ -542,13 +431,11 @@
                 <h4 style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Kommentare</h4><i class="fas fa-times close-modal" id="close-comments"></i>
             </div>
             <div class="modal-body" id="comment-list" style="padding-bottom: 0;"></div>
-
             <div class="modal-footer" style="flex-direction: column; align-items: stretch; padding-top: 5px;">
                 <div id="pending-gif-preview" style="display:none; position: relative; max-width: 120px; margin-bottom: 10px;">
                     <img id="pending-gif-img" src="" style="width: 100%; border-radius: 8px; border: 1px solid #444;">
                     <i class="fas fa-times-circle" id="remove-pending-gif" style="position: absolute; top: -5px; right: -5px; color: #ff4444; font-size: 20px; cursor: pointer; background: black; border-radius: 50%;"></i>
                 </div>
-
                 <div style="display: flex; gap: 10px; align-items: center; width: 100%;">
                     <input type="text" id="new-comment-input" placeholder="Sag etwas Nettes... (@mention)" class="comment-input">
                     <button id="btn-gif-comment" class="comment-submit" style="background:#333; margin-right:5px; color: #fff;"><i class="fas fa-photo-video"></i></button>
@@ -586,12 +473,18 @@
                 <div id="video-advanced-editor" style="display:none; background: rgba(255, 255, 255, 0.05); padding:15px; border-radius:15px; border:1px solid #333; margin-top: 10px;">
                     <label style="color:#00f2fe; font-size:14px; font-weight:bold; margin-bottom:15px; display:block;"><i class="fas fa-film"></i> Pro Video Editor</label>
 
-                    <div id="pro-editor-workspace" style="position: relative; width: 100%; height: 350px; background: #000; border-radius: 10px; overflow: hidden; margin-bottom: 15px; border: 1px solid #222; touch-action: none;">
-                        <video id="pro-video-source" style="position: absolute; width: 100%; height: 100%; object-fit: contain; z-index: 1;" playsinline crossorigin="anonymous"></video>
-                        <canvas id="pro-video-canvas" style="position: absolute; width: 100%; height: 100%; object-fit: contain; z-index: 2; pointer-events: none;"></canvas>
+                    <div style="width:100%; background:#000; border-radius:10px; border: 1px solid #222; margin-bottom:15px; padding: 10px 0;">
+                        <div id="pro-editor-workspace" style="position: relative; width: 100%; height: 350px; margin: 0 auto; overflow: hidden; touch-action: none; transition: width 0.3s, aspect-ratio 0.3s;">
+                            <div id="pro-snap-v" class="snap-line-v"></div>
+                            <div id="pro-snap-h" class="snap-line-h"></div>
 
-                        <div id="pro-editor-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 10;"></div>
+                            <video id="pro-video-source" style="position: absolute; width: 100%; height: 100%; object-fit: contain; z-index: 1;" playsinline crossorigin="anonymous"></video>
+
+                            <div id="pro-editor-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 10;"></div>
+                        </div>
                     </div>
+
+                    <audio id="pro-audio-player" style="display:none;"></audio>
 
                     <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; justify-content: space-between;">
                         <button id="btn-pro-play" class="profile-action-btn edit-btn" style="min-width: 50px; min-height: 40px; padding: 0; border-radius: 50%;"><i class="fas fa-play"></i></button>
@@ -601,14 +494,14 @@
                     </div>
 
                     <div class="shop-tabs" style="margin-bottom: 15px; border-radius: 10px; overflow: hidden; background: rgba(0,0,0,0.5);">
-                        <div class="shop-tab pro-tab-btn active" data-tab="pro-tab-trim" onclick="switchProEditorTab('pro-tab-trim')"><i class="fas fa-cut"></i></div>
-                        <div class="shop-tab pro-tab-btn" data-tab="pro-tab-audio" onclick="switchProEditorTab('pro-tab-audio')"><i class="fas fa-music"></i></div>
-                        <div class="shop-tab pro-tab-btn" data-tab="pro-tab-fx" onclick="switchProEditorTab('pro-tab-fx')"><i class="fas fa-magic"></i></div>
-                        <div class="shop-tab pro-tab-btn" data-tab="pro-tab-overlay" onclick="switchProEditorTab('pro-tab-overlay')"><i class="fas fa-layer-group"></i></div>
+                        <div class="shop-tab pro-tab-btn active" data-tab="pro-tab-trim" onclick="switchProEditorTab('pro-tab-trim')"><i class="fas fa-cut"></i> Trim</div>
+                        <div class="shop-tab pro-tab-btn" data-tab="pro-tab-audio" onclick="switchProEditorTab('pro-tab-audio')"><i class="fas fa-music"></i> Audio</div>
+                        <div class="shop-tab pro-tab-btn" data-tab="pro-tab-fx" onclick="switchProEditorTab('pro-tab-fx')"><i class="fas fa-magic"></i> FX</div>
+                        <div class="shop-tab pro-tab-btn" data-tab="pro-tab-overlay" onclick="switchProEditorTab('pro-tab-overlay')"><i class="fas fa-layer-group"></i> Layer</div>
                     </div>
 
                     <div id="pro-tab-trim" class="pro-tab-content active" style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #222;">
-                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:10px;">Zuschneiden (Trim)</label>
+                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:10px;">Video Schneiden</label>
                         <div id="pro-timeline-container" style="position: relative; height: 50px; background: #111; border-radius: 5px; margin-bottom: 15px; overflow: hidden; border: 1px solid #333;">
                             <div id="pro-timeline-frames" style="display:flex; height: 100%; width: 100%; opacity: 0.5;"></div>
                             <input type="range" id="pro-trim-start" min="0" value="0" step="0.1" class="trim-slider slider-blue" style="position: absolute; width: 100%; top: 20px; z-index: 2; background: transparent;">
@@ -629,24 +522,29 @@
                     </div>
 
                     <div id="pro-tab-audio" class="pro-tab-content" style="display:none; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #222;">
-                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;"><i class="fas fa-volume-up"></i> Originalton Lautstärke</label>
+                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;"><i class="fas fa-video"></i> Video Ton Lautstärke</label>
                         <input type="range" id="pro-audio-orig-vol" min="0" max="1" step="0.05" value="1" class="trim-slider slider-blue" style="width: 100%; margin-bottom: 15px;">
 
-                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;"><i class="fas fa-music"></i> Hintergrundmusik</label>
+                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;"><i class="fas fa-music"></i> Eigene Musik hinzufügen</label>
                         <input type="file" id="pro-audio-upload" accept="audio/*" style="display:none;">
-                        <button class="profile-action-btn edit-btn" onclick="document.getElementById('pro-audio-upload').click()" style="width: 100%; margin-bottom: 10px; font-size:14px;"><i class="fas fa-upload"></i> Audio wählen</button>
+                        <button class="profile-action-btn edit-btn" onclick="document.getElementById('pro-audio-upload').click()" style="width: 100%; margin-bottom: 10px; font-size:14px;"><i class="fas fa-upload"></i> Musik wählen</button>
                         <div id="pro-audio-bg-name" style="font-size:11px; color:#00f2fe; margin-bottom:10px; text-align:center;"></div>
 
-                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;">Musik Lautstärke</label>
-                        <input type="range" id="pro-audio-bg-vol" min="0" max="1" step="0.05" value="0.5" class="trim-slider slider-red" style="width: 100%;">
+                        <div id="pro-audio-controls-extended" style="display:none;">
+                            <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;">Musik Lautstärke</label>
+                            <input type="range" id="pro-audio-bg-vol" min="0" max="1" step="0.05" value="0.5" class="trim-slider slider-red" style="width: 100%; margin-bottom: 15px;">
+
+                            <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;">Startpunkt der Musik</label>
+                            <input type="range" id="pro-audio-offset" min="0" value="0" step="0.1" class="trim-slider slider-blue" style="width: 100%;">
+                        </div>
                     </div>
 
                     <div id="pro-tab-fx" class="pro-tab-content" style="display:none; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #222;">
                         <div style="display:flex; gap:15px; margin-bottom:15px;">
                             <div style="flex:1;">
-                                <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Geschwindigkeit</label>
+                                <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Tempo</label>
                                 <select id="pro-speed-ctrl" class="comment-input" style="width: 100%; background: #111; color: white; padding: 8px; border-radius: 10px;">
-                                    <option value="0.5">0.5x (Slow Mo)</option>
+                                    <option value="0.5">0.5x (Slow)</option>
                                     <option value="1" selected>1.0x (Normal)</option>
                                     <option value="1.5">1.5x</option>
                                     <option value="2">2.0x (Fast)</option>
@@ -662,12 +560,12 @@
                             </div>
                         </div>
 
-                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:10px;"><i class="fas fa-magic"></i> Farbfilter</label>
+                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:10px;"><i class="fas fa-magic"></i> Filter</label>
                         <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px;">
-                            <div class="pro-filter-btn active" data-filter="none">Normal</div>
+                            <div class="pro-filter-btn active" data-filter="none">Aus</div>
                             <div class="pro-filter-btn" data-filter="grayscale">S/W</div>
                             <div class="pro-filter-btn" data-filter="sepia">Sepia</div>
-                            <div class="pro-filter-btn" data-filter="blur">Blur</div>
+                            <div class="pro-filter-btn" data-filter="blur">Global Blur</div>
                             <div class="pro-filter-btn" data-filter="contrast">Kontrast</div>
                             <div class="pro-filter-btn" data-filter="vintage">Vintage</div>
                         </div>
@@ -675,15 +573,27 @@
 
                     <div id="pro-tab-overlay" class="pro-tab-content" style="display:none; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; border: 1px solid #222;">
                         <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                            <button id="btn-pro-add-text" class="profile-action-btn" style="flex: 1; background: white; color: black; min-height: 40px;"><i class="fas fa-font"></i> Text</button>
-                            <button class="profile-action-btn" onclick="document.getElementById('pro-sticker-upload-input').click()" style="flex: 1; background: #ffd700; color: black; min-height: 40px;"><i class="fas fa-sticky-note"></i> Sticker</button>
+                            <button id="btn-pro-add-text" class="profile-action-btn" style="flex: 1; background: white; color: black; min-height: 40px; padding:0;"><i class="fas fa-font"></i> Text</button>
+                            <button class="profile-action-btn" onclick="document.getElementById('pro-sticker-upload-input').click()" style="flex: 1; background: #ffd700; color: black; min-height: 40px; padding:0;"><i class="fas fa-sticky-note"></i> Sticker</button>
                             <input type="file" id="pro-sticker-upload-input" accept="image/*" style="display:none;">
+                            <button id="btn-pro-add-blur" class="profile-action-btn" style="flex: 1; background: rgba(255,255,255,0.2); color: white; min-height: 40px; padding:0;"><i class="fas fa-droplet"></i> Blur</button>
                         </div>
 
                         <div id="pro-text-controls" style="display: none; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; border: 1px solid #444;">
+
+                            <div style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #333;">
+                                <label style="font-size: 12px; color: #00f2fe; display:block; margin-bottom:5px;"><i class="fas fa-clock"></i> Anzeigezeitraum (Frames)</label>
+                                <div style="display:flex; gap:10px; align-items: center;">
+                                    <span style="font-size:10px; color:#aaa;">Von:</span>
+                                    <input type="range" id="pro-overlay-start" min="0" step="0.1" class="trim-slider slider-blue" style="flex:1;">
+                                    <span style="font-size:10px; color:#aaa;">Bis:</span>
+                                    <input type="range" id="pro-overlay-end" min="0" step="0.1" class="trim-slider slider-red" style="flex:1;">
+                                </div>
+                            </div>
+
                             <input type="text" id="pro-text-ctrl-input" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5);" placeholder="Textinhalt">
 
-                            <div style="display:flex; gap:10px;">
+                            <div id="pro-font-group" style="display:flex; gap:10px;">
                                 <div style="flex:1;">
                                     <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Schriftart</label>
                                     <select id="pro-text-ctrl-font" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5); color: white; padding: 10px; border-radius: 10px; outline: none;">
@@ -695,19 +605,21 @@
                                 </div>
                             </div>
 
-                            <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Farbe</label>
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 15px; gap: 5px;">
-                                <div class="pro-color-dot color-dot" style="background: white;" data-color="#ffffff"></div>
-                                <div class="pro-color-dot color-dot" style="background: black;" data-color="#000000"></div>
-                                <div class="pro-color-dot color-dot" style="background: #ff0050;" data-color="#ff0050"></div>
-                                <div class="pro-color-dot color-dot" style="background: #00f2fe;" data-color="#00f2fe"></div>
-                                <div class="pro-color-dot color-dot" style="background: #ffd700;" data-color="#ffd700"></div>
-                                <div class="pro-color-dot color-dot" style="background: #39ff14;" data-color="#39ff14"></div>
+                            <div id="pro-color-group">
+                                <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Farbe</label>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 15px; gap: 5px;">
+                                    <div class="pro-color-dot color-dot" style="background: white;" data-color="#ffffff"></div>
+                                    <div class="pro-color-dot color-dot" style="background: black;" data-color="#000000"></div>
+                                    <div class="pro-color-dot color-dot" style="background: #ff0050;" data-color="#ff0050"></div>
+                                    <div class="pro-color-dot color-dot" style="background: #00f2fe;" data-color="#00f2fe"></div>
+                                    <div class="pro-color-dot color-dot" style="background: #ffd700;" data-color="#ffd700"></div>
+                                    <div class="pro-color-dot color-dot" style="background: #39ff14;" data-color="#39ff14"></div>
+                                </div>
                             </div>
 
                             <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Größe & Rotation</label>
                             <div style="display:flex; gap:10px; margin-bottom:15px;">
-                                <input type="range" id="pro-text-ctrl-size" min="15" max="150" value="24" class="trim-slider slider-blue" style="flex:1;">
+                                <input type="range" id="pro-text-ctrl-size" min="15" max="250" value="24" class="trim-slider slider-blue" style="flex:1;">
                                 <input type="range" id="pro-text-ctrl-rot" min="-180" max="180" value="0" class="trim-slider slider-red" style="flex:1;">
                             </div>
 
@@ -718,13 +630,15 @@
                 </div>
 
                 <div id="image-advanced-editor" style="display:none; background: rgba(255, 255, 255, 0.05); padding:10px; border-radius:15px; border:1px solid #333;">
-
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                         <label style="color:#888; font-size:12px;">Bild Editor</label>
                         <button id="btn-toggle-grid" class="profile-action-btn edit-btn" style="min-height:30px; font-size:12px; padding: 0 10px;"><i class="fas fa-border-all"></i> Raster: Aus</button>
                     </div>
 
                     <div id="editor-workspace" style="position: relative; width: 100%; height: 350px; background: #000; overflow: hidden; border-radius: 10px; touch-action: none;">
+                        <div id="img-snap-v" class="snap-line-v"></div>
+                        <div id="img-snap-h" class="snap-line-h"></div>
+
                         <img id="editor-bg" style="width: 100%; height: 100%; object-fit: contain; pointer-events: none; display: block;">
                         <div id="editor-grid" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; display:none; background-image: linear-gradient(to right, rgba(255,255,255,0.2) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.2) 1px, transparent 1px); background-size: 33.33% 33.33%; z-index: 5;"></div>
                         <div id="editor-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 10;"></div>
@@ -738,43 +652,44 @@
 
                     <div style="display: flex; gap: 10px; margin-top: 10px;">
                         <button id="btn-add-text" class="profile-action-btn" style="flex: 1; background: white; color: black; min-height: 40px;"><i class="fas fa-font"></i> Text</button>
-                        <button class="profile-action-btn" onclick="document.getElementById('sticker-upload-input').click()" style="flex: 1; background: #ffd700; color: black; min-height: 40px;"><i class="fas fa-sticky-note"></i> Sticker (Plus+++)</button>
+                        <button class="profile-action-btn" onclick="document.getElementById('sticker-upload-input').click()" style="flex: 1; background: #ffd700; color: black; min-height: 40px;"><i class="fas fa-sticky-note"></i> Sticker</button>
                         <input type="file" id="sticker-upload-input" accept="image/*" style="display:none;">
                     </div>
 
                     <div id="text-controls" style="display: none; margin-top: 15px; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; border: 1px solid #444;">
                         <input type="text" id="text-ctrl-input" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5);" placeholder="Textinhalt">
 
-                        <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Schriftart</label>
-                        <select id="text-ctrl-font" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5); color: white; padding: 10px; border-radius: 10px; border: 1px solid #444; outline: none;">
-                            <option value="Arial, sans-serif">Arial</option>
-                            <option value="'Courier New', Courier, monospace">Courier</option>
-                            <option value="'Times New Roman', Times, serif">Times New Roman</option>
-                            <option value="Impact, fantasy">Impact</option>
-                            <option value="'Comic Sans MS', cursive, sans-serif">Comic Sans</option>
-                            <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
-                            <option value="Verdana, sans-serif">Verdana</option>
-                        </select>
-
-                        <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Farbe</label>
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 15px; gap: 5px;">
-                            <div class="color-dot" style="background: white;" data-color="#ffffff"></div>
-                            <div class="color-dot" style="background: black;" data-color="#000000"></div>
-                            <div class="color-dot" style="background: #ff0050;" data-color="#ff0050"></div>
-                            <div class="color-dot" style="background: #00f2fe;" data-color="#00f2fe"></div>
-                            <div class="color-dot" style="background: #ffd700;" data-color="#ffd700"></div>
-                            <div class="color-dot" style="background: #39ff14;" data-color="#39ff14"></div>
+                        <div id="img-font-group">
+                            <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Schriftart</label>
+                            <select id="text-ctrl-font" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5); color: white; padding: 10px; border-radius: 10px; border: 1px solid #444; outline: none;">
+                                <option value="Arial, sans-serif">Arial</option>
+                                <option value="'Courier New', Courier, monospace">Courier</option>
+                                <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                                <option value="Impact, fantasy">Impact</option>
+                                <option value="'Comic Sans MS', cursive, sans-serif">Comic Sans</option>
+                            </select>
                         </div>
 
-                        <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Größe</label>
-                        <input type="range" id="text-ctrl-size" min="15" max="300" value="24" class="trim-slider slider-blue" style="width: 100%; margin-bottom: 15px;">
+                        <div id="img-color-group">
+                            <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Farbe</label>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 15px; gap: 5px;">
+                                <div class="color-dot" style="background: white;" data-color="#ffffff"></div>
+                                <div class="color-dot" style="background: black;" data-color="#000000"></div>
+                                <div class="color-dot" style="background: #ff0050;" data-color="#ff0050"></div>
+                                <div class="color-dot" style="background: #00f2fe;" data-color="#00f2fe"></div>
+                                <div class="color-dot" style="background: #ffd700;" data-color="#ffd700"></div>
+                                <div class="color-dot" style="background: #39ff14;" data-color="#39ff14"></div>
+                            </div>
+                        </div>
 
-                        <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Rotation</label>
-                        <input type="range" id="text-ctrl-rot" min="-180" max="180" value="0" class="trim-slider slider-red" style="width: 100%; margin-bottom: 15px;">
+                        <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Größe & Rotation</label>
+                        <div style="display:flex; gap:10px; margin-bottom:15px;">
+                            <input type="range" id="text-ctrl-size" min="15" max="300" value="24" class="trim-slider slider-blue" style="flex:1;">
+                            <input type="range" id="text-ctrl-rot" min="-180" max="180" value="0" class="trim-slider slider-red" style="flex:1;">
+                        </div>
 
                         <button id="btn-delete-text" class="profile-action-btn" style="width: 100%; background: #ff4444; color: white; min-height: 40px;"><i class="fas fa-trash"></i> Element löschen</button>
                     </div>
-
                 </div>
 
                 <hr style="border:0; border-top:1px solid #333; margin: 15px 0;">

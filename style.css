@@ -2609,3 +2609,40 @@ input:checked+.slider:before {
 .pro-tab-content.active {
     display: block;
 }
+
+
+/* NEU: Blur Box Styling & Einrast-Linien */
+
+.blur-box-content {
+    width: 100%;
+    height: 100%;
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px dashed rgba(255, 255, 255, 0.4);
+    border-radius: 12px;
+}
+
+.snap-line-v {
+    display: none;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    border-left: 1px dashed #00f2fe;
+    z-index: 99;
+    pointer-events: none;
+}
+
+.snap-line-h {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    border-top: 1px dashed #00f2fe;
+    z-index: 99;
+    pointer-events: none;
+}
