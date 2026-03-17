@@ -25,7 +25,15 @@ if (currentUser) currentUser.verified = false;
 
 let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || { master: false, comments: true, likes: true, dms: true, follows: true };
 
-// --- PRO EDITOR STATE ---
+// --- IMAGE EDITOR STATE ---
+let imageEditorState = {
+    images: [],
+    edits: [],
+    currentIndex: 0,
+    activeTextId: null
+};
+
+// --- PRO VIDEO EDITOR STATE (CAPCUT) ---
 let proEditorState = {
     filter: 'none',
     start: 0,
@@ -43,9 +51,11 @@ let proEditorState = {
 
 let proBgAudio = new Audio();
 
-// Drag-State für Canvas (Mitte einrasten)
-let dragState = {
+// --- DRAG STATES ---
+// Drag-State für Image Editor
+let imgDragState = {
     activeId: null,
+    activeResizeId: null,
     activeResizePos: null,
     startX: 0,
     startY: 0,
@@ -56,7 +66,21 @@ let dragState = {
     gridVisible: false
 };
 
-// Drag-State für Timeline Resizing (Start/End trimmen)
+// Drag-State für Video Canvas (CapCut)
+let dragState = {
+    activeId: null,
+    activeResizeId: null,
+    activeResizePos: null,
+    startX: 0,
+    startY: 0,
+    initialObjX: 0,
+    initialObjY: 0,
+    startSize: 0,
+    startDist: 0,
+    gridVisible: false
+};
+
+// Drag-State für Timeline Resizing (CapCut)
 let tlDragState = {
     activeId: null,
     handleType: null, // 'start' oder 'end'
@@ -87,17 +111,36 @@ window.switchView = function(viewId) {
     document.querySelectorAll('.nav__item').forEach(n => n.classList.remove('active'));
     if (viewId === 'feed') document.querySelectorAll('.nav__item')[0].classList.add('active');
     if (viewId === 'search') document.querySelectorAll('.nav__item')[1].classList.add('active');
-    if (viewId === 'inbox') document.querySelectorAll('.nav__item')[3].classList.add('active');
+    if (viewId === 'inbox' || viewId === 'dm' || viewId === 'ticket') document.querySelectorAll('.nav__item')[3].classList.add('active');
     if (viewId === 'profile' && currentUser && document.getElementById('profile-name').innerText.includes(currentUser.displayName)) document.querySelectorAll('.nav__item')[4].classList.add('active');
     if (viewId !== 'feed') document.querySelectorAll('.video__player').forEach(v => {
         v.pause();
         v.currentTime = 0;
     });
+
+    const audioPlayer = document.getElementById('profile-audio-player');
+    if (viewId !== 'profile' && audioPlayer) {
+        audioPlayer.pause();
+    }
 };
 
 window.jumpToVideo = function(videoId) {
     switchView('feed');
-    setTimeout(() => { const t = document.querySelector(`.video[data-id="${videoId}"]`); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, 250);
+    setTimeout(() => {
+        const targetVid = document.querySelector(`.video[data-id="${videoId}"]`);
+        if (targetVid) {
+            targetVid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            document.querySelectorAll('.video__player').forEach(v => {
+                v.pause();
+                v.currentTime = 0;
+            });
+            const player = targetVid.querySelector('.video__player');
+            if (player) {
+                player.muted = window.globalMuted;
+                player.play().catch(() => {});
+            }
+        }
+    }, 250);
 };
 
 function showToast(msg) {
@@ -313,6 +356,13 @@ document.getElementById('notif-master').addEventListener('change', async(e) => {
         localStorage.setItem('phil_notif_settings', JSON.stringify(notifSettings));
     });
 });
+
+let currentFeedMode = 'foryou';
+let isInitialLoad = true;
+let sortedFeed = [];
+const viewedVideos = new Set();
+window.globalVolume = 1;
+window.globalMuted = false;
 
 let userUnsubscribe = null;
 
@@ -534,11 +584,394 @@ document.getElementById('btn-live-stream').addEventListener('click', () => { sho
 
 
 // ============================================================================
+// --- IMAGE EDITOR LOGIK ---
+// ============================================================================
+
+function renderEditorImage(index) {
+    if (imageEditorState.images.length === 0) return;
+    document.getElementById('editor-bg').src = imageEditorState.images[index];
+    document.getElementById('editor-img-counter').innerText = `${index + 1} / ${imageEditorState.images.length}`;
+    const layer = document.getElementById('editor-layer');
+    layer.innerHTML = '';
+    imageEditorState.activeTextId = null;
+    document.getElementById('text-controls').style.display = 'none';
+    imageEditorState.edits[index].forEach(obj => createDOMTextElement(obj));
+}
+
+function createDOMTextElement(obj) {
+    const layer = document.getElementById('editor-layer');
+    const wrapper = document.createElement('div');
+    wrapper.id = 'drag-txt-' + obj.id;
+    wrapper.className = 'draggable-text';
+    wrapper.style.left = obj.x + 'px';
+    wrapper.style.top = obj.y + 'px';
+    wrapper.style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`;
+
+    if (obj.type === 'sticker') {
+        const imgEl = document.createElement('img');
+        imgEl.className = 'sticker-content';
+        imgEl.src = obj.src;
+        imgEl.style.width = obj.size + 'px';
+        imgEl.style.height = 'auto';
+        imgEl.style.pointerEvents = 'none';
+        wrapper.appendChild(imgEl);
+    } else if (obj.type === 'blur') {
+        const blurEl = document.createElement('div');
+        blurEl.className = 'blur-box-content';
+        blurEl.style.width = obj.size + 'px';
+        blurEl.style.height = obj.size + 'px';
+        wrapper.appendChild(blurEl);
+    } else {
+        const textEl = document.createElement('div');
+        textEl.className = 'text-content';
+        textEl.innerText = obj.text;
+        textEl.style.fontSize = obj.size + 'px';
+        textEl.style.color = obj.color;
+        textEl.style.fontFamily = obj.font || 'Arial, sans-serif';
+        wrapper.appendChild(textEl);
+    }
+
+    ['tl', 'tr', 'bl', 'br'].forEach(pos => {
+        const h = document.createElement('div');
+        h.className = `resize-handle handle-${pos}`;
+        h.addEventListener('mousedown', (e) => startImgResize(e, obj.id, pos));
+        h.addEventListener('touchstart', (e) => startImgResize(e, obj.id, pos), { passive: false });
+        wrapper.appendChild(h);
+    });
+
+    wrapper.addEventListener('mousedown', (e) => startImgDrag(e, obj.id));
+    wrapper.addEventListener('touchstart', (e) => startImgDrag(e, obj.id), { passive: false });
+    layer.appendChild(wrapper);
+}
+
+function selectText(id) {
+    imageEditorState.activeTextId = id;
+    document.querySelectorAll('#editor-layer .draggable-text').forEach(el => el.classList.remove('active'));
+    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id);
+    if (!obj) return;
+
+    document.getElementById('drag-txt-' + id).classList.add('active');
+    document.getElementById('text-controls').style.display = 'block';
+    document.getElementById('text-ctrl-input').value = obj.text || '';
+    document.getElementById('text-ctrl-size').value = obj.size;
+    document.getElementById('text-ctrl-rot').value = obj.rotation;
+    document.getElementById('text-ctrl-font').value = obj.font || 'Arial, sans-serif';
+
+    if (obj.type === 'sticker') {
+        document.getElementById('text-ctrl-input').style.display = 'none';
+        document.getElementById('img-font-group').style.display = 'none';
+        document.getElementById('img-color-group').style.display = 'none';
+    } else {
+        document.getElementById('text-ctrl-input').style.display = 'block';
+        document.getElementById('img-font-group').style.display = 'block';
+        document.getElementById('img-color-group').style.display = 'block';
+    }
+}
+
+document.getElementById('editor-workspace') ? .addEventListener('click', (e) => {
+    if (!e.target.closest('.draggable-text')) {
+        imageEditorState.activeTextId = null;
+        document.querySelectorAll('#editor-layer .draggable-text').forEach(el => el.classList.remove('active'));
+        if (document.getElementById('text-controls')) document.getElementById('text-controls').style.display = 'none';
+    }
+});
+
+document.getElementById('text-ctrl-input') ? .addEventListener('input', (e) => {
+    if (!imageEditorState.activeTextId) return;
+    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId);
+    if (obj && obj.type !== 'sticker') {
+        obj.text = e.target.value;
+        document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').innerText = obj.text;
+    }
+});
+
+document.getElementById('text-ctrl-size') ? .addEventListener('input', (e) => {
+    if (!imageEditorState.activeTextId) return;
+    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId);
+    if (obj) {
+        obj.size = e.target.value;
+        const el = document.getElementById('drag-txt-' + obj.id);
+        if (obj.type === 'sticker') {
+            el.querySelector('.sticker-content').style.width = obj.size + 'px';
+        } else {
+            el.querySelector('.text-content').style.fontSize = obj.size + 'px';
+        }
+    }
+});
+
+document.getElementById('text-ctrl-rot') ? .addEventListener('input', (e) => {
+    if (!imageEditorState.activeTextId) return;
+    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId);
+    if (obj) {
+        obj.rotation = e.target.value;
+        document.getElementById('drag-txt-' + obj.id).style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`;
+    }
+});
+
+document.getElementById('text-ctrl-font') ? .addEventListener('change', (e) => {
+    if (!imageEditorState.activeTextId) return;
+    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId);
+    if (obj && obj.type !== 'sticker') {
+        obj.font = e.target.value;
+        document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.fontFamily = obj.font;
+    }
+});
+
+document.querySelectorAll('#text-controls .color-dot').forEach(dot => {
+    dot.addEventListener('click', (e) => {
+        if (!imageEditorState.activeTextId) return;
+        const color = e.target.dataset.color;
+        const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId);
+        if (obj && obj.type !== 'sticker') {
+            obj.color = color;
+            document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.color = color;
+        }
+    });
+});
+
+document.getElementById('btn-delete-text') ? .addEventListener('click', () => {
+    if (!imageEditorState.activeTextId) return;
+    imageEditorState.edits[imageEditorState.currentIndex] = imageEditorState.edits[imageEditorState.currentIndex].filter(t => t.id !== imageEditorState.activeTextId);
+    document.getElementById('drag-txt-' + imageEditorState.activeTextId).remove();
+    imageEditorState.activeTextId = null;
+    document.getElementById('text-controls').style.display = 'none';
+});
+
+document.getElementById('btn-add-text') ? .addEventListener('click', () => {
+    const workspace = document.getElementById('editor-workspace');
+    const newObj = { id: Date.now(), type: 'text', text: "Neuer Text", x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 24, rotation: 0, color: '#ffffff', font: 'Arial, sans-serif' };
+    imageEditorState.edits[imageEditorState.currentIndex].push(newObj);
+    createDOMTextElement(newObj);
+    selectText(newObj.id);
+});
+
+document.getElementById('sticker-upload-input') ? .addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        const workspace = document.getElementById('editor-workspace');
+        const newObj = { id: Date.now(), type: 'sticker', src: event.target.result, x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 100, rotation: 0 };
+        imageEditorState.edits[imageEditorState.currentIndex].push(newObj);
+        createDOMTextElement(newObj);
+        selectText(newObj.id);
+        document.getElementById('sticker-upload-input').value = '';
+    }
+    reader.readAsDataURL(file);
+});
+
+document.getElementById('btn-prev-img') ? .addEventListener('click', () => {
+    if (imageEditorState.currentIndex > 0) {
+        imageEditorState.currentIndex--;
+        renderEditorImage(imageEditorState.currentIndex);
+    }
+});
+document.getElementById('btn-next-img') ? .addEventListener('click', () => {
+    if (imageEditorState.currentIndex < imageEditorState.images.length - 1) {
+        imageEditorState.currentIndex++;
+        renderEditorImage(imageEditorState.currentIndex);
+    }
+});
+
+// --- IMAGE EDITOR DRAG & DROP LOGIC ---
+function startImgDrag(e, id) {
+    if (e.target.tagName.toLowerCase() === 'input' || e.target.classList.contains('resize-handle')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    imgDragState.activeId = id;
+    selectText(id);
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    imgDragState.startX = clientX;
+    imgDragState.startY = clientY;
+    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id);
+    if (obj) {
+        imgDragState.initialObjX = obj.x;
+        imgDragState.initialObjY = obj.y;
+    }
+}
+
+function startImgResize(e, id, pos) {
+    e.preventDefault();
+    e.stopPropagation();
+    imgDragState.activeResizeId = id;
+    imgDragState.activeResizePos = pos;
+    selectText(id);
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    imgDragState.startX = clientX;
+    imgDragState.startY = clientY;
+    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id);
+    if (obj) {
+        imgDragState.startSize = parseFloat(obj.size);
+        const wsRect = document.getElementById('editor-workspace').getBoundingClientRect();
+        const mouseX = clientX - wsRect.left;
+        const mouseY = clientY - wsRect.top;
+        imgDragState.startDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2));
+    }
+}
+
+function imgDragMove(e) {
+    if (imgDragState.activeId) {
+        e.preventDefault();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const dx = clientX - imgDragState.startX;
+        const dy = clientY - imgDragState.startY;
+        let rawX = imgDragState.initialObjX + dx;
+        let rawY = imgDragState.initialObjY + dy;
+
+        const ws = document.getElementById('editor-workspace');
+        if (!ws) return;
+
+        let snappedX = false;
+        let snappedY = false;
+
+        if (Math.abs(rawX - (ws.clientWidth / 2)) < 15) {
+            rawX = ws.clientWidth / 2;
+            snappedX = true;
+        }
+        if (Math.abs(rawY - (ws.clientHeight / 2)) < 15) {
+            rawY = ws.clientHeight / 2;
+            snappedY = true;
+        }
+
+        if (document.getElementById('img-snap-v')) document.getElementById('img-snap-v').style.display = snappedX ? 'block' : 'none';
+        if (document.getElementById('img-snap-h')) document.getElementById('img-snap-h').style.display = snappedY ? 'block' : 'none';
+
+        if (imgDragState.gridVisible) {
+            rawX = Math.round(rawX / 20) * 20;
+            rawY = Math.round(rawY / 20) * 20;
+        }
+
+        const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imgDragState.activeId);
+        if (obj) {
+            obj.x = rawX;
+            obj.y = rawY;
+            const el = document.getElementById('drag-txt-' + obj.id);
+            if (el) {
+                el.style.left = obj.x + 'px';
+                el.style.top = obj.y + 'px';
+            }
+        }
+    } else if (imgDragState.activeResizeId) {
+        e.preventDefault();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const wsRect = document.getElementById('editor-workspace').getBoundingClientRect();
+        const mouseX = clientX - wsRect.left;
+        const mouseY = clientY - wsRect.top;
+
+        const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imgDragState.activeResizeId);
+        if (obj) {
+            const currentDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2));
+            if (imgDragState.startDist > 0) {
+                let newSize = Math.max(15, imgDragState.startSize * (currentDist / imgDragState.startDist));
+                obj.size = newSize;
+                const el = document.getElementById('drag-txt-' + obj.id);
+                if (el) {
+                    if (obj.type === 'sticker' || obj.type === 'blur') {
+                        el.children[0].style.width = newSize + 'px';
+                        if (obj.type === 'blur') el.children[0].style.height = newSize + 'px';
+                    } else {
+                        el.querySelector('.text-content').style.fontSize = newSize + 'px';
+                    }
+                }
+                if (document.getElementById('text-ctrl-size')) document.getElementById('text-ctrl-size').value = newSize;
+            }
+        }
+    }
+}
+
+function endImgDrag() {
+    imgDragState.activeId = null;
+    imgDragState.activeResizeId = null;
+    if (document.getElementById('img-snap-v')) document.getElementById('img-snap-v').style.display = 'none';
+    if (document.getElementById('img-snap-h')) document.getElementById('img-snap-h').style.display = 'none';
+}
+
+document.addEventListener('mousemove', imgDragMove);
+document.addEventListener('touchmove', imgDragMove, { passive: false });
+document.addEventListener('mouseup', endImgDrag);
+document.addEventListener('touchend', endImgDrag);
+
+// Image Renderer to Cloudinary
+async function renderAndUploadImages() {
+    let uploadedUrls = [];
+    const ws = document.getElementById('editor-workspace');
+    const Cw = ws.clientWidth;
+    const Ch = ws.clientHeight;
+    for (let i = 0; i < imageEditorState.images.length; i++) {
+        const img = new Image();
+        await new Promise(res => {
+            img.onload = res;
+            img.src = imageEditorState.images[i];
+        });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const Nw = img.naturalWidth;
+        const Nh = img.naturalHeight;
+        canvas.width = Nw;
+        canvas.height = Nh;
+        ctx.drawImage(img, 0, 0, Nw, Nh);
+        const scale = Math.min(Cw / Nw, Ch / Nh);
+        const Dw = Nw * scale;
+        const Dh = Nh * scale;
+        const Ox = (Cw - Dw) / 2;
+        const Oy = (Ch - Dh) / 2;
+
+        for (const obj of imageEditorState.edits[i]) {
+            let nativeX = (obj.x - Ox) / scale;
+            let nativeY = (obj.y - Oy) / scale;
+            let nativeSize = obj.size / scale;
+            ctx.save();
+            ctx.translate(nativeX, nativeY);
+            ctx.rotate((obj.rotation * Math.PI) / 180);
+
+            if (obj.type === 'sticker') {
+                const sImg = new Image();
+                await new Promise(res => {
+                    sImg.onload = res;
+                    sImg.src = obj.src;
+                });
+                const ratio = sImg.naturalHeight / sImg.naturalWidth;
+                ctx.drawImage(sImg, -nativeSize / 2, -(nativeSize * ratio) / 2, nativeSize, nativeSize * ratio);
+            } else if (obj.type === 'blur') {
+                ctx.filter = 'blur(15px)';
+                ctx.drawImage(canvas, nativeX - nativeSize / 2, nativeY - nativeSize / 2, nativeSize, nativeSize, -nativeSize / 2, -nativeSize / 2, nativeSize, nativeSize);
+                ctx.filter = 'none';
+            } else {
+                ctx.font = `bold ${nativeSize}px ${obj.font || 'Arial, sans-serif'}`;
+                ctx.fillStyle = obj.color;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+                ctx.lineWidth = nativeSize * 0.1;
+                ctx.strokeText(obj.text, 0, 0);
+                ctx.fillText(obj.text, 0, 0);
+            }
+            ctx.restore();
+        }
+
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        const formData = new FormData();
+        formData.append('file', dataUrl);
+        formData.append('upload_preset', UPLOAD_PRESET);
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`, { method: 'POST', body: formData });
+        const data = await res.json();
+        uploadedUrls.push(data.secure_url.replace('/upload/', `/upload/q_auto,f_auto/`));
+    }
+    return uploadedUrls;
+}
+
+
+// ============================================================================
 // --- CAPCUT EDITOR LOGIK ---
 // ============================================================================
 
 document.getElementById('btn-toggle-grid').addEventListener('click', (e) => {
     dragState.gridVisible = !dragState.gridVisible;
+    imgDragState.gridVisible = dragState.gridVisible;
     e.target.innerHTML = dragState.gridVisible ? '<i class="fas fa-border-all"></i> Raster: An' : '<i class="fas fa-border-all"></i> Raster: Aus';
 });
 
@@ -546,7 +979,10 @@ document.getElementById('up-file').addEventListener('change', async function(e) 
     const files = e.target.files;
     const txt = document.querySelector('#up-file-btn p');
     const icon = document.querySelector('#up-file-btn i');
+
     const proPreview = document.getElementById('pro-video-source');
+    const advancedVideoUi = document.getElementById('video-advanced-editor');
+    const advancedImageUi = document.getElementById('image-advanced-editor');
 
     if (!files || files.length === 0) return;
 
@@ -555,6 +991,9 @@ document.getElementById('up-file').addEventListener('change', async function(e) 
         txt.innerText = files[0].name;
         icon.className = "fas fa-check";
         icon.style.color = "#00f2fe";
+
+        if (advancedVideoUi) advancedVideoUi.style.display = 'block';
+        if (advancedImageUi) advancedImageUi.style.display = 'none';
 
         const url = URL.createObjectURL(files[0]);
         proPreview.src = url;
@@ -591,8 +1030,39 @@ document.getElementById('up-file').addEventListener('change', async function(e) 
             document.getElementById('cc-format-select').value = '9:16';
         };
     } else {
-        showCustomAlert("Info", "Bilder-Editor wird in der CapCut-Ansicht bald unterstützt. Bitte lade aktuell ein Video hoch.");
-        document.getElementById('up-file').value = '';
+        // Image Logic from File 1
+        txt.innerText = `${files.length} Bild(er) ausgewählt`;
+        icon.className = "fas fa-images";
+        icon.style.color = "#ffd700";
+
+        if (advancedVideoUi) advancedVideoUi.style.display = 'none';
+        if (advancedImageUi) advancedImageUi.style.display = 'block';
+
+        imageEditorState.images = [];
+        imageEditorState.edits = [];
+        imageEditorState.currentIndex = 0;
+
+        for (let i = 0; i < files.length; i++) {
+            if (files[i].size > 15 * 1024 * 1024) continue;
+            const reader = new FileReader();
+            await new Promise(resolve => {
+                reader.onload = (event) => {
+                    imageEditorState.images.push(event.target.result);
+                    imageEditorState.edits.push([]);
+                    resolve();
+                };
+                reader.readAsDataURL(files[i]);
+            });
+        }
+
+        if (imageEditorState.images.length === 0) {
+            showCustomAlert("Fehler", "Bilder konnten nicht geladen werden.");
+            txt.innerText = "Video oder Bilder auswählen";
+            icon.className = "fas fa-cloud-upload-alt";
+            icon.style.color = "#aaa";
+            return;
+        }
+        renderEditorImage(0);
     }
 });
 
@@ -697,14 +1167,14 @@ document.addEventListener('mousemove', (e) => {
 
 document.addEventListener('mouseup', () => { tlDragState.activeId = null; });
 document.addEventListener('touchend', () => { tlDragState.activeId = null; });
-document.getElementById('handle-vid-start').onmousedown = (e) => startTlDrag(e, 'video', 'start', 'video');
-document.getElementById('handle-vid-end').onmousedown = (e) => startTlDrag(e, 'video', 'end', 'video');
-document.getElementById('handle-vid-start').ontouchstart = (e) => startTlDrag(e, 'video', 'start', 'video');
-document.getElementById('handle-vid-end').ontouchstart = (e) => startTlDrag(e, 'video', 'end', 'video');
-document.getElementById('handle-aud-start').onmousedown = (e) => startTlDrag(e, 'audio', 'start', 'audio');
-document.getElementById('handle-aud-start').ontouchstart = (e) => startTlDrag(e, 'audio', 'start', 'audio');
+document.getElementById('handle-vid-start') ? .addEventListener('mousedown', (e) => startTlDrag(e, 'video', 'start', 'video'));
+document.getElementById('handle-vid-end') ? .addEventListener('mousedown', (e) => startTlDrag(e, 'video', 'end', 'video'));
+document.getElementById('handle-vid-start') ? .addEventListener('touchstart', (e) => startTlDrag(e, 'video', 'start', 'video'));
+document.getElementById('handle-vid-end') ? .addEventListener('touchstart', (e) => startTlDrag(e, 'video', 'end', 'video'));
+document.getElementById('handle-aud-start') ? .addEventListener('mousedown', (e) => startTlDrag(e, 'audio', 'start', 'audio'));
+document.getElementById('handle-aud-start') ? .addEventListener('touchstart', (e) => startTlDrag(e, 'audio', 'start', 'audio'));
 
-document.getElementById('btn-pro-play').addEventListener('click', () => {
+document.getElementById('btn-pro-play') ? .addEventListener('click', () => {
     const vid = document.getElementById('pro-video-source');
     if (vid.paused) {
         vid.play();
@@ -717,7 +1187,7 @@ document.getElementById('btn-pro-play').addEventListener('click', () => {
     }
 });
 
-document.getElementById('pro-video-source').addEventListener('timeupdate', (e) => {
+document.getElementById('pro-video-source') ? .addEventListener('timeupdate', (e) => {
     const curr = e.target.currentTime;
     document.getElementById('pro-time-current').innerText = curr.toFixed(1) + "s";
     const dur = proEditorState.duration || 1;
@@ -782,6 +1252,8 @@ function canvasDragMove(e) {
         let rawX = dragState.initialObjX + dx;
         let rawY = dragState.initialObjY + dy;
         const ws = document.getElementById('pro-editor-workspace');
+        if (!ws) return;
+
         let snappedX = false;
         let snappedY = false;
         if (Math.abs(rawX - (ws.clientWidth / 2)) < 15) {
@@ -792,8 +1264,9 @@ function canvasDragMove(e) {
             rawY = ws.clientHeight / 2;
             snappedY = true;
         }
-        document.getElementById('pro-snap-v').style.display = snappedX ? 'block' : 'none';
-        document.getElementById('pro-snap-h').style.display = snappedY ? 'block' : 'none';
+        if (document.getElementById('pro-snap-v')) document.getElementById('pro-snap-v').style.display = snappedX ? 'block' : 'none';
+        if (document.getElementById('pro-snap-h')) document.getElementById('pro-snap-h').style.display = snappedY ? 'block' : 'none';
+
         if (dragState.gridVisible) {
             rawX = Math.round(rawX / 20) * 20;
             rawY = Math.round(rawY / 20) * 20;
@@ -822,7 +1295,14 @@ function canvasDragMove(e) {
                 let newSize = Math.max(15, dragState.startSize * (currentDist / dragState.startDist));
                 obj.size = newSize;
                 const el = document.getElementById('pro-drag-txt-' + obj.id);
-                if (el) { if (obj.type === 'sticker' || obj.type === 'blur') { el.children[0].style.width = newSize + 'px'; if (obj.type === 'blur') el.children[0].style.height = newSize + 'px'; } else { el.querySelector('.text-content').style.fontSize = newSize + 'px'; } }
+                if (el) {
+                    if (obj.type === 'sticker' || obj.type === 'blur') {
+                        el.children[0].style.width = newSize + 'px';
+                        if (obj.type === 'blur') el.children[0].style.height = newSize + 'px';
+                    } else {
+                        el.querySelector('.text-content').style.fontSize = newSize + 'px';
+                    }
+                }
                 document.getElementById('pro-text-ctrl-size').value = newSize;
             }
         }
@@ -832,9 +1312,10 @@ function canvasDragMove(e) {
 function endCanvasDrag() {
     dragState.activeId = null;
     dragState.activeResizeId = null;
-    document.getElementById('pro-snap-v').style.display = 'none';
-    document.getElementById('pro-snap-h').style.display = 'none';
+    if (document.getElementById('pro-snap-v')) document.getElementById('pro-snap-v').style.display = 'none';
+    if (document.getElementById('pro-snap-h')) document.getElementById('pro-snap-h').style.display = 'none';
 }
+
 document.addEventListener('mousemove', canvasDragMove);
 document.addEventListener('touchmove', canvasDragMove, { passive: false });
 document.addEventListener('mouseup', endCanvasDrag);
@@ -889,7 +1370,9 @@ function selectProOverlay(id) {
     if (!obj) return;
     const el = document.getElementById('pro-drag-txt-' + id);
     if (el) el.classList.add('active');
-    switchCCMenu('cc-panel-text');
+
+    if (typeof switchCCMenu === 'function') switchCCMenu('cc-panel-text');
+
     document.getElementById('pro-element-settings').style.display = 'block';
     document.getElementById('pro-text-ctrl-input').value = obj.text || '';
     document.getElementById('pro-text-ctrl-size').value = obj.size;
@@ -905,16 +1388,16 @@ function selectProOverlay(id) {
     updateTimelineUI();
 }
 
-document.getElementById('pro-editor-workspace').addEventListener('click', (e) => {
+document.getElementById('pro-editor-workspace') ? .addEventListener('click', (e) => {
     if (!e.target.closest('.draggable-text')) {
         proEditorState.activeElementId = null;
         document.querySelectorAll('#pro-editor-layer .draggable-text').forEach(el => el.classList.remove('active'));
-        document.getElementById('pro-element-settings').style.display = 'none';
+        if (document.getElementById('pro-element-settings')) document.getElementById('pro-element-settings').style.display = 'none';
         updateTimelineUI();
     }
 });
 
-document.getElementById('btn-pro-add-text').addEventListener('click', () => {
+document.getElementById('btn-pro-add-text') ? .addEventListener('click', () => {
     const ws = document.getElementById('pro-editor-workspace');
     const newObj = { id: Date.now(), type: 'text', text: "Text hier", x: ws.clientWidth / 2, y: ws.clientHeight / 2, size: 40, rotation: 0, color: '#ffffff', font: 'Arial, sans-serif', start: proEditorState.start, end: proEditorState.end };
     proEditorState.overlays.push(newObj);
@@ -922,7 +1405,8 @@ document.getElementById('btn-pro-add-text').addEventListener('click', () => {
     selectProOverlay(newObj.id);
     updateTimelineUI();
 });
-document.getElementById('btn-pro-add-blur').addEventListener('click', () => {
+
+document.getElementById('btn-pro-add-blur') ? .addEventListener('click', () => {
     const ws = document.getElementById('pro-editor-workspace');
     const newObj = { id: Date.now(), type: 'blur', x: ws.clientWidth / 2, y: ws.clientHeight / 2, size: 100, rotation: 0, start: proEditorState.start, end: proEditorState.end };
     proEditorState.overlays.push(newObj);
@@ -930,7 +1414,8 @@ document.getElementById('btn-pro-add-blur').addEventListener('click', () => {
     selectProOverlay(newObj.id);
     updateTimelineUI();
 });
-document.getElementById('pro-sticker-upload-input').addEventListener('change', (e) => {
+
+document.getElementById('pro-sticker-upload-input') ? .addEventListener('change', (e) => {
     if (!e.target.files[0]) return;
     const reader = new FileReader();
     reader.onload = function(ev) {
@@ -945,7 +1430,7 @@ document.getElementById('pro-sticker-upload-input').addEventListener('change', (
     reader.readAsDataURL(e.target.files[0]);
 });
 
-document.getElementById('pro-text-ctrl-input').addEventListener('input', (e) => {
+document.getElementById('pro-text-ctrl-input') ? .addEventListener('input', (e) => {
     if (!proEditorState.activeElementId) return;
     const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeElementId);
     if (obj.type === 'text') {
@@ -953,20 +1438,23 @@ document.getElementById('pro-text-ctrl-input').addEventListener('input', (e) => 
         document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').innerText = obj.text;
     }
 });
-document.getElementById('pro-text-ctrl-size').addEventListener('input', (e) => {
+
+document.getElementById('pro-text-ctrl-size') ? .addEventListener('input', (e) => {
     if (!proEditorState.activeElementId) return;
     const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeElementId);
     obj.size = e.target.value;
     const el = document.getElementById('pro-drag-txt-' + obj.id);
     if (obj.type !== 'text') { el.children[0].style.width = obj.size + 'px'; if (obj.type === 'blur') el.children[0].style.height = obj.size + 'px'; } else { el.querySelector('.text-content').style.fontSize = obj.size + 'px'; }
 });
-document.getElementById('pro-text-ctrl-rot').addEventListener('input', (e) => {
+
+document.getElementById('pro-text-ctrl-rot') ? .addEventListener('input', (e) => {
     if (!proEditorState.activeElementId) return;
     const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeElementId);
     obj.rotation = e.target.value;
     document.getElementById('pro-drag-txt-' + obj.id).style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`;
 });
-document.getElementById('pro-text-ctrl-font').addEventListener('change', (e) => {
+
+document.getElementById('pro-text-ctrl-font') ? .addEventListener('change', (e) => {
     if (!proEditorState.activeElementId) return;
     const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeElementId);
     if (obj.type === 'text') {
@@ -974,6 +1462,7 @@ document.getElementById('pro-text-ctrl-font').addEventListener('change', (e) => 
         document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').style.fontFamily = obj.font;
     }
 });
+
 document.querySelectorAll('.pro-color-dot').forEach(dot => {
     dot.addEventListener('click', (e) => {
         if (!proEditorState.activeElementId) return;
@@ -985,7 +1474,8 @@ document.querySelectorAll('.pro-color-dot').forEach(dot => {
         }
     });
 });
-document.getElementById('btn-pro-delete-text').addEventListener('click', () => {
+
+document.getElementById('btn-pro-delete-text') ? .addEventListener('click', () => {
     if (!proEditorState.activeElementId) return;
     proEditorState.overlays = proEditorState.overlays.filter(t => t.id !== proEditorState.activeElementId);
     document.getElementById('pro-drag-txt-' + proEditorState.activeElementId).remove();
@@ -1009,12 +1499,13 @@ document.querySelectorAll('.pro-filter-btn').forEach(btn => {
     });
 });
 
-document.getElementById('pro-speed-ctrl').addEventListener('change', (e) => {
+document.getElementById('pro-speed-ctrl') ? .addEventListener('change', (e) => {
     proEditorState.speed = parseFloat(e.target.value);
     document.getElementById('pro-video-source').playbackRate = proEditorState.speed;
     proBgAudio.playbackRate = proEditorState.speed;
 });
-document.getElementById('cc-format-select').addEventListener('change', (e) => {
+
+document.getElementById('cc-format-select') ? .addEventListener('change', (e) => {
     proEditorState.ratio = e.target.value;
     const ws = document.getElementById('pro-editor-workspace');
     ws.className = 'cc-workspace';
@@ -1023,15 +1514,17 @@ document.getElementById('cc-format-select').addEventListener('change', (e) => {
     else ws.classList.add('ratio-original');
 });
 
-document.getElementById('pro-audio-orig-vol').addEventListener('input', (e) => {
+document.getElementById('pro-audio-orig-vol') ? .addEventListener('input', (e) => {
     proEditorState.origVol = parseFloat(e.target.value);
     document.getElementById('pro-video-source').volume = proEditorState.origVol;
 });
-document.getElementById('pro-audio-bg-vol').addEventListener('input', (e) => {
+
+document.getElementById('pro-audio-bg-vol') ? .addEventListener('input', (e) => {
     proEditorState.bgVol = parseFloat(e.target.value);
     proBgAudio.volume = proEditorState.bgVol;
 });
-document.getElementById('pro-audio-upload').addEventListener('change', (e) => {
+
+document.getElementById('pro-audio-upload') ? .addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
         const file = e.target.files[0];
         document.getElementById('pro-audio-bg-name').innerText = "🎵 " + file.name;
@@ -1045,104 +1538,142 @@ document.getElementById('pro-audio-upload').addEventListener('change', (e) => {
 
 function hexToCloudinaryColor(hex) { if (hex && hex.startsWith('#')) return 'rgb:' + hex.substring(1); return hex || 'white'; }
 
+
+// --- UPLOAD SUBMISSION (MERGED LOGIC) ---
 document.getElementById('submit-upload').addEventListener('click', async() => {
     const files = document.getElementById('up-file').files;
     const titleVal = document.getElementById('up-title').value.trim();
     const desc = document.getElementById('up-desc').value.trim();
-    if (!files || files.length === 0 || (!desc && !titleVal)) { switchCCMenu('cc-panel-settings'); return showCustomAlert("Fehlende Daten", "Bitte lade ein Video hoch und schreibe einen Titel/Beschreibung im Details-Tab."); }
+
+    if (!files || files.length === 0 || (!desc && !titleVal)) {
+        const isVideo = files[0] && files[0].type.startsWith('video/');
+        if (isVideo && typeof switchCCMenu === 'function') switchCCMenu('cc-panel-settings');
+        return showCustomAlert("Fehlende Daten", "Bitte lade eine Datei hoch und schreibe einen Titel oder eine Beschreibung.");
+    }
 
     let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024;
     let limitText = checkPhilPlusStatus(1) ? "100" : "30";
-    if (files[0].size > maxSize) return showCustomAlert("Zu groß", `Videos dürfen maximal ${limitText} MB groß sein!`);
+    let isVideo = files[0].type.startsWith('video/');
+
+    if (isVideo && files[0].size > maxSize) return showCustomAlert("Zu groß", `Videos dürfen maximal ${limitText} MB groß sein!`);
 
     const btn = document.getElementById('submit-upload');
     const status = document.getElementById('upload-status');
     btn.disabled = true;
-    status.innerText = "Exportiere nach Cloudinary... Bitte warten!";
-    switchCCMenu('cc-panel-settings');
 
     try {
-        const formData = new FormData();
-        formData.append('file', files[0]);
-        formData.append('upload_preset', UPLOAD_PRESET);
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: formData });
-        const data = await res.json();
-        if (!data.secure_url) throw new Error("Upload fehlgeschlagen.");
+        if (isVideo) {
+            status.innerText = "Exportiere nach Cloudinary... Bitte warten!";
+            if (typeof switchCCMenu === 'function') switchCCMenu('cc-panel-settings');
 
-        let transform = 'q_auto,f_auto,vc_auto';
-        if (proEditorState.start > 0 || proEditorState.end < proEditorState.duration) { transform += `,so_${proEditorState.start},eo_${proEditorState.end}`; }
+            const formData = new FormData();
+            formData.append('file', files[0]);
+            formData.append('upload_preset', UPLOAD_PRESET);
+            const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: formData });
+            const data = await res.json();
+            if (!data.secure_url) throw new Error("Upload fehlgeschlagen.");
 
-        let extraTransforms = [];
-        if (proEditorState.ratio === '9:16') extraTransforms.push('c_fill,h_1920,w_1080');
-        else if (proEditorState.ratio === '1:1') extraTransforms.push('c_fill,h_1080,w_1080');
-        if (proEditorState.filter === 'grayscale') extraTransforms.push('e_grayscale');
-        if (proEditorState.filter === 'sepia') extraTransforms.push('e_sepia');
-        if (proEditorState.filter === 'blur') extraTransforms.push('e_blur:200');
-        if (proEditorState.filter === 'contrast') extraTransforms.push('e_contrast:50');
-        if (proEditorState.filter === 'vintage') extraTransforms.push('e_sepia:50/e_contrast:50');
-        if (proEditorState.origVol < 1) {
-            let volPercent = Math.round((proEditorState.origVol - 1) * 100);
-            if (proEditorState.origVol === 0) volPercent = -100;
-            extraTransforms.push(`e_volume:${volPercent}`);
-        }
+            let transform = 'q_auto,f_auto,vc_auto';
+            if (proEditorState.start > 0 || proEditorState.end < proEditorState.duration) { transform += `,so_${proEditorState.start},eo_${proEditorState.end}`; }
 
-        const audioFiles = document.getElementById('pro-audio-upload').files;
-        if (audioFiles.length > 0) {
-            status.innerText = "Synchronisiere Hintergrundmusik...";
-            const audioData = new FormData();
-            audioData.append('file', audioFiles[0]);
-            audioData.append('upload_preset', UPLOAD_PRESET);
-            const audioRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: audioData });
-            const aData = await audioRes.json();
-            if (aData.public_id) {
-                let audioVolPercent = Math.round((proEditorState.bgVol - 1) * 100);
-                if (proEditorState.bgVol === 0) audioVolPercent = -100;
-                extraTransforms.push(`l_video:${aData.public_id.replace(/\//g, ':')}/e_volume:${audioVolPercent}/so_${proEditorState.audioStart}/fl_layer_apply`);
+            let extraTransforms = [];
+            if (proEditorState.ratio === '9:16') extraTransforms.push('c_fill,h_1920,w_1080');
+            else if (proEditorState.ratio === '1:1') extraTransforms.push('c_fill,h_1080,w_1080');
+            if (proEditorState.filter === 'grayscale') extraTransforms.push('e_grayscale');
+            if (proEditorState.filter === 'sepia') extraTransforms.push('e_sepia');
+            if (proEditorState.filter === 'blur') extraTransforms.push('e_blur:200');
+            if (proEditorState.filter === 'contrast') extraTransforms.push('e_contrast:50');
+            if (proEditorState.filter === 'vintage') extraTransforms.push('e_sepia:50/e_contrast:50');
+            if (proEditorState.origVol < 1) {
+                let volPercent = Math.round((proEditorState.origVol - 1) * 100);
+                if (proEditorState.origVol === 0) volPercent = -100;
+                extraTransforms.push(`e_volume:${volPercent}`);
             }
+
+            const audioFiles = document.getElementById('pro-audio-upload').files;
+            if (audioFiles.length > 0) {
+                status.innerText = "Synchronisiere Hintergrundmusik...";
+                const audioData = new FormData();
+                audioData.append('file', audioFiles[0]);
+                audioData.append('upload_preset', UPLOAD_PRESET);
+                const audioRes = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/video/upload`, { method: 'POST', body: audioData });
+                const aData = await audioRes.json();
+                if (aData.public_id) {
+                    let audioVolPercent = Math.round((proEditorState.bgVol - 1) * 100);
+                    if (proEditorState.bgVol === 0) audioVolPercent = -100;
+                    extraTransforms.push(`l_video:${aData.public_id.replace(/\//g, ':')}/e_volume:${audioVolPercent}/so_${proEditorState.audioStart}/fl_layer_apply`);
+                }
+                status.innerText = "Wird gerendert und verarbeitet... Bitte warten!";
+            }
+
+            const ws = document.getElementById('pro-editor-workspace');
+            proEditorState.overlays.forEach(obj => {
+                let ox = Math.round(obj.x);
+                let oy = Math.round(obj.y);
+                let timeStr = '';
+                if (obj.start > 0 || obj.end < proEditorState.duration) { timeStr = `,so_${obj.start},eo_${obj.end}`; }
+                if (obj.type === 'text') {
+                    const encodedText = encodeURIComponent(obj.text.trim());
+                    const fName = obj.font.split(',')[0].replace(/'/g, '').replace(/ /g, '_');
+                    const cColor = hexToCloudinaryColor(obj.color);
+                    extraTransforms.push(`l_text:${fName}_${obj.size}_bold:${encodedText},co_${cColor},a_${obj.rotation},g_north_west,x_${ox},y_${oy}${timeStr}`);
+                } else if (obj.type === 'blur') {
+                    let bw = Math.round(obj.size);
+                    let bh = Math.round(obj.size);
+                    let bx = Math.round(obj.x - bw / 2);
+                    let by = Math.round(obj.y - bh / 2);
+                    extraTransforms.push(`e_blur_region:800,w_${bw},h_${bh},x_${bx},y_${by}${timeStr}`);
+                }
+            });
+
+            let finalUrl = data.secure_url;
+            if (extraTransforms.length > 0) finalUrl = data.secure_url.replace('/upload/', `/upload/${transform}/${extraTransforms.join('/')}/`);
+            else finalUrl = data.secure_url.replace('/upload/', `/upload/${transform}/`);
+
+            await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
+
+        } else {
             status.innerText = "Wird gerendert und verarbeitet... Bitte warten!";
+            const uploadedUrls = await renderAndUploadImages();
+            if (uploadedUrls.length === 0) throw new Error("Keine Bilder hochgeladen.");
+            await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
         }
-
-        const ws = document.getElementById('pro-editor-workspace');
-        const cw = ws.clientWidth;
-        const ch = ws.clientHeight;
-        proEditorState.overlays.forEach(obj => {
-            let ox = Math.round(obj.x);
-            let oy = Math.round(obj.y);
-            let timeStr = '';
-            if (obj.start > 0 || obj.end < proEditorState.duration) { timeStr = `,so_${obj.start},eo_${obj.end}`; }
-            if (obj.type === 'text') {
-                const encodedText = encodeURIComponent(obj.text.trim());
-                const fName = obj.font.split(',')[0].replace(/'/g, '').replace(/ /g, '_');
-                const cColor = hexToCloudinaryColor(obj.color);
-                extraTransforms.push(`l_text:${fName}_${obj.size}_bold:${encodedText},co_${cColor},a_${obj.rotation},g_north_west,x_${ox},y_${oy}${timeStr}`);
-            } else if (obj.type === 'blur') {
-                let bw = Math.round(obj.size);
-                let bh = Math.round(obj.size);
-                let bx = Math.round(obj.x - bw / 2);
-                let by = Math.round(obj.y - bh / 2);
-                extraTransforms.push(`e_blur_region:800,w_${bw},h_${bh},x_${bx},y_${by}${timeStr}`);
-            }
-        });
-
-        let finalUrl = data.secure_url;
-        if (extraTransforms.length > 0) finalUrl = data.secure_url.replace('/upload/', `/upload/${transform}/${extraTransforms.join('/')}/`);
-        else finalUrl = data.secure_url.replace('/upload/', `/upload/${transform}/`);
-
-        await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
 
         showToast("Erfolgreich veröffentlicht! 🎉");
+
+        // Cleanups
         document.getElementById('upload-modal').classList.remove('show');
         document.getElementById('up-file').value = '';
         document.getElementById('up-title').value = '';
         document.getElementById('up-desc').value = '';
+        document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen";
+        document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt";
+        document.querySelector('#up-file-btn i').style.color = "#aaa";
+        if (document.getElementById('video-advanced-editor')) document.getElementById('video-advanced-editor').style.display = 'none';
+        if (document.getElementById('image-advanced-editor')) document.getElementById('image-advanced-editor').style.display = 'none';
+
+        imageEditorState.images = [];
         proBgAudio.pause();
-    } catch (e) { showCustomAlert("Upload Fehler", "Fehler! Evtl. falsches Format."); } finally {
+
+    } catch (e) {
+        showCustomAlert("Upload Fehler", "Fehler! Evtl. falsches Format.");
+    } finally {
         btn.disabled = false;
         status.innerText = "";
     }
 });
 
-// --- FEED & INTERACTION LOGIC (REST OF SCRIPT) ---
+document.getElementById('open-upload').addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
+document.getElementById('close-upload').addEventListener('click', () => {
+    document.getElementById('upload-modal').classList.remove('show');
+    proBgAudio.pause();
+});
+document.getElementById('close-comments').addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
+document.getElementById('close-settings').addEventListener('click', () => document.getElementById('settings-modal').classList.remove('show'));
+document.getElementById('close-app-settings').addEventListener('click', () => document.getElementById('app-settings-modal').classList.remove('show'));
+
+
+// --- FEED & INTERACTION LOGIC ---
 
 async function addNotification(targetUid, type, text, videoId = null) {
     if (!currentUser || targetUid === currentUser.uid) return;
@@ -1939,13 +2470,8 @@ window.viewUserStory = function(index = 0) {
     storyViewerTimer = setTimeout(() => { nextStory(); }, 5000);
 }
 
-window.nextStory = function() {
-    viewUserStory(window.currentStoryIndex + 1);
-}
-window.prevStory = function() {
-    viewUserStory(window.currentStoryIndex - 1);
-}
-
+window.nextStory = function() { viewUserStory(window.currentStoryIndex + 1); }
+window.prevStory = function() { viewUserStory(window.currentStoryIndex - 1); }
 window.closeStoryViewer = function() { clearTimeout(storyViewerTimer); document.getElementById('story-viewer').classList.remove('show'); }
 
 window.sendSupport = async function() { const msg = document.getElementById('support-msg').value.trim(); if(!msg || !currentUser) return; const ticketRef = await addDoc(collection(db, "reports"), { uid: currentUser.uid, name: currentUser.displayName, hasPlus: checkPhilPlusStatus(1), tier: currentUser.philPlusTier || 0, status: 'open', timestamp: Date.now() }); await addDoc(collection(db, `reports/${ticketRef.id}/messages`), { senderUid: currentUser.uid, text: msg, timestamp: Date.now() }); showToast("Support-Ticket erstellt!"); document.getElementById('support-msg').value = ''; document.getElementById('app-settings-modal').classList.remove('show'); switchView('inbox'); document.getElementById('tab-support').click(); }
@@ -2167,6 +2693,59 @@ document.getElementById('dm-file-upload').addEventListener('change', async(e) =>
     try {
         const formData = new FormData(); formData.append('file', file); formData.append('upload_preset', UPLOAD_PRESET);
         const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`, { method: 'POST', body: formData }); const data = await res.json();
+        if(!data.secure_url) throw new Error();
+        const text = "[IMAGE] " + data.secure_url;
+        await addDoc(collection(db, `chats/${window.currentChatId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); 
+        await updateDoc(doc(db, "chats", window.currentChatId), { lastMessage: text, lastMessageTime: Date.now(), users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic } } }); 
+        addNotification(window.currentChatPartner.uid, "message", `hat ein Bild gesendet.`);
+    } catch(err) { showCustomAlert("Fehler", "Bild konnte nicht gesendet werden."); }
+    document.getElementById('dm-file-upload').value = '';
+});
+
+function initResponsiveLayout() {
+    const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;
+    function createPCContainers() { if (!pcSidebar) { pcSidebar = document.createElement('div'); pcSidebar.id = 'pc-nav-sidebar'; pcSidebar.innerHTML = `<div class="logo-area"><img src="https://i.imgur.com/JDPRzCc.png" class="app-logo" alt="Logo">Phil Shorts</div>`; appContainer.prepend(pcSidebar); } }
+    function restructureVideoForPC(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; let infoPanel = inner.querySelector('.pc-info-panel-container'); if (!infoPanel) { infoPanel = document.createElement('div'); infoPanel.className = 'pc-info-panel-container'; inner.appendChild(infoPanel); const videoFooter = inner.querySelector('.video__footer'); const videoSidebar = inner.querySelector('.video__sidebar'); if (videoFooter) infoPanel.appendChild(videoFooter); if (videoSidebar) infoPanel.appendChild(videoSidebar); } }
+    function rollBackVideoForHandy(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; const infoPanel = inner.querySelector('.pc-info-panel-container'); if (infoPanel) { const videoFooter = infoPanel.querySelector('.video__footer'); const videoSidebar = infoPanel.querySelector('.video__sidebar'); if (videoFooter) inner.appendChild(videoFooter); if (videoSidebar) inner.appendChild(videoSidebar); infoPanel.remove(); } }
+    function checkResponsiveMode() { const isPC = window.innerWidth > 768; if (isPC && currentMode !== 'pc') { currentMode = 'pc'; createPCContainers(); if (originalNav) pcSidebar.appendChild(originalNav); document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC); } else if (!isPC && currentMode !== 'handy') { currentMode = 'handy'; if (originalNav) appContainer.appendChild(originalNav); if (pcSidebar) { pcSidebar.remove(); pcSidebar = null; } document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy); } }
+    checkResponsiveMode(); window.addEventListener('resize', checkResponsiveMode);
+    if (window.innerWidth > 768) { const videoObserver2 = new MutationObserver(function(mutations) { if (currentMode === 'pc') mutations.forEach(mutation => mutation.addedNodes.forEach(node => { if (node.classList && node.classList.contains('video')) restructureVideoForPC(node); })); }); const videoContainer = document.getElementById('video-container'); if (videoContainer) videoObserver2.observe(videoContainer, { childList: true }); }
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
+        dmBox.scrollTop = dmBox.scrollHeight;
+    });
+};
+
+document.getElementById('send-dm-btn').addEventListener('click', async() => { const input = document.getElementById('dm-input'); const text = input.value.trim(); if (!text || !window.currentChatId || !currentUser) return; input.value = ''; await addDoc(collection(db, `chats/${window.currentChatId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); await updateDoc(doc(db, "chats", window.currentChatId), { lastMessage: text, lastMessageTime: Date.now(), users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic } } }); addNotification(window.currentChatPartner.uid, "message", `hat geschrieben: "${text}"`); });
+document.getElementById('dm-input').addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-dm-btn').click(); });
+
+document.getElementById('dm-img-btn').addEventListener('click', () => document.getElementById('dm-file-upload').click());
+document.getElementById('dm-file-upload').addEventListener('change', async(e) => {
+    const file = e.target.files[0]; if(!file) return; showToast("Bild wird gesendet...");
+    try {
+        const formData = new FormData(); formData.append('file', file); formData.append('upload_preset', UPLOAD_PRESET);
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`, { method: 'POST', body: formData }); const data = await res.json();
+        if(!data.secure_url) throw new Error();
+        const text = "[IMAGE] " + data.secure_url;
+        await addDoc(collection(db, `chats/${window.currentChatId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); 
+        await updateDoc(doc(db, "chats", window.currentChatId), { lastMessage: text, lastMessageTime: Date.now(), users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic } } }); 
+        addNotification(window.currentChatPartner.uid, "message", `hat ein Bild gesendet.`);
+    } catch(err) { showCustomAlert("Fehler", "Bild konnte nicht gesendet werden."); }
+    document.getElementById('dm-file-upload').value = '';
+});
+
+function initResponsiveLayout() {
+    const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;
+    function createPCContainers() { if (!pcSidebar) { pcSidebar = document.createElement('div'); pcSidebar.id = 'pc-nav-sidebar'; pcSidebar.innerHTML = `<div class="logo-area"><img src="https://i.imgur.com/JDPRzCc.png" class="app-logo" alt="Logo">Phil Shorts</div>`; appContainer.prepend(pcSidebar); } }
+    function restructureVideoForPC(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; let infoPanel = inner.querySelector('.pc-info-panel-container'); if (!infoPanel) { infoPanel = document.createElement('div'); infoPanel.className = 'pc-info-panel-container'; inner.appendChild(infoPanel); const videoFooter = inner.querySelector('.video__footer'); const videoSidebar = inner.querySelector('.video__sidebar'); if (videoFooter) infoPanel.appendChild(videoFooter); if (videoSidebar) infoPanel.appendChild(videoSidebar); } }
+    function rollBackVideoForHandy(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; const infoPanel = inner.querySelector('.pc-info-panel-container'); if (infoPanel) { const videoFooter = infoPanel.querySelector('.video__footer'); const videoSidebar = infoPanel.querySelector('.video__sidebar'); if (videoFooter) inner.appendChild(videoFooter); if (videoSidebar) inner.appendChild(videoSidebar); infoPanel.remove(); } }
+    function checkResponsiveMode() { const isPC = window.innerWidth > 768; if (isPC && currentMode !== 'pc') { currentMode = 'pc'; createPCContainers(); if (originalNav) pcSidebar.appendChild(originalNav); document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC); } else if (!isPC && currentMode !== 'handy') { currentMode = 'handy'; if (originalNav) appContainer.appendChild(originalNav); if (pcSidebar) { pcSidebar.remove(); pcSidebar = null; } document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy); } }
+    checkResponsiveMode(); window.addEventListener('resize', checkResponsiveMode);
+    if (window.innerWidth > 768) { const videoObserver2 = new MutationObserver(function(mutations) { if (currentMode === 'pc') mutations.forEach(mutation => mutation.addedNodes.forEach(node => { if (node.classList && node.classList.contains('video')) restructureVideoForPC(node); })); }); const videoContainer = document.getElementById('video-container'); if (videoContainer) videoObserver2.observe(videoContainer, { childList: true }); }
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();const data = await res.json();
         if(!data.secure_url) throw new Error();
         const text = "[IMAGE] " + data.secure_url;
         await addDoc(collection(db, `chats/${window.currentChatId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); 
