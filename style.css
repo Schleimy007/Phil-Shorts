@@ -216,6 +216,10 @@ body.theme-neon-pink .glass-nav-bottom {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 15px;
+    padding: 15px;
+    padding-bottom: 100px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .shop-item-card {
@@ -1408,11 +1412,12 @@ button.profile-action-btn[style*="display: block"] {
 }
 
 
-/* --- POSTEINGANG / CHATS / INBOX (TIKTOK STYLE) --- */
+/* --- POSTEINGANG / CHATS / INBOX / SHOP (TIKTOK STYLE) --- */
 
 #view-inbox,
 #view-dm,
-#view-ticket {
+#view-ticket,
+#view-shop {
     display: flex;
     flex-direction: column;
     height: calc(100dvh - 60px - env(safe-area-inset-bottom));
@@ -1820,9 +1825,10 @@ button.profile-action-btn[style*="display: block"] {
 .modal-header {
     padding: 15px 20px;
     display: flex;
-    justify-content: space-between;
-    border-bottom: 1px solid #222;
     align-items: center;
+    border-bottom: 1px solid #222;
+    position: relative;
+    /* WICHTIG FÜR DEN X BUTTON FIX */
 }
 
 .modal-header h4 {
@@ -1834,10 +1840,13 @@ button.profile-action-btn[style*="display: block"] {
 }
 
 .close-modal {
-    font-size: 20px;
+    font-size: 24px;
     cursor: pointer;
     color: #888;
-    padding: 0 5px;
+    padding: 5px;
+    position: absolute;
+    /* X BUTTON FIX */
+    right: 15px;
 }
 
 .modal-body {
