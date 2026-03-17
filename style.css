@@ -27,14 +27,14 @@ textarea,
 }
 
 
-/* --- FESTES LAYOUT FÜR MOBILE GERÄTE (VERHINDERT SCROLL-BUGS) --- */
+/* --- FESTES LAYOUT FÜR MOBILE GERÄTE (TIKTOK BASE) --- */
 
 html,
 body {
     background: #000;
     color: white;
-    height: 100%;
-    width: 100%;
+    height: 100dvh;
+    width: 100vw;
     position: fixed;
     top: 0;
     left: 0;
@@ -85,8 +85,8 @@ body.theme-neon-pink .glass-nav-bottom {
     left: 0;
     right: 0;
     bottom: 0;
-    height: 100%;
-    width: 100%;
+    height: 100dvh;
+    width: 100vw;
     background-color: #000;
     overflow: hidden;
     transition: background-color 0.3s ease;
@@ -281,9 +281,6 @@ body.theme-neon-pink .glass-nav-bottom {
     }
 }
 
-
-/* Neue Solid Borders */
-
 .border-solid-red {
     border: 3px solid #ff0000;
     padding: 2px;
@@ -324,9 +321,6 @@ body.theme-neon-pink .glass-nav-bottom {
     padding: 2px;
 }
 
-
-/* Neue Neon Borders */
-
 .border-neon-red {
     border: 3px solid #ff0000;
     box-shadow: 0 0 10px #ff0000, inset 0 0 5px #ff0000;
@@ -357,9 +351,6 @@ body.theme-neon-pink .glass-nav-bottom {
     padding: 2px;
 }
 
-
-/* Dashed & Dotted */
-
 .border-dashed-red {
     border: 3px dashed #ff0000;
     padding: 2px;
@@ -375,9 +366,6 @@ body.theme-neon-pink .glass-nav-bottom {
     padding: 2px;
 }
 
-
-/* Double Borders */
-
 .border-double-purple {
     border: 5px double #a200ff;
     padding: 1px;
@@ -387,9 +375,6 @@ body.theme-neon-pink .glass-nav-bottom {
     border: 5px double #ffd700;
     padding: 1px;
 }
-
-
-/* Gradients */
 
 .border-grad-fire {
     border: 3px solid transparent;
@@ -415,9 +400,6 @@ body.theme-neon-pink .glass-nav-bottom {
     padding: 2px;
 }
 
-
-/* Premium Themed */
-
 .border-cyberpunk {
     border: 3px solid transparent;
     background: linear-gradient(#000, #000) padding-box, linear-gradient(45deg, #fcee0a, #00f2fe, #ff0050) border-box;
@@ -442,9 +424,6 @@ body.theme-neon-pink .glass-nav-bottom {
     background: linear-gradient(#000, #000) padding-box, linear-gradient(45deg, red, orange, yellow, green, blue, indigo, violet) border-box;
     padding: 2px;
 }
-
-
-/* Custom Fallback */
 
 .border-custom {
     border: 3px solid transparent;
@@ -634,6 +613,7 @@ body.theme-neon-pink .glass-nav-bottom {
 .glass-nav {
     background: rgba(0, 0, 0, 0.85);
     backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     transition: background-color 0.3s ease;
 }
@@ -641,16 +621,20 @@ body.theme-neon-pink .glass-nav-bottom {
 .glass-nav-bottom {
     background: rgba(0, 0, 0, 0.85);
     backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     transition: background-color 0.3s ease;
 }
+
+
+/* VIEWS & LAYOUT */
 
 .view {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: calc(100% - 60px - env(safe-area-inset-bottom));
+    width: 100vw;
+    height: calc(100dvh - 60px - env(safe-area-inset-bottom));
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.2s ease, background-color 0.3s ease;
@@ -667,12 +651,15 @@ body.theme-neon-pink .glass-nav-bottom {
     z-index: 5;
 }
 
+
+/* FULL SCREEN OVERLAYS */
+
 .full-screen-overlay {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100dvh;
     background: #000;
     z-index: 1000;
     display: flex;
@@ -714,8 +701,8 @@ body.theme-neon-pink .glass-nav-bottom {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100dvh;
     background: rgba(0, 0, 0, 0.8);
     z-index: 3000;
     display: flex;
@@ -725,6 +712,7 @@ body.theme-neon-pink .glass-nav-bottom {
     pointer-events: none;
     transition: opacity 0.3s ease;
     backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
 }
 
 .alert-modal-overlay.show {
@@ -791,26 +779,28 @@ body.theme-neon-pink .glass-nav-bottom {
 }
 
 
-/* --- HEADER OPTIMIERT FÜR JEDES HANDY --- */
+/* --- TIKTOK HEADER (PERFEKT NEBENEINANDER & ZENTRIERT) --- */
 
 .app__header {
     position: absolute;
     top: 0;
     left: 0;
-    width: 100%;
+    width: 100vw;
     display: flex;
     justify-content: center;
+    /* Hält "Folge ich" und "Für dich" exakt in der Mitte */
     align-items: center;
     gap: 20px;
-    padding: calc(15px + env(safe-area-inset-top)) 60px 15px;
+    /* Abstand zwischen Folge ich & Für dich */
+    padding: calc(15px + env(safe-area-inset-top)) 15px 15px;
     z-index: 100;
-    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0) 100%);
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6) 0%, transparent 100%);
     box-sizing: border-box;
 }
 
 .header__link {
     font-size: 17px;
-    font-weight: 600;
+    font-weight: bold;
     color: rgba(255, 255, 255, 0.6);
     cursor: pointer;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
@@ -832,31 +822,17 @@ body.theme-neon-pink .glass-nav-bottom {
     border-radius: 2px;
 }
 
-.search-icon {
-    position: absolute;
-    right: 20px;
-    top: calc(50% + (env(safe-area-inset-top) / 2));
-    transform: translateY(-50%);
-    font-size: 22px;
-    cursor: pointer;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-    transition: transform 0.2s;
-}
 
-.search-icon:active {
-    transform: translateY(-50%) scale(0.8);
-}
+/* Absolute Positionierung verhindert, dass das Menü weggedrückt wird */
 
 .live-stream-btn {
     position: absolute;
     left: 15px;
-    top: calc(50% + (env(safe-area-inset-top) / 2));
-    transform: translateY(-50%);
     font-size: 14px;
     font-weight: bold;
     background: #ff0050;
     color: white;
-    padding: 5px 10px;
+    padding: 6px 12px;
     border-radius: 8px;
     cursor: pointer;
     display: flex;
@@ -867,7 +843,21 @@ body.theme-neon-pink .glass-nav-bottom {
 }
 
 .live-stream-btn:active {
-    transform: translateY(-50%) scale(0.9);
+    transform: scale(0.9);
+}
+
+.search-icon {
+    position: absolute;
+    right: 20px;
+    font-size: 22px;
+    cursor: pointer;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+    transition: transform 0.2s;
+    color: white;
+}
+
+.search-icon:active {
+    transform: scale(0.8);
 }
 
 
@@ -891,9 +881,13 @@ body.theme-neon-pink .glass-nav-bottom {
     padding: 5px;
 }
 
+
+/* --- VIDEO FEED --- */
+
 .app__videos {
-    height: 100%;
-    width: 100%;
+    height: 100dvh;
+    /* Nutzt die komplette Höhe */
+    width: 100vw;
     scroll-snap-type: y mandatory;
     overflow-y: scroll;
     scrollbar-width: none;
@@ -908,8 +902,8 @@ body.theme-neon-pink .glass-nav-bottom {
 
 .video {
     position: relative;
-    height: 100%;
-    width: 100%;
+    height: 100dvh;
+    width: 100vw;
     scroll-snap-align: start;
     background: transparent;
     overflow: hidden;
@@ -930,7 +924,7 @@ body.theme-neon-pink .glass-nav-bottom {
     left: 0;
     width: 100%;
     height: 100%;
-    background: transparent;
+    background: #000;
 }
 
 .video__player {
@@ -940,6 +934,9 @@ body.theme-neon-pink .glass-nav-bottom {
     cursor: pointer;
     display: block;
 }
+
+
+/* Carousel (Multi-Image Posts) */
 
 .carousel-container {
     position: absolute;
@@ -975,7 +972,7 @@ body.theme-neon-pink .glass-nav-bottom {
 
 .carousel-dots {
     position: absolute;
-    bottom: 130px;
+    bottom: calc(130px + env(safe-area-inset-bottom));
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -1057,10 +1054,13 @@ body.theme-neon-pink .glass-nav-bottom {
     filter: drop-shadow(0 4px 15px rgba(0, 0, 0, 0.4));
 }
 
+
+/* Mute Button oben rechts */
+
 .mute-container {
     position: absolute;
     top: calc(80px + env(safe-area-inset-top));
-    right: 20px;
+    right: 15px;
     display: flex;
     flex-direction: row-reverse;
     align-items: center;
@@ -1127,7 +1127,7 @@ body.theme-neon-pink .glass-nav-bottom {
 
 .player-progress-bar {
     position: absolute;
-    bottom: 0px;
+    bottom: calc(60px + env(safe-area-inset-bottom));
     left: 0;
     width: 100%;
     height: 3px;
@@ -1142,62 +1142,30 @@ body.theme-neon-pink .glass-nav-bottom {
     border-radius: 0 2px 2px 0;
 }
 
-.video__footer {
-    position: absolute;
-    bottom: 20px;
-    left: 12px;
-    width: calc(100% - 70px);
-    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
-    z-index: 10;
-    pointer-events: none;
-    word-wrap: break-word;
-}
 
-.creator-name {
-    font-size: 17px;
-    margin-bottom: 6px;
-    font-weight: bold;
-    pointer-events: auto;
-    cursor: pointer;
-    display: inline-block;
-}
-
-.video-title {
-    font-size: 15px;
-    font-weight: bold;
-    margin-bottom: 4px;
-    pointer-events: auto;
-    cursor: pointer;
-}
-
-.video-desc-preview {
-    font-size: 14px;
-    pointer-events: auto;
-    line-height: 1.3;
-    cursor: pointer;
-    color: #eee;
-}
+/* --- TIKTOK VIDEO SIDEBAR (RECHTS) --- */
 
 .video__sidebar {
     position: absolute;
-    bottom: 25px;
-    right: 12px;
+    bottom: calc(75px + env(safe-area-inset-bottom));
+    right: 10px;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 15px;
-    z-index: 10;
+    z-index: 25;
 }
 
 .sidebar__profile {
     position: relative;
-    width: 50px;
-    height: 50px;
+    width: 48px;
+    height: 48px;
     margin-bottom: 8px;
     cursor: pointer;
     border-radius: 50%;
     padding: 2px;
     background: white;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
 }
 
 .sidebar__profile img {
@@ -1218,6 +1186,7 @@ body.theme-neon-pink .glass-nav-bottom {
     border-radius: 50%;
     cursor: pointer;
     transition: transform 0.2s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .follow-btn:active {
@@ -1237,14 +1206,16 @@ body.theme-neon-pink .glass-nav-bottom {
 
 .videoSidebar__button i {
     font-size: 32px;
+    color: white;
     filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.8));
 }
 
 .videoSidebar__button p {
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 13px;
+    font-weight: bold;
+    color: white;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-    margin-top: 3px;
+    margin-top: 2px;
 }
 
 .videoSidebar__button.liked i {
@@ -1254,6 +1225,90 @@ body.theme-neon-pink .glass-nav-bottom {
 .videoSidebar__button.gift-btn i {
     color: #ffd700;
 }
+
+
+/* --- TIKTOK VIDEO FOOTER (UNTEN LINKS) --- */
+
+.video__footer {
+    position: absolute;
+    bottom: calc(75px + env(safe-area-inset-bottom));
+    left: 15px;
+    width: calc(100% - 90px);
+    /* Platz lassen für die Sidebar rechts */
+    z-index: 20;
+    pointer-events: none;
+    word-wrap: break-word;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.creator-name {
+    font-size: 16px;
+    margin-bottom: 6px;
+    font-weight: bold;
+    color: white;
+    pointer-events: auto;
+    cursor: pointer;
+    display: inline-block;
+}
+
+.video-title {
+    font-size: 15px;
+    font-weight: bold;
+    margin-bottom: 4px;
+    color: white;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.video-desc-preview {
+    font-size: 14px;
+    color: #fff;
+    pointer-events: auto;
+    line-height: 1.4;
+    cursor: pointer;
+    font-weight: 400;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+
+/* --- PERFEKTE BUTTONS FÜR PROFIL / ADMIN (HANDY OPTIMIERT) --- */
+
+.profile-action-btn {
+    background: #ff0050;
+    color: white;
+    border: none;
+    padding: 0 15px;
+    min-height: 44px;
+    /* Perfekte Touch-Höhe für iOS/Android */
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    flex: 1 1 auto;
+    /* Erlaubt wachsen/schrumpfen in Flexboxen, verhindert Quetschen */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    box-sizing: border-box;
+    -webkit-appearance: none;
+}
+
+.profile-action-btn:active {
+    transform: scale(0.97);
+}
+
+button.profile-action-btn[style*="display: block"] {
+    display: flex !important;
+}
+
+.profile-action-btn.edit-btn {
+    background: #333;
+}
+
+
+/* --- PROFIL HEADER --- */
 
 .profile-header {
     display: flex;
@@ -1297,45 +1352,10 @@ body.theme-neon-pink .glass-nav-bottom {
     color: #888;
 }
 
-
-/* --- PERFEKTION FÜR BUTTONS --- */
-
-.profile-action-btn {
-    background: #ff0050;
-    color: white;
-    border: none;
-    padding: 0 20px;
-    min-height: 46px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 15px;
-    cursor: pointer;
-    transition: background 0.2s;
-    flex: 1 1 auto;
-    /* Behebt das Quetschen der Buttons */
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    line-height: normal;
-    text-align: center;
-    box-sizing: border-box;
-    -webkit-appearance: none;
-}
-
-button.profile-action-btn[style*="display: block"] {
-    display: flex !important;
-}
-
-.profile-action-btn.edit-btn {
-    background: #333;
-}
-
 .profile-tabs {
     display: flex;
     border-bottom: 1px solid #222;
+    width: 100%;
 }
 
 .profile-tab {
@@ -1387,12 +1407,15 @@ button.profile-action-btn[style*="display: block"] {
     gap: 5px;
 }
 
+
+/* --- POSTEINGANG / CHATS / INBOX (TIKTOK STYLE) --- */
+
 #view-inbox,
 #view-dm,
 #view-ticket {
     display: flex;
     flex-direction: column;
-    height: calc(100% - 60px - env(safe-area-inset-bottom));
+    height: calc(100dvh - 60px - env(safe-area-inset-bottom));
 }
 
 .chat-container {
@@ -1403,44 +1426,53 @@ button.profile-action-btn[style*="display: block"] {
     flex-direction: column;
     gap: 15px;
     padding-bottom: 90px;
+    -webkit-overflow-scrolling: touch;
 }
 
 .inbox-msg {
     display: flex;
     gap: 15px;
     align-items: center;
-    background: rgba(255, 255, 255, 0.05);
-    padding: 15px;
-    border-radius: 15px;
+    background: transparent;
+    padding: 10px 0;
+    border-radius: 0;
     cursor: pointer;
     transition: background 0.2s;
-    border: 1px solid #222;
+    border-bottom: 1px solid #222;
+    /* TikTok Style Trennlinien */
 }
 
 .inbox-msg:active {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
 }
 
 .chat-avatar {
-    width: 45px;
-    height: 45px;
+    width: 50px;
+    height: 50px;
     border-radius: 50%;
     object-fit: cover;
-}
-
-.chat-bubble {
-    font-size: 14px;
-    line-height: 1.4;
-    color: #ddd;
+    flex-shrink: 0;
 }
 
 .chat-username {
-    font-size: 14px;
+    font-size: 15px;
     color: white;
     margin-bottom: 5px;
     display: block;
     font-weight: bold;
 }
+
+.chat-bubble {
+    font-size: 14px;
+    line-height: 1.4;
+    color: #aaa;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+/* DM Chat Messages */
 
 .chat-msg {
     display: flex;
@@ -1455,13 +1487,14 @@ button.profile-action-btn[style*="display: block"] {
 }
 
 .chat-msg .chat-bubble {
-    background: #222;
+    background: #333;
     padding: 12px 16px;
     border-radius: 20px;
     border-top-left-radius: 4px;
     font-size: 15px;
     color: white;
     word-break: break-word;
+    white-space: normal;
 }
 
 .chat-msg.me .chat-bubble {
@@ -1478,24 +1511,23 @@ button.profile-action-btn[style*="display: block"] {
 }
 
 
-/* --- INPUT FELDER PERFEKT GEMACHT (KOMMENTARE & DM) --- */
+/* --- PERFEKTES INPUT-FELD FÜR KOMMENTARE & DMS --- */
 
 .chat-input-wrapper {
     position: absolute;
     bottom: 0;
     left: 0;
-    width: 100%;
+    width: 100vw;
     padding: 10px 15px;
     display: flex;
     flex-wrap: nowrap;
-    /* Fix für rutschende Buttons */
     gap: 10px;
     align-items: center;
     padding-bottom: calc(10px + env(safe-area-inset-bottom));
-    background: rgba(15, 15, 15, 0.95);
-    /* Solider Hintergrund gegen transparente Fehler */
-    backdrop-filter: blur(10px);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    /* iOS Tastatur/Home Bar Fix */
+    background: #111;
+    /* Festes Dunkelgrau statt buggy transparent */
+    border-top: 1px solid #222;
     box-sizing: border-box;
     z-index: 1000;
 }
@@ -1503,11 +1535,13 @@ button.profile-action-btn[style*="display: block"] {
 .chat-input,
 .comment-input {
     flex: 1 1 auto;
+    width: 100%;
     min-width: 0;
-    padding: 14px 20px;
+    padding: 12px 20px;
     border-radius: 25px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    background: rgba(255, 255, 255, 0.1);
+    /* Schönes rundes Pill-Design wie TikTok */
+    border: none;
+    background: #222;
     color: white;
     outline: none;
     font-size: 15px;
@@ -1518,28 +1552,29 @@ button.profile-action-btn[style*="display: block"] {
 
 .chat-input::placeholder,
 .comment-input::placeholder {
-    color: rgba(255, 255, 255, 0.5);
+    color: #888;
 }
 
 .chat-input:focus,
 .comment-input:focus {
-    border-color: #555;
-    background: rgba(255, 255, 255, 0.15);
+    background: #333;
 }
 
 .chat-send-btn,
 .comment-submit {
-    flex: 0 0 45px;
-    width: 45px;
-    height: 45px;
-    background: #ff0050;
-    color: white;
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    /* Kein dominanter roter Kreis mehr, sondern Clean */
+    color: #ff0050;
     border: none;
     border-radius: 50%;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 18px;
+    font-size: 22px;
+    /* Größeres Icon */
     font-weight: bold;
     cursor: pointer;
     transition: transform 0.1s;
@@ -1548,7 +1583,32 @@ button.profile-action-btn[style*="display: block"] {
 
 .chat-send-btn:active,
 .comment-submit:active {
-    transform: scale(0.9);
+    transform: scale(0.8);
+}
+
+
+/* Extra Button Style für Modal Footer Kommentare */
+
+.modal-footer {
+    padding: 10px 15px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid #222;
+    background: #111;
+    position: absolute;
+    /* Fixiert den Footer unten im Modal */
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+
+/* Modal Body muss Platz für den fixierten Footer lassen */
+
+#comment-modal .modal-body {
+    padding-bottom: 80px;
 }
 
 .search-input-box {
@@ -1578,7 +1638,7 @@ button.profile-action-btn[style*="display: block"] {
 
 .trending-section {
     padding: 10px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid #222;
 }
 
 .trend-item {
@@ -1729,26 +1789,26 @@ button.profile-action-btn[style*="display: block"] {
 }
 
 
-/* MODALS */
+/* --- MODALS (BOTTOM SHEETS WIE TIKTOK) --- */
 
 .modal {
     position: absolute;
     bottom: -100%;
     left: 0;
-    width: 100%;
-    height: 75%;
+    width: 100vw;
+    height: 75dvh;
+    /* Nutzt 75% des Bildschirms */
     background: #111;
     color: white;
-    z-index: 200;
-    border-radius: 20px 20px 0 0;
-    transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), visibility 0.3s, background-color 0.3s ease;
+    z-index: 2000;
+    border-radius: 15px 15px 0 0;
+    transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), visibility 0.3s;
     display: flex;
     flex-direction: column;
     border-top: 1px solid #333;
     pointer-events: none;
     visibility: hidden;
-    padding-bottom: env(safe-area-inset-bottom);
-    /* Fix für abgeschnittene Modals bei iPhone */
+    box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.5);
 }
 
 .modal.show {
@@ -1758,41 +1818,33 @@ button.profile-action-btn[style*="display: block"] {
 }
 
 .modal-header {
-    padding: 20px;
+    padding: 15px 20px;
     display: flex;
     justify-content: space-between;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid #222;
     align-items: center;
 }
 
 .modal-header h4 {
-    font-size: 16px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: bold;
     text-align: center;
     flex: 1;
     margin: 0;
 }
 
 .close-modal {
-    font-size: 24px;
+    font-size: 20px;
     cursor: pointer;
-    color: #aaa;
-    padding: 0 10px;
+    color: #888;
+    padding: 0 5px;
 }
 
 .modal-body {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
-}
-
-.modal-footer {
-    padding: 15px 20px;
-    padding-bottom: calc(15px + env(safe-area-inset-bottom));
-    display: flex;
-    gap: 10px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    align-items: center;
+    padding: 15px;
+    -webkit-overflow-scrolling: touch;
 }
 
 .delete-comment-icon {
@@ -1810,18 +1862,18 @@ button.profile-action-btn[style*="display: block"] {
 }
 
 .comment-wrapper {
-    margin-bottom: 25px;
+    margin-bottom: 20px;
 }
 
 .comment {
     display: flex;
-    gap: 15px;
+    gap: 12px;
     margin-bottom: 0;
 }
 
 .comment>img:first-child {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
@@ -1830,12 +1882,12 @@ button.profile-action-btn[style*="display: block"] {
 .comment strong {
     font-size: 14px;
     color: #aaa;
-    display: block;
-    margin-bottom: 5px;
+    display: inline-block;
+    margin-bottom: 4px;
 }
 
 .comment-time {
-    font-size: 11px;
+    font-size: 12px;
     color: #666;
     margin-left: 8px;
     font-weight: normal;
@@ -1845,6 +1897,7 @@ button.profile-action-btn[style*="display: block"] {
     font-size: 15px;
     line-height: 1.4;
     color: white;
+    word-break: break-word;
 }
 
 .comment-actions {
@@ -1866,7 +1919,7 @@ button.profile-action-btn[style*="display: block"] {
 }
 
 .reply-container {
-    margin-left: 55px;
+    margin-left: 48px;
     margin-top: 15px;
     display: flex;
     flex-direction: column;
@@ -1880,8 +1933,8 @@ button.profile-action-btn[style*="display: block"] {
 }
 
 .reply-item>img:first-child {
-    width: 30px;
-    height: 30px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     object-fit: cover;
     flex-shrink: 0;
@@ -1890,7 +1943,7 @@ button.profile-action-btn[style*="display: block"] {
 .reply-item strong {
     font-size: 13px;
     color: #aaa;
-    display: block;
+    display: inline-block;
     margin-bottom: 3px;
 }
 
@@ -1898,10 +1951,11 @@ button.profile-action-btn[style*="display: block"] {
     font-size: 14px;
     line-height: 1.4;
     color: white;
+    word-break: break-word;
 }
 
 .reply-box {
-    margin-left: 55px;
+    margin-left: 48px;
     margin-top: 10px;
     display: flex;
     gap: 10px;
@@ -1955,34 +2009,43 @@ button.profile-action-btn[style*="display: block"] {
     font-weight: 600;
 }
 
+
+/* --- TIKTOK BOTTOM NAV --- */
+
 .app__bottom-nav {
     position: absolute;
     bottom: 0;
     left: 0;
-    width: 100%;
+    width: 100vw;
     height: calc(60px + env(safe-area-inset-bottom));
-    padding: 0 10px;
+    padding: 0 5px;
     padding-bottom: env(safe-area-inset-bottom);
     display: flex;
     justify-content: space-around;
     align-items: center;
     z-index: 1000;
+    background: #000;
+    /* Solid Black wie bei TikTok */
+    border-top: 1px solid #222;
 }
 
 .nav__item {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     color: #888;
     cursor: pointer;
     font-size: 10px;
-    gap: 5px;
+    gap: 4px;
     transition: color 0.2s;
-    min-width: 0;
+    flex: 1;
+    height: 100%;
 }
 
 .nav__item.active {
     color: white;
+    font-weight: bold;
 }
 
 .nav__item i {
@@ -1995,11 +2058,15 @@ button.profile-action-btn[style*="display: block"] {
 
 .plus-box {
     background: white;
-    padding: 6px 16px;
+    padding: 6px 14px;
     border-radius: 10px;
     border-left: 4px solid #00f2fe;
     border-right: 4px solid #ff0050;
     transition: transform 0.1s;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 32px;
 }
 
 .plus-box:active {
@@ -2008,6 +2075,7 @@ button.profile-action-btn[style*="display: block"] {
 
 .plus-box i {
     font-size: 16px;
+    color: black;
 }
 
 .loading-screen,
