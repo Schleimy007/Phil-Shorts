@@ -1,8 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
-import { FFmpeg } from 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/esm/index.js';
-import { fetchFile } from 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/esm/index.js';
 
 const firebaseConfig = {
     apiKey: "AIzaSyAF-QW_MtVBkImqh1gXwhKrc2pLLCAe3Ek",
@@ -18,9 +16,7 @@ const GIPHY_API_KEY = "Vj2uCqfOmAT1sXEKQgQvneGy60VIxgCk";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const storage = getStorage(app); 
-
-const ffmpeg = new FFmpeg();
+const storage = getStorage(app);
 
 let allVideosData = [];
 let allKnownUsers = [];
@@ -29,39 +25,18 @@ if (currentUser) currentUser.verified = false;
 
 let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || { master: false, comments: true, likes: true, dms: true, follows: true };
 
-// --- PRO EDITOR STATE ---
-let imageEditorState = { images: [], edits: [], currentIndex: 0 };
-let proEditorState = { filter: 'none', start: 0, end: 0, speed: 1, ratio: 'original', audioFileUrl: null, origVol: 1, bgVol: 0.5, overlays: [] };
-
-let proBgAudio = new Audio();
-
-// Zentraler Drag-State für Einrasten & Bugfixes
-let dragState = {
-    activeId: null,
-    isVideo: false,
-    activeResizeId: null,
-    activeResizePos: null,
-    startX: 0,
-    startY: 0,
-    initialObjX: 0,
-    initialObjY: 0,
-    startSize: 0,
-    startDist: 0,
-    gridVisible: false
-};
-
 // --- HILFSFUNKTION FÜR FIREBASE UPLOADS ---
 async function uploadFileToFirebase(file, folderName) {
     return new Promise((resolve, reject) => {
-        const fileRef = ref(storage, `${folderName}/${Date.now()}_${file.name || 'upload.mp4'}`);
+        const fileRef = ref(storage, `${folderName}/${Date.now()}_${file.name || 'upload'}`);
         const uploadTask = uploadBytesResumable(fileRef, file);
 
         uploadTask.on('state_changed', 
             (snapshot) => {
                 const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
                 const statusEl = document.getElementById('upload-status');
-                if(statusEl && statusEl.innerText.includes("Lade zu Firebase hoch")) {
-                    statusEl.innerText = `Lade zu Firebase hoch... ${Math.round(progress)}%`;
+                if(statusEl) {
+                    statusEl.innerText = `Lade hoch... ${Math.round(progress)}%`;
                 }
             }, 
             (error) => {
@@ -76,6 +51,7 @@ async function uploadFileToFirebase(file, folderName) {
     });
 }
 
+// --- BENACHRICHTIGUNGEN ---
 window.sendDesktopNotification = function(title, body, type) {
     if (!("Notification" in window) || !notifSettings.master || Notification.permission !== "granted") return;
     if (type === 'comment' && !notifSettings.comments) return;
@@ -1964,725 +1940,124 @@ document.getElementById('dm-file-upload').addEventListener('change', async(e) =>
     document.getElementById('dm-file-upload').value = '';
 });
 
-
-// --- DRAG & DROP LOGIK ---
-
-document.getElementById('btn-toggle-grid').addEventListener('click', (e) => { 
-    dragState.gridVisible = !dragState.gridVisible; 
-    document.getElementById('editor-grid').style.display = dragState.gridVisible ? 'block' : 'none'; 
-    e.target.innerHTML = dragState.gridVisible ? '<i class="fas fa-border-all"></i> Raster: An' : '<i class="fas fa-border-all"></i> Raster: Aus'; 
-});
-
-function startDrag(e, id, isVideo = false) { 
-    if(e.target.tagName.toLowerCase() === 'input' || e.target.classList.contains('resize-handle')) return; 
-    e.preventDefault(); e.stopPropagation(); 
-    
-    dragState.activeId = id;
-    dragState.isVideo = isVideo; 
-    
-    if(isVideo) selectProOverlay(id); else selectText(id); 
-    
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX; 
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY; 
-    dragState.startX = clientX; 
-    dragState.startY = clientY; 
-    
-    let obj;
-    if(isVideo) obj = proEditorState.overlays.find(t => t.id === id);
-    else obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id);
-    
-    if(obj) {
-        dragState.initialObjX = obj.x; 
-        dragState.initialObjY = obj.y; 
-    }
-}
-
-function startResize(e, id, pos, isVideo = false) { 
-    e.preventDefault(); e.stopPropagation(); 
-    dragState.activeResizeId = id; 
-    dragState.isVideo = isVideo;
-    dragState.activeResizePos = pos; 
-    
-    if(isVideo) selectProOverlay(id); else selectText(id); 
-    
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX; 
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY; 
-    dragState.startX = clientX; 
-    dragState.startY = clientY; 
-    
-    let obj;
-    if(isVideo) obj = proEditorState.overlays.find(t => t.id === id);
-    else obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id);
-    
-    if(obj) {
-        dragState.startSize = parseFloat(obj.size); 
-        const workspaceId = isVideo ? 'pro-editor-workspace' : 'editor-workspace';
-        const workspaceRect = document.getElementById(workspaceId).getBoundingClientRect(); 
-        const mouseX = clientX - workspaceRect.left; 
-        const mouseY = clientY - workspaceRect.top; 
-        dragState.startDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2)); 
-    }
-}
-
-function dragMove(e) {
-    if (dragState.activeId) { 
-        e.preventDefault(); 
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX; 
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY; 
-        const dx = clientX - dragState.startX; 
-        const dy = clientY - dragState.startY; 
-        let rawX = dragState.initialObjX + dx; 
-        let rawY = dragState.initialObjY + dy; 
-
-        const workspaceId = dragState.isVideo ? 'pro-editor-workspace' : 'editor-workspace';
-        const ws = document.getElementById(workspaceId);
-        
-        let snappedX = false;
-        let snappedY = false;
-
-        // Snapping Logik
-        if (Math.abs(rawX - (ws.clientWidth / 2)) < 15) { rawX = ws.clientWidth / 2; snappedX = true; }
-        if (Math.abs(rawY - (ws.clientHeight / 2)) < 15) { rawY = ws.clientHeight / 2; snappedY = true; }
-
-        const snapVId = dragState.isVideo ? 'pro-snap-v' : 'img-snap-v';
-        const snapHId = dragState.isVideo ? 'pro-snap-h' : 'img-snap-h';
-        document.getElementById(snapVId).style.display = snappedX ? 'block' : 'none';
-        document.getElementById(snapHId).style.display = snappedY ? 'block' : 'none';
-        
-        if (!dragState.isVideo && dragState.gridVisible) { 
-            rawX = Math.round(rawX / 20) * 20; 
-            rawY = Math.round(rawY / 20) * 20; 
-        } 
-        
-        let obj;
-        if(dragState.isVideo) obj = proEditorState.overlays.find(t => t.id === dragState.activeId);
-        else obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === dragState.activeId);
-        
-        if (obj) { 
-            obj.x = rawX; obj.y = rawY; 
-            const prefix = dragState.isVideo ? 'pro-drag-txt-' : 'drag-txt-';
-            const el = document.getElementById(prefix + obj.id); 
-            if(el) { el.style.left = obj.x + 'px'; el.style.top = obj.y + 'px'; } 
-        } 
-    } 
-    else if (dragState.activeResizeId) { 
-        e.preventDefault(); 
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX; 
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY; 
-        const workspaceId = dragState.isVideo ? 'pro-editor-workspace' : 'editor-workspace';
-        const workspaceRect = document.getElementById(workspaceId).getBoundingClientRect(); 
-        const mouseX = clientX - workspaceRect.left; 
-        const mouseY = clientY - workspaceRect.top; 
-        
-        let obj;
-        if(dragState.isVideo) obj = proEditorState.overlays.find(t => t.id === dragState.activeResizeId);
-        else obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === dragState.activeResizeId);
-        
-        if (obj) { 
-            const currentDist = Math.sqrt(Math.pow(mouseX - obj.x, 2) + Math.pow(mouseY - obj.y, 2)); 
-            if (dragState.startDist > 0) { 
-                let newSize = Math.max(15, dragState.startSize * (currentDist / dragState.startDist)); 
-                obj.size = newSize; 
-                const prefix = dragState.isVideo ? 'pro-drag-txt-' : 'drag-txt-';
-                const el = document.getElementById(prefix + obj.id); 
-                if(el) { 
-                    if(obj.type === 'sticker' || obj.type === 'blur'){ 
-                        el.children[0].style.width = newSize+'px'; 
-                        if(obj.type === 'blur') el.children[0].style.height = newSize+'px'; 
-                    } 
-                    else { el.querySelector('.text-content').style.fontSize = newSize + 'px'; } 
-                } 
-                const sizeCtrl = dragState.isVideo ? 'pro-text-ctrl-size' : 'text-ctrl-size';
-                document.getElementById(sizeCtrl).value = newSize; 
-            } 
-        } 
-    }
-}
-function endDrag() { 
-    dragState.activeId = null; 
-    dragState.activeResizeId = null; 
-    document.getElementById('pro-snap-v').style.display = 'none';
-    document.getElementById('pro-snap-h').style.display = 'none';
-    document.getElementById('img-snap-v').style.display = 'none';
-    document.getElementById('img-snap-h').style.display = 'none';
-}
-
-document.addEventListener('mousemove', dragMove); 
-document.addEventListener('touchmove', dragMove, {passive: false}); 
-document.addEventListener('mouseup', endDrag); 
-document.addEventListener('touchend', endDrag);
-
-// --- IMAGE EDITOR SPEZIFISCH ---
-function renderEditorImage(index) {
-    if (imageEditorState.images.length === 0) return; 
-    document.getElementById('editor-bg').src = imageEditorState.images[index]; 
-    document.getElementById('editor-img-counter').innerText = `${index + 1} / ${imageEditorState.images.length}`; 
-    const layer = document.getElementById('editor-layer'); 
-    layer.innerHTML = ''; 
-    imageEditorState.activeTextId = null; 
-    document.getElementById('text-controls').style.display = 'none'; 
-    imageEditorState.edits[index].forEach(obj => createDOMTextElement(obj, false));
-}
-
-function createDOMTextElement(obj, isVideo = false) {
-    const layerId = isVideo ? 'pro-editor-layer' : 'editor-layer';
-    const prefix = isVideo ? 'pro-drag-txt-' : 'drag-txt-';
-    
-    const layer = document.getElementById(layerId); 
-    const wrapper = document.createElement('div'); 
-    wrapper.id = prefix + obj.id; 
-    wrapper.className = 'draggable-text'; 
-    wrapper.style.left = obj.x + 'px'; 
-    wrapper.style.top = obj.y + 'px'; 
-    wrapper.style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`; 
-    
-    if(obj.type === 'sticker') {
-        const imgEl = document.createElement('img');
-        imgEl.className = 'sticker-content';
-        imgEl.src = obj.src;
-        imgEl.style.width = obj.size + 'px';
-        imgEl.style.height = 'auto';
-        imgEl.style.pointerEvents = 'none';
-        wrapper.appendChild(imgEl);
-    } else if (obj.type === 'blur') {
-        const blurEl = document.createElement('div');
-        blurEl.className = 'blur-box-content';
-        blurEl.style.width = obj.size + 'px';
-        blurEl.style.height = obj.size + 'px';
-        wrapper.appendChild(blurEl);
-    } else {
-        const textEl = document.createElement('div'); 
-        textEl.className = 'text-content'; 
-        textEl.innerText = obj.text; 
-        textEl.style.fontSize = obj.size + 'px'; 
-        textEl.style.color = obj.color; 
-        textEl.style.fontFamily = obj.font || 'Arial, sans-serif'; 
-        wrapper.appendChild(textEl);
-    }
-
-    ['tl', 'tr', 'bl', 'br'].forEach(pos => { 
-        const h = document.createElement('div'); 
-        h.className = `resize-handle handle-${pos}`; 
-        h.addEventListener('mousedown', (e) => startResize(e, obj.id, pos, isVideo)); 
-        h.addEventListener('touchstart', (e) => startResize(e, obj.id, pos, isVideo), {passive: false}); 
-        wrapper.appendChild(h); 
-    });
-    
-    wrapper.addEventListener('mousedown', (e) => startDrag(e, obj.id, isVideo)); 
-    wrapper.addEventListener('touchstart', (e) => startDrag(e, obj.id, isVideo), {passive: false}); 
-    layer.appendChild(wrapper);
-}
-
-function selectText(id) { 
-    imageEditorState.activeTextId = id; 
-    document.querySelectorAll('#editor-layer .draggable-text').forEach(el => el.classList.remove('active')); 
-    const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === id); 
-    if(!obj) return; 
-    
-    document.getElementById('drag-txt-' + id).classList.add('active'); 
-    document.getElementById('text-controls').style.display = 'block'; 
-    document.getElementById('text-ctrl-input').value = obj.text || ''; 
-    document.getElementById('text-ctrl-size').value = obj.size; 
-    document.getElementById('text-ctrl-rot').value = obj.rotation; 
-    document.getElementById('text-ctrl-font').value = obj.font || 'Arial, sans-serif'; 
-    
-    if(obj.type === 'sticker') {
-        document.getElementById('text-ctrl-input').style.display = 'none';
-        document.getElementById('img-font-group').style.display = 'none';
-        document.getElementById('img-color-group').style.display = 'none';
-    } else {
-        document.getElementById('text-ctrl-input').style.display = 'block';
-        document.getElementById('img-font-group').style.display = 'block';
-        document.getElementById('img-color-group').style.display = 'block';
-    }
-}
-document.getElementById('editor-workspace').addEventListener('click', (e) => { if (!e.target.closest('.draggable-text')) { imageEditorState.activeTextId = null; document.querySelectorAll('#editor-layer .draggable-text').forEach(el => el.classList.remove('active')); document.getElementById('text-controls').style.display = 'none'; } });
-
-document.getElementById('text-ctrl-input').addEventListener('input', (e) => { if(!imageEditorState.activeTextId) return; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); if(obj.type!=='sticker'){ obj.text = e.target.value; document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').innerText = obj.text; } });
-document.getElementById('text-ctrl-size').addEventListener('input', (e) => { if(!imageEditorState.activeTextId) return; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); obj.size = e.target.value; const el = document.getElementById('drag-txt-' + obj.id); if(obj.type==='sticker'){ el.querySelector('.sticker-content').style.width = obj.size + 'px'; } else { el.querySelector('.text-content').style.fontSize = obj.size + 'px'; } });
-document.getElementById('text-ctrl-rot').addEventListener('input', (e) => { if(!imageEditorState.activeTextId) return; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); obj.rotation = e.target.value; document.getElementById('drag-txt-' + obj.id).style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`; });
-document.getElementById('text-ctrl-font').addEventListener('change', (e) => { if(!imageEditorState.activeTextId) return; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); if(obj.type!=='sticker'){ obj.font = e.target.value; document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.fontFamily = obj.font; } });
-document.querySelectorAll('#text-controls .color-dot').forEach(dot => { dot.addEventListener('click', (e) => { if(!imageEditorState.activeTextId) return; const color = e.target.dataset.color; const obj = imageEditorState.edits[imageEditorState.currentIndex].find(t => t.id === imageEditorState.activeTextId); if(obj.type!=='sticker'){ obj.color = color; document.getElementById('drag-txt-' + obj.id).querySelector('.text-content').style.color = color; } }); });
-document.getElementById('btn-delete-text').addEventListener('click', () => { if(!imageEditorState.activeTextId) return; imageEditorState.edits[imageEditorState.currentIndex] = imageEditorState.edits[imageEditorState.currentIndex].filter(t => t.id !== imageEditorState.activeTextId); document.getElementById('drag-txt-' + imageEditorState.activeTextId).remove(); imageEditorState.activeTextId = null; document.getElementById('text-controls').style.display = 'none'; });
-document.getElementById('btn-add-text').addEventListener('click', () => { const workspace = document.getElementById('editor-workspace'); const newObj = { id: Date.now(), type: 'text', text: "Neuer Text", x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 24, rotation: 0, color: '#ffffff', font: 'Arial, sans-serif' }; imageEditorState.edits[imageEditorState.currentIndex].push(newObj); createDOMTextElement(newObj, false); selectText(newObj.id); });
-
-document.getElementById('sticker-upload-input').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = function(event) {
-        const workspace = document.getElementById('editor-workspace');
-        const newObj = { id: Date.now(), type: 'sticker', src: event.target.result, x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 100, rotation: 0 };
-        imageEditorState.edits[imageEditorState.currentIndex].push(newObj); 
-        createDOMTextElement(newObj, false); 
-        selectText(newObj.id);
-        document.getElementById('sticker-upload-input').value = '';
-    }
-    reader.readAsDataURL(file);
-});
-
-document.getElementById('btn-prev-img').addEventListener('click', () => { if (imageEditorState.currentIndex > 0) { imageEditorState.currentIndex--; renderEditorImage(imageEditorState.currentIndex); } });
-document.getElementById('btn-next-img').addEventListener('click', () => { if (imageEditorState.currentIndex < imageEditorState.images.length - 1) { imageEditorState.currentIndex++; renderEditorImage(imageEditorState.currentIndex); } });
-
-
-// --- PRO VIDEO EDITOR OVERLAYS ---
-function selectProOverlay(id) { 
-    proEditorState.activeTextId = id; 
-    document.querySelectorAll('#pro-editor-layer .draggable-text').forEach(el => el.classList.remove('active')); 
-    const obj = proEditorState.overlays.find(t => t.id === id); 
-    if(!obj) return; 
-    
-    document.getElementById('pro-drag-txt-' + id).classList.add('active'); 
-    document.getElementById('pro-text-controls').style.display = 'block'; 
-    document.getElementById('pro-text-ctrl-input').value = obj.text || ''; 
-    document.getElementById('pro-text-ctrl-size').value = obj.size; 
-    document.getElementById('pro-text-ctrl-rot').value = obj.rotation; 
-    document.getElementById('pro-text-ctrl-font').value = obj.font || 'Arial, sans-serif'; 
-    document.getElementById('pro-overlay-start').value = obj.start || 0;
-    document.getElementById('pro-overlay-end').value = obj.end || (proEditorState.end || 10);
-
-    if(obj.type === 'sticker' || obj.type === 'blur') {
-        document.getElementById('pro-text-ctrl-input').style.display = 'none';
-        document.getElementById('pro-font-group').style.display = 'none';
-        document.getElementById('pro-color-group').style.display = 'none';
-    } else {
-        document.getElementById('pro-text-ctrl-input').style.display = 'block';
-        document.getElementById('pro-font-group').style.display = 'flex';
-        document.getElementById('pro-color-group').style.display = 'block';
-    }
-}
-
-document.getElementById('pro-editor-workspace').addEventListener('click', (e) => { 
-    if (!e.target.closest('.draggable-text')) { 
-        proEditorState.activeTextId = null; 
-        document.querySelectorAll('#pro-editor-layer .draggable-text').forEach(el => el.classList.remove('active')); 
-        document.getElementById('pro-text-controls').style.display = 'none'; 
-    } 
-});
-
-document.getElementById('btn-pro-add-text').addEventListener('click', () => { 
-    const workspace = document.getElementById('pro-editor-workspace'); 
-    const newObj = { id: Date.now(), type: 'text', text: "Video Text", x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 40, rotation: 0, color: '#ffffff', font: 'Arial, sans-serif', start: 0, end: proEditorState.end || 10 }; 
-    proEditorState.overlays.push(newObj); 
-    createDOMTextElement(newObj, true); 
-    selectProOverlay(newObj.id); 
-});
-
-document.getElementById('btn-pro-add-blur').addEventListener('click', () => { 
-    const workspace = document.getElementById('pro-editor-workspace'); 
-    const newObj = { id: Date.now(), type: 'blur', x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 100, rotation: 0, start: 0, end: proEditorState.end || 10 }; 
-    proEditorState.overlays.push(newObj); 
-    createDOMTextElement(newObj, true); 
-    selectProOverlay(newObj.id); 
-});
-
-document.getElementById('pro-sticker-upload-input').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = function(event) {
-        const workspace = document.getElementById('pro-editor-workspace');
-        const newObj = { id: Date.now(), type: 'sticker', src: event.target.result, x: workspace.clientWidth / 2, y: workspace.clientHeight / 2, size: 100, rotation: 0, start: 0, end: proEditorState.end || 10 };
-        proEditorState.overlays.push(newObj); 
-        createDOMTextElement(newObj, true); 
-        selectProOverlay(newObj.id);
-        document.getElementById('pro-sticker-upload-input').value = '';
-    }
-    reader.readAsDataURL(file);
-});
-
-document.getElementById('pro-overlay-start').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); obj.start = parseFloat(e.target.value); });
-document.getElementById('pro-overlay-end').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); obj.end = parseFloat(e.target.value); });
-document.getElementById('pro-text-ctrl-input').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); if(obj.type==='text'){ obj.text = e.target.value; document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').innerText = obj.text; } });
-document.getElementById('pro-text-ctrl-size').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); obj.size = e.target.value; const el = document.getElementById('pro-drag-txt-' + obj.id); if(obj.type!=='text'){ el.children[0].style.width = obj.size + 'px'; if(obj.type==='blur') el.children[0].style.height = obj.size+'px'; } else { el.querySelector('.text-content').style.fontSize = obj.size + 'px'; } });
-document.getElementById('pro-text-ctrl-rot').addEventListener('input', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); obj.rotation = e.target.value; document.getElementById('pro-drag-txt-' + obj.id).style.transform = `translate(-50%, -50%) rotate(${obj.rotation}deg)`; });
-document.getElementById('pro-text-ctrl-font').addEventListener('change', (e) => { if(!proEditorState.activeTextId) return; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); if(obj.type==='text'){ obj.font = e.target.value; document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').style.fontFamily = obj.font; } });
-document.querySelectorAll('.pro-color-dot').forEach(dot => { dot.addEventListener('click', (e) => { if(!proEditorState.activeTextId) return; const color = e.target.dataset.color; const obj = proEditorState.overlays.find(t => t.id === proEditorState.activeTextId); if(obj.type==='text'){ obj.color = color; document.getElementById('pro-drag-txt-' + obj.id).querySelector('.text-content').style.color = color; } }); });
-document.getElementById('btn-pro-delete-text').addEventListener('click', () => { if(!proEditorState.activeTextId) return; proEditorState.overlays = proEditorState.overlays.filter(t => t.id !== proEditorState.activeTextId); document.getElementById('pro-drag-txt-' + proEditorState.activeTextId).remove(); proEditorState.activeTextId = null; document.getElementById('pro-text-controls').style.display = 'none'; });
-
-
-// --- UPLOAD LOGIC PRO VIDEO & IMAGES ---
-document.getElementById('up-file').addEventListener('change', async function(e) {
+// --- EINFACHER UPLOAD LOGIC ---
+document.getElementById('up-file').addEventListener('change', function(e) {
     const files = e.target.files; 
     const txt = document.querySelector('#up-file-btn p'); 
     const icon = document.querySelector('#up-file-btn i'); 
-    
-    const advancedVideoUi = document.getElementById('video-advanced-editor');
-    const proPreview = document.getElementById('pro-video-source');
-    const proTrimStart = document.getElementById('pro-trim-start');
-    const proTrimEnd = document.getElementById('pro-trim-end');
-
-    const advancedImageUi = document.getElementById('image-advanced-editor'); 
 
     if (!files || files.length === 0) { 
         txt.innerText = "Video oder Bilder auswählen"; 
         icon.className = "fas fa-cloud-upload-alt"; 
         icon.style.color = "#aaa"; 
-        advancedVideoUi.style.display = 'none'; 
-        advancedImageUi.style.display = 'none'; 
         return; 
     }
-    const isVideo = files[0].type.startsWith('video/');
-    if (isVideo) {
+    
+    if (files.length === 1) {
         txt.innerText = files[0].name; 
-        icon.className = "fas fa-video"; 
+        icon.className = files[0].type.startsWith('video/') ? "fas fa-video" : "fas fa-image"; 
         icon.style.color = "#00f2fe"; 
-        advancedVideoUi.style.display = 'block'; 
-        advancedImageUi.style.display = 'none';
-        
-        const url = URL.createObjectURL(files[0]); 
-        proPreview.src = url; 
-        proPreview.onloadedmetadata = () => { 
-            const dur = proPreview.duration; 
-            
-            if(dur > 180 && !checkPhilPlusStatus(2)) {
-                showCustomAlert("Zu lang", "Videos über 3 Minuten erfordern Phil Shorts++!");
-                document.getElementById('up-file').value = '';
-                txt.innerText = "Video oder Bilder auswählen";
-                icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa";
-                advancedVideoUi.style.display = 'none';
-                return;
-            }
-
-            document.getElementById('pro-time-total').innerText = dur.toFixed(1);
-            proTrimStart.max = dur; 
-            proTrimEnd.max = dur; 
-            proTrimEnd.value = dur; 
-            document.getElementById('pro-val-end').innerText = dur.toFixed(1);
-            
-            document.getElementById('pro-overlay-start').max = dur;
-            document.getElementById('pro-overlay-end').max = dur;
-
-            proEditorState.end = dur;
-            proEditorState.start = 0;
-            proEditorState.filter = 'none';
-            proEditorState.speed = 1;
-            proEditorState.ratio = 'original';
-            proEditorState.audioFileUrl = null;
-            proEditorState.origVol = 1;
-            proEditorState.bgVol = 0.5;
-            proEditorState.overlays = [];
-            proEditorState.activeTextId = null;
-            
-            document.getElementById('pro-editor-layer').innerHTML = '';
-            document.getElementById('pro-text-controls').style.display = 'none';
-            document.getElementById('pro-audio-orig-vol').value = 1;
-            document.getElementById('pro-audio-bg-vol').value = 0.5;
-            document.getElementById('pro-audio-bg-name').innerText = "";
-            document.getElementById('pro-speed-ctrl').value = "1";
-            document.getElementById('pro-ratio-ctrl').value = "original";
-            document.getElementById('pro-audio-controls-extended').style.display = 'none';
-            proBgAudio.src = "";
-            
-            document.querySelectorAll('.pro-filter-btn').forEach(b => b.classList.remove('active'));
-            document.querySelector('.pro-filter-btn[data-filter="none"]').classList.add('active');
-            proPreview.style.filter = 'none';
-            proPreview.style.transform = 'scale(1)';
-            
-            generateTimelineFrames(proPreview);
-        };
     } else {
-        txt.innerText = `${files.length} Bild(er) ausgewählt`; icon.className = "fas fa-images"; icon.style.color = "#ffd700"; advancedVideoUi.style.display = 'none'; advancedImageUi.style.display = 'block';
-        imageEditorState.images = []; imageEditorState.edits = []; imageEditorState.currentIndex = 0;
-        for(let i = 0; i < files.length; i++) {
-            if(files[i].size > 15 * 1024 * 1024) continue;
-            const reader = new FileReader(); await new Promise(resolve => { reader.onload = (event) => { imageEditorState.images.push(event.target.result); imageEditorState.edits.push([]); resolve(); }; reader.readAsDataURL(files[i]); });
-        }
-        if (imageEditorState.images.length === 0) { showCustomAlert("Fehler", "Bilder konnten nicht geladen werden."); txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; return; }
-        renderEditorImage(0);
+        txt.innerText = `${files.length} Dateien ausgewählt`; 
+        icon.className = "fas fa-images"; 
+        icon.style.color = "#ffd700"; 
     }
 });
-
-// Timeline Frames generieren
-function generateTimelineFrames(videoEl) {
-    const container = document.getElementById('pro-timeline-frames');
-    container.innerHTML = '';
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const frameCount = 5;
-    const dur = videoEl.duration;
-    
-    canvas.width = 60;
-    canvas.height = 40;
-
-    let times = [];
-    for(let i=0; i<frameCount; i++) {
-        times.push((dur / frameCount) * i);
-    }
-
-    let i = 0;
-    videoEl.addEventListener('seeked', function extractFrame() {
-        if(i >= times.length) {
-            videoEl.removeEventListener('seeked', extractFrame);
-            videoEl.currentTime = 0;
-            return;
-        }
-        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-        const img = document.createElement('img');
-        img.src = canvas.toDataURL();
-        img.style.flex = "1";
-        img.style.objectFit = "cover";
-        img.style.height = "100%";
-        container.appendChild(img);
-        i++;
-        if(i < times.length) videoEl.currentTime = times[i];
-    });
-    
-    if(times.length > 0) videoEl.currentTime = times[0];
-}
-
-
-// PRO VIDEO EDITOR EVENTS
-document.getElementById('btn-pro-play').addEventListener('click', () => {
-    const vid = document.getElementById('pro-video-source');
-    if (vid.paused) { 
-        vid.play(); 
-        proBgAudio.play();
-        document.getElementById('btn-pro-play').innerHTML = '<i class="fas fa-pause"></i>'; 
-    } else { 
-        vid.pause(); 
-        proBgAudio.pause();
-        document.getElementById('btn-pro-play').innerHTML = '<i class="fas fa-play"></i>'; 
-    }
-});
-
-document.getElementById('pro-video-source').addEventListener('timeupdate', (e) => {
-    const curr = e.target.currentTime;
-    document.getElementById('pro-time-current').innerText = curr.toFixed(1);
-    
-    const endVal = parseFloat(document.getElementById('pro-trim-end').value) || 0;
-    const startVal = parseFloat(document.getElementById('pro-trim-start').value) || 0;
-    
-    if(curr >= endVal && endVal > 0) {
-        e.target.currentTime = startVal;
-        if(proBgAudio.src) {
-            proBgAudio.currentTime = parseFloat(document.getElementById('pro-audio-offset').value) || 0;
-        }
-    }
-
-    // Keyframes Overlay Logic
-    proEditorState.overlays.forEach(obj => {
-        const el = document.getElementById('pro-drag-txt-' + obj.id);
-        if(el) {
-            if(curr >= obj.start && curr <= obj.end) {
-                el.style.display = 'block';
-            } else {
-                el.style.display = 'none';
-            }
-        }
-    });
-});
-
-function updateTrim() {
-    let s = parseFloat(document.getElementById('pro-trim-start').value);
-    let e = parseFloat(document.getElementById('pro-trim-end').value);
-    if(s >= e) { s = e - 0.1; document.getElementById('pro-trim-start').value = s; }
-    document.getElementById('pro-val-start').innerText = s.toFixed(1);
-    document.getElementById('pro-video-source').currentTime = s;
-    proEditorState.start = s;
-    
-    if(proBgAudio.src) {
-        proBgAudio.currentTime = parseFloat(document.getElementById('pro-audio-offset').value) || 0;
-    }
-}
-
-function updateTrimEnd() {
-    let s = parseFloat(document.getElementById('pro-trim-start').value);
-    let e = parseFloat(document.getElementById('pro-trim-end').value);
-    if(e <= s) { e = s + 0.1; document.getElementById('pro-trim-end').value = e; }
-    document.getElementById('pro-val-end').innerText = e.toFixed(1);
-    document.getElementById('pro-video-source').currentTime = e - 0.1;
-    proEditorState.end = e;
-}
-
-document.getElementById('pro-trim-start').addEventListener('input', updateTrim);
-document.getElementById('pro-trim-start-plus').addEventListener('click', () => { document.getElementById('pro-trim-start').value = parseFloat(document.getElementById('pro-trim-start').value) + 0.1; updateTrim(); });
-document.getElementById('pro-trim-start-minus').addEventListener('click', () => { document.getElementById('pro-trim-start').value = Math.max(0, parseFloat(document.getElementById('pro-trim-start').value) - 0.1); updateTrim(); });
-
-document.getElementById('pro-trim-end').addEventListener('input', updateTrimEnd);
-document.getElementById('pro-trim-end-plus').addEventListener('click', () => { document.getElementById('pro-trim-end').value = Math.min(parseFloat(document.getElementById('pro-trim-end').max), parseFloat(document.getElementById('pro-trim-end').value) + 0.1); updateTrimEnd(); });
-document.getElementById('pro-trim-end-minus').addEventListener('click', () => { document.getElementById('pro-trim-end').value = parseFloat(document.getElementById('pro-trim-end').value) - 0.1; updateTrimEnd(); });
-
-
-document.querySelectorAll('.pro-filter-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-        document.querySelectorAll('.pro-filter-btn').forEach(b => b.classList.remove('active'));
-        e.target.classList.add('active');
-        proEditorState.filter = e.target.dataset.filter;
-        const vid = document.getElementById('pro-video-source');
-        if(proEditorState.filter === 'none') vid.style.filter = 'none';
-        if(proEditorState.filter === 'grayscale') vid.style.filter = 'grayscale(100%)';
-        if(proEditorState.filter === 'sepia') vid.style.filter = 'sepia(100%)';
-        if(proEditorState.filter === 'blur') vid.style.filter = 'blur(4px)';
-        if(proEditorState.filter === 'contrast') vid.style.filter = 'contrast(200%)';
-        if(proEditorState.filter === 'vintage') vid.style.filter = 'sepia(50%) contrast(150%)';
-    });
-});
-
-document.getElementById('pro-speed-ctrl').addEventListener('change', (e) => { 
-    proEditorState.speed = parseFloat(e.target.value); 
-    document.getElementById('pro-video-source').playbackRate = proEditorState.speed;
-    proBgAudio.playbackRate = proEditorState.speed;
-});
-
-document.getElementById('pro-ratio-ctrl').addEventListener('change', (e) => { 
-    proEditorState.ratio = e.target.value; 
-    const ws = document.getElementById('pro-editor-workspace');
-    if(proEditorState.ratio === '9:16') {
-        ws.style.width = '196px'; // Aspect Ratio 9:16 Preview
-    } else if (proEditorState.ratio === '1:1') {
-        ws.style.width = '350px';
-    } else {
-        ws.style.width = '100%';
-    }
-});
-
-document.getElementById('pro-audio-orig-vol').addEventListener('input', (e) => {
-    proEditorState.origVol = parseFloat(e.target.value);
-    document.getElementById('pro-video-source').volume = proEditorState.origVol;
-});
-document.getElementById('pro-audio-bg-vol').addEventListener('input', (e) => { 
-    proEditorState.bgVol = parseFloat(e.target.value); 
-    proBgAudio.volume = proEditorState.bgVol;
-});
-
-document.getElementById('pro-audio-upload').addEventListener('change', (e) => {
-    if(e.target.files.length > 0) {
-        const file = e.target.files[0];
-        document.getElementById('pro-audio-bg-name').innerText = file.name;
-        document.getElementById('pro-audio-controls-extended').style.display = 'block';
-        
-        const url = URL.createObjectURL(file);
-        proBgAudio.src = url;
-        proBgAudio.volume = proEditorState.bgVol;
-        
-        proBgAudio.onloadedmetadata = () => {
-            document.getElementById('pro-audio-offset').max = proBgAudio.duration;
-            document.getElementById('pro-audio-offset').value = 0;
-        };
-    }
-});
-
-
-async function renderAndUploadImages() {
-    let uploadedUrls = []; const ws = document.getElementById('editor-workspace'); const Cw = ws.clientWidth; const Ch = ws.clientHeight;
-    for (let i = 0; i < imageEditorState.images.length; i++) {
-        const img = new Image(); await new Promise(res => { img.onload = res; img.src = imageEditorState.images[i]; });
-        const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); const Nw = img.naturalWidth; const Nh = img.naturalHeight; canvas.width = Nw; canvas.height = Nh; ctx.drawImage(img, 0, 0, Nw, Nh);
-        const scale = Math.min(Cw / Nw, Ch / Nh); const Dw = Nw * scale; const Dh = Nh * scale; const Ox = (Cw - Dw) / 2; const Oy = (Ch - Dh) / 2;
-        
-        for (const obj of imageEditorState.edits[i]) {
-            let nativeX = (obj.x - Ox) / scale; let nativeY = (obj.y - Oy) / scale; let nativeSize = obj.size / scale;
-            ctx.save(); ctx.translate(nativeX, nativeY); ctx.rotate((obj.rotation * Math.PI) / 180); 
-            
-            if(obj.type === 'sticker') {
-                const sImg = new Image(); await new Promise(res => { sImg.onload = res; sImg.src = obj.src; });
-                const ratio = sImg.naturalHeight / sImg.naturalWidth;
-                ctx.drawImage(sImg, -nativeSize/2, -(nativeSize*ratio)/2, nativeSize, nativeSize*ratio);
-            } else if (obj.type === 'blur') {
-                ctx.filter = 'blur(15px)';
-                ctx.drawImage(canvas, nativeX - nativeSize/2, nativeY - nativeSize/2, nativeSize, nativeSize, -nativeSize/2, -nativeSize/2, nativeSize, nativeSize);
-                ctx.filter = 'none';
-            } else {
-                ctx.font = `bold ${nativeSize}px ${obj.font || 'Arial, sans-serif'}`; ctx.fillStyle = obj.color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.lineWidth = nativeSize * 0.1; ctx.strokeText(obj.text, 0, 0); ctx.fillText(obj.text, 0, 0); 
-            }
-            ctx.restore();
-        }
-
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-        const res = await fetch(dataUrl);
-        const blob = await res.blob();
-        
-        const secure_url = await uploadFileToFirebase(blob, 'images');
-        uploadedUrls.push(secure_url);
-    }
-    return uploadedUrls;
-}
 
 document.getElementById('submit-upload').addEventListener('click', async() => {
-    const files = document.getElementById('up-file').files; const titleVal = document.getElementById('up-title').value.trim(); const desc = document.getElementById('up-desc').value.trim();
-    if (!files || files.length === 0 || (!desc && !titleVal)) return showCustomAlert("Fehlende Daten", "Bitte wähle Dateien aus und schreibe einen Titel oder eine Beschreibung.");
+    const files = document.getElementById('up-file').files; 
+    // Hole Titel und Beschreibung oder nutze einen leeren String, falls nichts eingegeben wurde
+    const titleVal = document.getElementById('up-title') ? document.getElementById('up-title').value.trim() : ""; 
+    const desc = document.getElementById('up-desc') ? document.getElementById('up-desc').value.trim() : "";
     
-    let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
-    let isVideo = files[0].type.startsWith('video/');
-    if (isVideo && files[0].size > maxSize) return showCustomAlert("Zu groß", `Videos dürfen maximal ${limitText} MB groß sein!`);
+    if (!files || files.length === 0) {
+        return showCustomAlert("Fehlende Daten", "Bitte wähle mindestens eine Datei aus.");
+    }
     
-    const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); btn.disabled = true; status.innerText = "Lade Tools... Bitte warten!";
+    let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; 
+    let limitText = checkPhilPlusStatus(1) ? "100" : "30";
+    
+    // Check sizes
+    for(let i=0; i<files.length; i++) {
+        if(files[i].size > maxSize) {
+            return showCustomAlert("Zu groß", `Dateien dürfen maximal ${limitText} MB groß sein!`);
+        }
+    }
+    
+    const btn = document.getElementById('submit-upload'); 
+    const status = document.getElementById('upload-status'); 
+    btn.disabled = true; 
+    status.innerText = "Lade hoch... Bitte warten!";
     
     try {
+        const isVideo = files[0].type.startsWith('video/');
+        
         if (isVideo) {
-            // --- FFMPEG INTEGRATION FÜR VIDEO RENDERING ---
-            if (!ffmpeg.loaded) {
-                status.innerText = "Lade FFmpeg.wasm... (Das kann kurz dauern)";
-                await ffmpeg.load({
-                    coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.js',
-                    wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/esm/ffmpeg-core.wasm'
-                });
-            }
-
-            status.innerText = "Lese Video-Datei...";
-            const inputName = 'input_video.mp4';
-            const outputName = 'output_video.mp4';
-            await ffmpeg.writeFile(inputName, await fetchFile(files[0]));
-
-            let ffmpegArgs = ['-i', inputName];
-
-            // 1. Trimming
-            const tStart = proEditorState.start; 
-            const tEnd = proEditorState.end; 
-            const dur = parseFloat(document.getElementById('pro-trim-start').max) || 0;
-            
-            if (tStart > 0) {
-                ffmpegArgs.unshift('-ss', tStart.toString());
-            }
-            if (tEnd < dur && tEnd > 0) {
-                ffmpegArgs.push('-t', (tEnd - tStart).toString());
-            }
-
-            // 2. Video Filters (Scale & Colors)
-            let vfFilters = [];
-            if(proEditorState.ratio === '9:16') vfFilters.push('scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2');
-            else if(proEditorState.ratio === '1:1') vfFilters.push('scale=1080:1080:force_original_aspect_ratio=decrease,pad=1080:1080:(ow-iw)/2:(oh-ih)/2');
-
-            if(proEditorState.filter === 'grayscale') vfFilters.push('format=gray');
-            else if(proEditorState.filter === 'sepia') vfFilters.push('colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131');
-            
-            if (vfFilters.length > 0) {
-                ffmpegArgs.push('-vf', vfFilters.join(','));
-            }
-
-            // Codec Optionen für schnelles Rendering
-            ffmpegArgs.push('-c:v', 'libx264', '-preset', 'ultrafast', '-c:a', 'aac', outputName);
-
-            status.innerText = "Rendere Video lokal... (Das kann je nach Gerät dauern)";
-            await ffmpeg.exec(ffmpegArgs);
-
-            status.innerText = "Video erfolgreich gerendert!";
-            const data = await ffmpeg.readFile(outputName);
-            const processedBlob = new Blob([data.buffer], { type: 'video/mp4' });
-
-            status.innerText = "Lade verarbeitetes Video zu Firebase hoch...";
-            const finalUrl = await uploadFileToFirebase(processedBlob, 'videos');
-
-            await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
+            // Einzelnes Video hochladen
+            const finalUrl = await uploadFileToFirebase(files[0], 'videos');
+            await addDoc(collection(db, "videos"), { 
+                mediaType: 'video', 
+                url: finalUrl, 
+                authorUid: currentUser.uid, 
+                authorName: currentUser.displayName, 
+                authorUsername: currentUser.username, 
+                authorPic: currentUser.photoURL, 
+                authorVerified: currentUser.verified || false, 
+                title: titleVal, 
+                description: desc, 
+                likedBy: [], 
+                gifts: 0, 
+                comments: [], 
+                views: 0, 
+                timestamp: Date.now() 
+            });
         } else {
-            const uploadedUrls = await renderAndUploadImages(); if(uploadedUrls.length === 0) throw new Error("Keine Bilder hochgeladen.");
-            await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
+            // Mehrere Bilder hochladen
+            let uploadedUrls = [];
+            for(let i=0; i<files.length; i++) {
+                const secure_url = await uploadFileToFirebase(files[i], 'images');
+                uploadedUrls.push(secure_url);
+            }
+            await addDoc(collection(db, "videos"), { 
+                mediaType: 'images', 
+                urls: uploadedUrls, 
+                authorUid: currentUser.uid, 
+                authorName: currentUser.displayName, 
+                authorUsername: currentUser.username, 
+                authorPic: currentUser.photoURL, 
+                authorVerified: currentUser.verified || false, 
+                title: titleVal, 
+                description: desc, 
+                likedBy: [], 
+                gifts: 0, 
+                comments: [], 
+                views: 0, 
+                timestamp: Date.now() 
+            });
         }
-        showToast("Erfolgreich veröffentlicht! 🎉"); document.getElementById('upload-modal').classList.remove('show');
-        document.getElementById('up-file').value = ''; document.getElementById('up-title').value = ''; document.getElementById('up-desc').value = ''; document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; document.querySelector('#up-file-btn i').style.color = "#aaa"; document.getElementById('video-advanced-editor').style.display = 'none'; document.getElementById('image-advanced-editor').style.display = 'none'; imageEditorState.images = []; proBgAudio.pause();
+        
+        showToast("Erfolgreich veröffentlicht! 🎉"); 
+        document.getElementById('upload-modal').classList.remove('show');
+        
+        // Reset inputs
+        document.getElementById('up-file').value = ''; 
+        if(document.getElementById('up-title')) document.getElementById('up-title').value = ''; 
+        if(document.getElementById('up-desc')) document.getElementById('up-desc').value = ''; 
+        document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; 
+        document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; 
+        document.querySelector('#up-file-btn i').style.color = "#aaa"; 
+        
     } catch (e) { 
+        showCustomAlert("Upload Fehler", "Fehler beim Upload. Bitte überprüfe deine Verbindung."); 
         console.error(e);
-        if (e.message && e.message.includes('SharedArrayBuffer')) {
-            showCustomAlert("Upload Fehler", "FFmpeg funktioniert nicht ohne Server-Header (SharedArrayBuffer). Bitte füge Cross-Origin Header in deinem Hosting hinzu!");
-        } else {
-            showCustomAlert("Upload Fehler", "Fehler! Evtl. falsches Format oder Netzwerkproblem."); 
-        }
-    } finally { btn.disabled = false; status.innerText = ""; }
+    } finally { 
+        btn.disabled = false; 
+        if(status) status.innerText = ""; 
+    }
 });
 
 document.getElementById('open-upload').addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
-document.getElementById('close-upload').addEventListener('click', () => { document.getElementById('upload-modal').classList.remove('show'); proBgAudio.pause(); });
+document.getElementById('close-upload').addEventListener('click', () => document.getElementById('upload-modal').classList.remove('show'));
 document.getElementById('close-comments').addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
 document.getElementById('close-settings').addEventListener('click', () => document.getElementById('settings-modal').classList.remove('show'));
 document.getElementById('close-app-settings').addEventListener('click', () => document.getElementById('app-settings-modal').classList.remove('show'));
