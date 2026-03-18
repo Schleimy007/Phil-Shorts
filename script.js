@@ -1966,12 +1966,19 @@ document.getElementById('up-file').addEventListener('change', function(e) {
 
 document.getElementById('submit-upload').addEventListener('click', async() => {
     const files = document.getElementById('up-file').files; 
-    // Hole Titel und Beschreibung oder nutze einen leeren String, falls nichts eingegeben wurde
-    const titleVal = document.getElementById('up-title') ? document.getElementById('up-title').value.trim() : ""; 
-    const desc = document.getElementById('up-desc') ? document.getElementById('up-desc').value.trim() : "";
+    
+    const titleInput = document.getElementById('up-title');
+    const descInput = document.getElementById('up-desc');
+    const titleVal = titleInput ? titleInput.value.trim() : ""; 
+    const desc = descInput ? descInput.value.trim() : "";
     
     if (!files || files.length === 0) {
         return showCustomAlert("Fehlende Daten", "Bitte wähle mindestens eine Datei aus.");
+    }
+    
+    // --- NEU: Zwingender Check für Titel UND Beschreibung ---
+    if (!titleVal || !desc) {
+        return showCustomAlert("Fehlende Daten", "Bitte gib einen Titel UND eine Beschreibung ein.");
     }
     
     let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; 
