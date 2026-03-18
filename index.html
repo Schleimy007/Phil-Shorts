@@ -145,7 +145,10 @@
         <div id="view-dm" class="view">
             <div class="top-bar glass-nav">
                 <i class="fas fa-chevron-left back-btn" onclick="switchView('inbox')"></i>
-                <h3 id="dm-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">Chat</h3>
+                <div style="flex: 1; text-align: center; overflow: hidden; display: flex; flex-direction: column;">
+                    <h3 id="dm-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px;"><span id="dm-name-span">Chat</span></h3>
+                    <span id="dm-status-span" style="font-size: 11px; color: #aaa; font-weight: normal;"></span>
+                </div>
                 <i class="fas fa-info-circle back-btn" style="opacity: 0; pointer-events: none;"></i>
             </div>
             <div class="chat-container" id="dm-box"></div>
@@ -194,6 +197,8 @@
                 <div id="profile-level" class="creator-level">Level 1 Creator 🌟</div>
                 <p id="profile-bio" class="profile-bio">Hier könnte deine coole Bio stehen.</p>
 
+                <div id="profile-social-links" style="display: flex; gap: 15px; justify-content: center; margin-bottom: 15px; font-size: 22px;"></div>
+
                 <div class="profile-stats">
                     <div class="stat-box"><strong id="stat-following">0</strong><span>Folge ich</span></div>
                     <div class="stat-box"><strong id="stat-followers">0</strong><span>Follower</span></div>
@@ -203,6 +208,7 @@
                 <div style="display: flex; gap: 10px; align-items: center; justify-content: center; width: 100%; flex-wrap: wrap;">
                     <button id="profile-action-btn" class="profile-action-btn" style="flex: 1; min-width: 120px;">Folgen</button>
                     <button id="profile-message-btn" class="profile-action-btn edit-btn" style="display: none; width: 46px; padding: 0;"><i class="fas fa-paper-plane"></i></button>
+                    <button id="profile-block-btn" class="profile-action-btn edit-btn" style="display: none; flex: 1; min-width: 120px;"><i class="fas fa-ban"></i> Blockieren</button>
                     <button id="profile-shop-btn" class="profile-action-btn shop-btn" style="display: none; flex: 1; min-width: 120px; background: #ffd700; color: black;"><i class="fas fa-store"></i> Shop</button>
                 </div>
 
@@ -224,9 +230,11 @@
                     </div>
                 </div>
             </div>
+
             <div class="profile-tabs" style="background: rgba(0,0,0,0.5); backdrop-filter: blur(10px);">
-                <div class="profile-tab active"><i class="fas fa-bars"></i></div>
-                <div class="profile-tab"><i class="fas fa-heart"></i></div>
+                <div class="profile-tab active" id="tab-profile-grid" onclick="switchProfileTab('grid')"><i class="fas fa-bars"></i></div>
+                <div class="profile-tab" id="tab-profile-likes" onclick="switchProfileTab('likes')"><i class="fas fa-heart"></i></div>
+                <div class="profile-tab" id="tab-profile-saved" onclick="switchProfileTab('saved')" style="display: none;"><i class="fas fa-lock"></i></div>
             </div>
             <div class="grid-container" id="profile-grid"></div>
         </div>
@@ -827,6 +835,14 @@
                 <input type="text" id="edit-username-input" class="comment-input" placeholder="benutzername" maxlength="20" style="border-radius:15px; margin-bottom:10px; width: 100%;">
                 <label style="color:#888; font-size:12px; margin-left:5px;">Bio</label>
                 <textarea id="edit-bio-input" class="comment-input" placeholder="Etwas über dich..." rows="4" style="resize:none; border-radius:15px; width:100%; margin-bottom: 10px;"></textarea>
+
+                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 15px;">
+                    <h5 style="margin-bottom: 10px; color: #00f2fe;"><i class="fas fa-link"></i> Social Media Links</h5>
+                    <input type="text" id="edit-social-ig" class="comment-input" placeholder="Instagram Username" style="border-radius:10px; margin-bottom:10px; width: 100%; padding: 10px;">
+                    <input type="text" id="edit-social-yt" class="comment-input" placeholder="YouTube Username" style="border-radius:10px; margin-bottom:10px; width: 100%; padding: 10px;">
+                    <input type="text" id="edit-social-tt" class="comment-input" placeholder="TikTok Username" style="border-radius:10px; margin-bottom:10px; width: 100%; padding: 10px;">
+                    <input type="text" id="edit-social-tw" class="comment-input" placeholder="Twitch Username" style="border-radius:10px; width: 100%; padding: 10px;">
+                </div>
 
                 <div id="tier3-settings-area" style="display:none; background: rgba(255,215,0,0.05); padding: 15px; border-radius: 15px; border: 1px solid #ffd700;">
                     <h5 style="color: #ffd700; margin-bottom: 10px;"><i class="fas fa-crown"></i> Plus+++ Einstellungen</h5>

@@ -2646,3 +2646,32 @@ input:checked+.slider:before {
     z-index: 99;
     pointer-events: none;
 }
+/* --- NEUE FEATURES STYLES (Socials, Blockieren, Favoriten) --- */
+
+.social-btn {
+    color: #aaa;
+    transition: color 0.2s ease, transform 0.2s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.social-btn:hover,
+.social-btn:active {
+    color: white;
+    transform: scale(1.1);
+}
+
+.blocked-user {
+    background: #ff4444 !important;
+    color: white !important;
+    border-color: #ff4444 !important;
+}
+
+.bookmark-btn.saved i {
+    color: #ffd700;
+}
+
+.saved p {
+    color: #ffd700;
+}
