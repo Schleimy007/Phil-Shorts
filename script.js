@@ -186,7 +186,8 @@ function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackV
         philPlusUntil: user ? user.philPlusUntil : 0,
         philPlusTier: user ? user.philPlusTier : 0,
         activeBorder: user ? user.activeBorder : "",
-        customBorder: user ? user.customBorder : null
+        customBorder: user ? user.customBorder : null,
+        lastActive: user ? user.lastActive : 0
     };
 }
 
@@ -208,7 +209,10 @@ window.openHashtag = function(tag, event) {
     document.getElementById('hashtag-title').innerText = '#' + tag;
     const grid = document.getElementById('hashtag-grid');
     grid.innerHTML = '';
-    const matchedVideos = allVideosData.filter(v => (v.description || "").toLowerCase().includes('#' + tag.toLowerCase()));
+    
+    let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
+    const matchedVideos = allVideosData.filter(v => (v.description || "").toLowerCase().includes('#' + tag.toLowerCase()) && !blocked.includes(v.authorUid));
+    
     if (matchedVideos.length === 0) { grid.innerHTML = '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Keine Videos gefunden</div>'; return; }
     matchedVideos.forEach(v => {
         const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`;
@@ -221,7 +225,6 @@ window.openHashtag = function(tag, event) {
 window.openProfileByUsername = function(username, event) {
     if (event) event.stopPropagation();
     const user = allKnownUsers.find(u => {
-        // Falls kein Benutzername hinterlegt ist, nehmen wir den Fallback-Namen zum Suchen!
         const cleanUname = u.username || (u.displayName ? u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase() : 'user');
         return cleanUname === username.toLowerCase();
     });
@@ -247,7 +250,9 @@ document.addEventListener('input', (e) => {
 });
 
 window.showMentionSuggestions = function(inputEl, query) {
+    let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
     const matchedUsers = allKnownUsers.filter(u => {
+        if(blocked.includes(u.uid)) return false;
         const uname = (u.username || "").toLowerCase();
         const dname = (u.displayName || "").toLowerCase();
         return uname.includes(query) || dname.includes(query);
@@ -346,6 +351,9 @@ function initLiveUser() {
             if (currentUser.coins === undefined) currentUser.coins = 1000;
             if (!currentUser.followers) currentUser.followers = [];
             if (!currentUser.following) currentUser.following = [];
+            if (!currentUser.savedVideos) currentUser.savedVideos = [];
+            if (!currentUser.blockedUsers) currentUser.blockedUsers = [];
+            if (!currentUser.socialLinks) currentUser.socialLinks = {ig: '', yt: '', tw: '', tt: ''};
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             if (!currentUser.decorations) currentUser.decorations = [];
             if (!currentUser.appTheme) currentUser.appTheme = 'default';
@@ -361,7 +369,7 @@ function initLiveUser() {
 
                 currentUser.coins += bonus;
                 currentUser.lastLogin = today;
-                updateDoc(doc(db, "users", currentUser.uid), { coins: currentUser.coins, lastLogin: today });
+                updateDoc(doc(db, "users", currentUser.uid), { coins: currentUser.coins, lastLogin: today, lastActive: Date.now() });
                 showToast(`Täglicher Login: +${bonus} Coins erhalten!`);
             }
 
@@ -452,6 +460,13 @@ function initLiveUser() {
             }
         }
     });
+
+    // Aktivitätsstatus regelmäßig updaten
+    setInterval(() => {
+        if(currentUser && document.visibilityState === 'visible') {
+            updateDoc(doc(db, "users", currentUser.uid), { lastActive: Date.now() }).catch(()=>{});
+        }
+    }, 60000);
 }
 
 function initSearchUsers() {
@@ -500,7 +515,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
                 nameQuery = query(collection(db, "users"), where("username", "==", finalUser));
                 nameSnap = await getDocs(nameQuery);
             }
-            const newUser = { uid: uid, displayName: rawDisplayName, username: finalUser, email: email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], verified: false, coins: 1000, profileViews: 0, isAdmin: false, banned: false, decorations: [], activeBorder: "", stories: [], appTheme: 'default', philPlusTier: 0, lastLogin: new Date().toDateString(), customBorder: { c1: '#ff0050', c2: '#00f2fe', grad: true } };
+            const newUser = { uid: uid, displayName: rawDisplayName, username: finalUser, email: email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], savedVideos: [], blockedUsers: [], socialLinks: {ig: '', yt: '', tw: '', tt: ''}, verified: false, coins: 1000, profileViews: 0, isAdmin: false, banned: false, decorations: [], activeBorder: "", stories: [], appTheme: 'default', philPlusTier: 0, lastLogin: new Date().toDateString(), lastActive: Date.now(), customBorder: { c1: '#ff0050', c2: '#00f2fe', grad: true } };
             await setDoc(userRef, newUser);
             currentUser = newUser;
         } else {
@@ -513,6 +528,9 @@ window.addEventListener('googleLoginSuccess', async(event) => {
                 return;
             }
             if (!currentUser.following) currentUser.following = [];
+            if (!currentUser.savedVideos) currentUser.savedVideos = [];
+            if (!currentUser.blockedUsers) currentUser.blockedUsers = [];
+            if (!currentUser.socialLinks) currentUser.socialLinks = {ig: '', yt: '', tw: '', tt: ''};
             if (!currentUser.decorations) currentUser.decorations = [];
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             if (currentUser.coins === undefined) await updateDoc(userRef, { coins: 1000, profileViews: 0, followers: [] });
@@ -532,6 +550,9 @@ window.onload = async function() {
     if (!currentUser) { document.getElementById('login-screen').classList.add('show'); } else {
         document.getElementById('login-screen').classList.remove('show');
         if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
+        if (!currentUser.savedVideos) currentUser.savedVideos = [];
+        if (!currentUser.blockedUsers) currentUser.blockedUsers = [];
+        if (!currentUser.socialLinks) currentUser.socialLinks = {ig: '', yt: '', tw: '', tt: ''};
         initLiveDatabase();
         initLiveUser();
         initInbox();
@@ -570,6 +591,8 @@ document.getElementById('btn-live-stream').addEventListener('click', () => {
 
 async function addNotification(targetUid, type, text, videoId = null) {
     if (!currentUser || targetUid === currentUser.uid) return;
+    let targetUser = allKnownUsers.find(u => u.uid === targetUid);
+    if(targetUser && targetUser.blockedUsers && targetUser.blockedUsers.includes(currentUser.uid)) return; // Blockierte User können keine Notifs senden
     await addDoc(collection(db, "users", targetUid, "notifications"), { fromUid: currentUser.uid, fromName: currentUser.displayName, fromUsername: currentUser.username, fromPic: currentUser.photoURL, type: type, text: text, videoId: videoId, timestamp: Date.now() });
 }
 
@@ -613,7 +636,11 @@ function initLiveDatabase() {
     document.getElementById('video-container').innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i><p>Lade Algorithmus...</p></div>';
     onSnapshot(collection(db, "videos"), (snapshot) => {
         allVideosData = [];
-        snapshot.forEach(doc => allVideosData.push({ id: doc.id, ...doc.data() }));
+        let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
+        snapshot.forEach(doc => {
+            const v = { id: doc.id, ...doc.data() };
+            if(!blocked.includes(v.authorUid)) allVideosData.push(v);
+        });
         allVideosData.reverse();
         if (isInitialLoad) {
             renderFeed(true);
@@ -627,6 +654,8 @@ function initLiveDatabase() {
         } else {
             snapshot.docChanges().forEach((change) => {
                 const vData = { id: change.doc.id, ...change.doc.data() };
+                if(blocked.includes(vData.authorUid)) return; // Ignoriere blockierte
+
                 if (change.type === "added") {
                     if (!document.querySelector(`.video[data-id="${vData.id}"]`)) {
                         const newVidEl = createVideoElement(vData);
@@ -697,7 +726,7 @@ function appendLoader(container, isEnd) {
     const loader = document.createElement('div');
     loader.className = 'feed-end-loader';
     if (isEnd) {
-        loader.innerHTML = '<i class="fas fa-check-circle"></i><span>Du bist auf dem neueste Stand</span>';
+        loader.innerHTML = '<i class="fas fa-check-circle"></i><span>Du bist auf dem neuesten Stand</span>';
         loader.classList.add('no-more');
     } else { loader.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Prüfe Algorithmus...</span>'; }
     container.appendChild(loader);
@@ -739,6 +768,8 @@ function createVideoElement(video) {
     const commentCount = video.comments ? video.comments.length : 0;
     const isMe = currentUser && video.authorUid === currentUser.uid;
     const isFollowing = currentUser && currentUser.following && currentUser.following.includes(video.authorUid);
+    const hasSaved = currentUser && currentUser.savedVideos && currentUser.savedVideos.includes(video.id) ? 'saved' : '';
+    
     const plusButton = (!isMe) ? `<i class="fas fa-circle-plus follow-btn" data-target="${video.authorUid}" onclick="toggleFollow('${video.authorUid}', this, event)" style="${isFollowing ? 'display: none;' : ''}"></i>` : '';
     const authorData = getUserData(video.authorUid, video.authorName, video.authorUsername || video.authorName, video.authorPic, video.authorVerified);
     const verifiedBadge = getVerifiedBadge(authorData.verified);
@@ -750,7 +781,7 @@ function createVideoElement(video) {
     const deleteVideoBtn = canDeleteVideo ? `<div class="videoSidebar__button" onclick="deleteVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-trash" style="color: #ff4444; font-size:24px;"></i></div>` : '';
     const editVideoBtn = isMe ? `<div class="videoSidebar__button" onclick="openEditVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-pen" style="font-size:24px;"></i></div>` : '';
 
-    const downloadVideoBtn = checkPhilPlusStatus(3) ? `<div class="videoSidebar__button" onclick="window.open('${video.mediaType === 'images' ? video.urls[0] : video.url}', '_blank')" style="margin-top:15px;"><i class="fas fa-download" style="color: #00f2fe; font-size:24px;"></i><p>Speichern</p></div>` : '';
+    const downloadVideoBtn = checkPhilPlusStatus(3) ? `<div class="videoSidebar__button" onclick="window.open('${video.mediaType === 'images' ? video.urls[0] : video.url}', '_blank')" style="margin-top:15px;"><i class="fas fa-download" style="color: #00f2fe; font-size:24px;"></i><p>Download</p></div>` : '';
 
     const analyticsBtn = isMe && checkPhilPlusStatus(3) ? `<div class="videoSidebar__button" onclick="openAnalytics('${video.id}')" style="margin-top:15px;"><i class="fas fa-chart-line" style="color: #ffd700; font-size:24px;"></i><p>Analytics</p></div>` : '';
 
@@ -770,9 +801,33 @@ function createVideoElement(video) {
     const inlineStyle = getInlineBorderStyle(authorData.activeBorder, authorData.customBorder);
     const bClass = getBorderClass(authorData.activeBorder);
 
-    div.innerHTML = `<div class="video-inner is-paused"><div class="video-wrapper">${mediaHTML}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div><div class="video__footer"><h3 class="creator-name" onclick="openProfile('${video.authorUid}')"><span class="live-name-${video.authorUid} ${nameClass}">${authorData.displayName}${verifiedBadge}${tier3Badge}</span></h3><p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p><h4 class="video-title" onclick="openVideoDetails('${video.id}')">${video.title || 'Ohne Titel'}</h4><p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${previewHtml}</p></div><div class="video__sidebar"><div class="sidebar__profile" onclick="openProfile('${video.authorUid}')"><img src="${authorData.pic}" class="live-pic-${video.authorUid} ${bClass}" style="${inlineStyle}" alt="Profil">${plusButton}</div><div class="videoSidebar__button like-btn ${hasLiked}" data-id="${video.id}"><i class="fas fa-heart"></i><p class="like-count">${realLikes}</p></div><div class="videoSidebar__button comment-btn" data-id="${video.id}"><i class="fas fa-comment-dots"></i><p class="comment-count-txt">${commentCount}</p></div><div class="videoSidebar__button gift-btn" data-id="${video.id}"><i class="fas fa-gift" style="color: #ffd700;"></i><p class="gift-count">${video.gifts || 0}</p></div><div class="videoSidebar__button share-btn" data-id="${video.id}"><i class="fas fa-share"></i><p>Teilen</p></div>${downloadVideoBtn}${analyticsBtn}${editVideoBtn}${deleteVideoBtn}</div></div>`;
+    div.innerHTML = `<div class="video-inner is-paused"><div class="video-wrapper">${mediaHTML}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div><div class="video__footer"><h3 class="creator-name" onclick="openProfile('${video.authorUid}')"><span class="live-name-${video.authorUid} ${nameClass}">${authorData.displayName}${verifiedBadge}${tier3Badge}</span></h3><p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p><h4 class="video-title" onclick="openVideoDetails('${video.id}')">${video.title || 'Ohne Titel'}</h4><p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${previewHtml}</p></div><div class="video__sidebar"><div class="sidebar__profile" onclick="openProfile('${video.authorUid}')"><img src="${authorData.pic}" class="live-pic-${video.authorUid} ${bClass}" style="${inlineStyle}" alt="Profil">${plusButton}</div><div class="videoSidebar__button like-btn ${hasLiked}" data-id="${video.id}"><i class="fas fa-heart"></i><p class="like-count">${realLikes}</p></div><div class="videoSidebar__button comment-btn" data-id="${video.id}"><i class="fas fa-comment-dots"></i><p class="comment-count-txt">${commentCount}</p></div><div class="videoSidebar__button bookmark-btn ${hasSaved}" data-id="${video.id}" onclick="toggleSaveVideo('${video.id}', this)"><i class="fas fa-bookmark"></i><p>Speichern</p></div><div class="videoSidebar__button gift-btn" data-id="${video.id}"><i class="fas fa-gift" style="color: #ffd700;"></i><p class="gift-count">${video.gifts || 0}</p></div><div class="videoSidebar__button share-btn" data-id="${video.id}"><i class="fas fa-share"></i><p>Teilen</p></div>${downloadVideoBtn}${analyticsBtn}${editVideoBtn}${deleteVideoBtn}</div></div>`;
     attachInteractionsToVideo(div); return div;
 }
+
+window.toggleSaveVideo = async function(videoId, btnEl) {
+    if (!currentUser) return showCustomAlert("Fehler", "Bitte logge dich ein, um Videos zu speichern.");
+    const isSaved = currentUser.savedVideos.includes(videoId);
+    try {
+        if(isSaved) {
+            currentUser.savedVideos = currentUser.savedVideos.filter(id => id !== videoId);
+            btnEl.classList.remove('saved');
+            await updateDoc(doc(db, "users", currentUser.uid), { savedVideos: arrayRemove(videoId) });
+            showToast("Aus Favoriten entfernt.");
+        } else {
+            currentUser.savedVideos.push(videoId);
+            btnEl.classList.add('saved');
+            await updateDoc(doc(db, "users", currentUser.uid), { savedVideos: arrayUnion(videoId) });
+            showToast("Zu Favoriten hinzugefügt 📌");
+        }
+        localStorage.setItem('phil_session', JSON.stringify(currentUser));
+        if(document.getElementById('view-profile').classList.contains('active') && window.currentProfileTab === 'saved') {
+            renderProfileGrid(currentUser.uid);
+        }
+    } catch(e) {
+        showCustomAlert("Fehler", "Konnte nicht gespeichert werden.");
+    }
+};
 
 window.openAnalytics = function(id) {
     const video = allVideosData.find(v => v.id === id); if(!video) return;
@@ -811,6 +866,7 @@ videoContainer.addEventListener('wheel', (e) => {
     scrollTimeout = setTimeout(() => { scrollTimeout = null; }, 600);
 }, { passive: false });
 
+// Verbessertes Scroll-Verhalten für "RICHTIGEN" Feed
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         const el = e.target; const vidId = el.dataset.id;
@@ -821,7 +877,7 @@ const videoObserver = new IntersectionObserver(entries => {
             if (videoPlayer) { document.querySelectorAll('.video__player').forEach(otherVid => { if (otherVid !== videoPlayer && !otherVid.paused) { otherVid.pause(); otherVid.currentTime = 0; } }); videoPlayer.muted = window.globalMuted; const playPromise = videoPlayer.play(); if (playPromise !== undefined) { playPromise.catch(error => { videoPlayer.pause(); const container = videoPlayer.closest('.video-inner'); if(container) container.classList.add('is-paused'); }); } }
         } else { const videoPlayer = el.querySelector('.video__player'); if (videoPlayer) { videoPlayer.pause(); videoPlayer.currentTime = 0; } }
     });
-}, { threshold: 0.4 });
+}, { threshold: 0.6 });
 
 const allGifts = [ { id: 'g1', name: 'Rose', emoji: '🌹', price: 1 }, { id: 'g2', name: 'Kaffee', emoji: '☕', price: 1 }, { id: 'g3', name: 'Herz', emoji: '❤️', price: 5 }, { id: 'g4', name: 'GG', emoji: '🎮', price: 5 }, { id: 'g5', name: 'Mini 3663', emoji: '🧊', price: 10 }, { id: 'g6', name: 'Flamme', emoji: '🔥', price: 10 }, { id: 'g7', name: 'Applaus', emoji: '👏', price: 15 }, { id: 'g8', name: 'Brille', emoji: '🕶️', price: 20 }, { id: 'g9', name: 'Party', emoji: '🎉', price: 20 }, { id: 'g10', name: 'Flex', emoji: '💪', price: 50 }, { id: 'g11', name: '3663 Schild', emoji: '🛡️', price: 50 }, { id: 'g12', name: 'Diamant', emoji: '💎', price: 100 }, { id: 'g13', name: '3663 Krone', emoji: '👑', price: 100 }, { id: 'g14', name: 'Rakete', emoji: '🚀', price: 200 }, { id: 'g15', name: '3663 Kette', emoji: '⛓️', price: 250 }, { id: 'g16', name: 'Löwe', emoji: '🦁', price: 500 }, { id: 'g17', name: '3663 Auto', emoji: '🏎️', price: 500 }, { id: 'g18', name: 'Universum', emoji: '🌌', price: 1000, reqTier: 2 }, { id: 'g19', name: '3663 Villa', emoji: '🏰', price: 1000, reqTier: 2 }, { id: 'g20', name: '3663 Legende', emoji: '🦅', price: 5000, reqTier: 2 } ];
 
@@ -863,7 +919,7 @@ function attachInteractionsToVideo(videoContainerEl) {
         if (volumeSlider) { volumeSlider.addEventListener('input', (e) => { e.stopPropagation(); window.globalMuted = false; window.globalVolume = e.target.value; window.updateGlobalVolumeUI(); }); volumeSlider.addEventListener('mousedown', (e) => { e.stopPropagation(); muteContainer.classList.add('active-slider'); }); volumeSlider.addEventListener('touchstart', (e) => { e.stopPropagation(); muteContainer.classList.add('active-slider'); }, { passive: false }); }
     } else if (c) {
         container.classList.remove('is-paused'); c.addEventListener('click', (e) => handleDoubleTap(e));
-        c.addEventListener('scroll', () => { const idx = Math.round(c.scrollLeft / c.clientWidth); const dots = videoContainerEl.querySelectorAll('.dot'); dots.forEach((d, i) => { if (i === idx) d.classList.add('active'); else d.classList.remove('active'); }); });
+        c.addEventListener('scroll', () => { const idx = Math.round(c.scrollLeft / c.clientWidth); const dots = videoContainerEl.querySelectorAll('.dot'); dots.forEach((d, i) => { if (i === idx) d.active = true; else d.classList.remove('active'); }); });
     }
     document.addEventListener('mouseup', () => document.querySelectorAll('.mute-container').forEach(mc => mc.classList.remove('active-slider'))); document.addEventListener('touchend', () => document.querySelectorAll('.mute-container').forEach(mc => mc.classList.remove('active-slider')));
     const mc = container.querySelector('.mute-container'); if (mc) mc.addEventListener('click', (e) => e.stopPropagation());
@@ -932,12 +988,19 @@ function renderComments(id) {
         const authorData = getUserData(video.authorUid, video.authorName, video.authorUsername || video.authorName, video.authorPic, video.authorVerified); 
         const creatorPic = authorData.pic || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback';
         
-        let sortedComments = [...video.comments];
+        let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
+        let sortedComments = video.comments.filter(c => !blocked.includes(c.uid));
+        
         sortedComments.sort((a, b) => {
             if(a.pinned && !b.pinned) return -1;
             if(!a.pinned && b.pinned) return 1;
             return 0;
         });
+
+        if(sortedComments.length === 0) {
+             list.innerHTML = '<div class="no-comments">Keine sichtbaren Kommentare.</div>';
+             return;
+        }
 
         list.innerHTML = sortedComments.map((c, index) => {
             const cUser = getUserData(c.uid, c.name, c.username, c.pic, c.verified); const badge = getVerifiedBadge(cUser.verified); const canDelete = currentUser && (currentUser.uid === c.uid || currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin); const commentId = c.cId || index.toString(); const deleteBtn = canDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteComment('${id}', '${commentId}')"></i>` : ''; const likeCount = c.likes ? c.likes.length : 0; const hasLiked = c.likes && currentUser && c.likes.includes(currentUser.uid) ? 'liked-heart' : ''; const timeString = timeAgo(c.cId);
@@ -952,12 +1015,15 @@ function renderComments(id) {
 
             let repliesHtml = '';
             if (c.replies && c.replies.length > 0) {
-                repliesHtml = `<div class="reply-container">` + c.replies.map(r => {
-                    const rUser = getUserData(r.uid, r.name, r.username, r.pic, r.verified); const rBadge = getVerifiedBadge(rUser.verified); const rCanDelete = currentUser && (currentUser.uid === r.uid || currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin); const rDeleteBtn = rCanDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteReply('${id}', '${commentId}', '${r.rId}')"></i>` : ''; const rLikeCount = r.likes ? r.likes.length : 0; const rHasLiked = r.likes && currentUser && r.likes.includes(currentUser.uid) ? 'liked-heart' : ''; const replyTimeString = timeAgo(r.rId);
-                    let rClass = ""; if(rUser.philPlusUntil && rUser.philPlusUntil > Date.now() && rUser.philPlusTier >= 1) rClass = "name-phil-plus";
-                    let rCreatorHeartHtml = ''; if (r.creatorHeart) rCreatorHeartHtml = `<div class="creator-heart-wrap" onclick="toggleCreatorHeart('${id}', '${commentId}', '${r.rId}')" style="cursor:${isCreator?'pointer':'default'};" title="Vom Creator geliket"><div class="creator-heart-img" style="background-image: url('${creatorPic}')"></div><i class="fas fa-heart creator-heart-badge"></i></div>`; else if (isCreator) rCreatorHeartHtml = `<div class="creator-heart-wrap creator-heart-inactive" onclick="toggleCreatorHeart('${id}', '${commentId}', '${r.rId}')" title="Creator Herz geben"><i class="far fa-heart creator-heart-badge-outline"></i></div>`;
-                    return `<div class="reply-item"><img src="${rUser.pic}" class="live-pic-${r.uid}" alt="User" onclick="openProfile('${r.uid}')" style="cursor:pointer;"><div style="flex:1; min-width: 0;"><strong onclick="openProfile('${r.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;"><span class="live-name-${r.uid} ${rClass}">${rUser.displayName}${rBadge}</span> <span class="live-username-${r.uid}" style="color:#888; font-weight:normal; font-size:12px;">@${rUser.username}</span> <span class="comment-time">${replyTimeString}</span></strong><p style="word-break: break-word;">${formatText(r.text)}</p><div class="comment-actions"><span onclick="toggleReplyBox('${commentId}')">Antworten</span><span class="${rHasLiked}" onclick="likeReply('${id}', '${commentId}', '${r.rId}')"><i class="fas fa-heart"></i> ${rLikeCount}</span>${rCreatorHeartHtml}</div></div>${rDeleteBtn}</div>`;
-                }).join('') + `</div>`;
+                let validReplies = c.replies.filter(r => !blocked.includes(r.uid));
+                if(validReplies.length > 0) {
+                    repliesHtml = `<div class="reply-container">` + validReplies.map(r => {
+                        const rUser = getUserData(r.uid, r.name, r.username, r.pic, r.verified); const rBadge = getVerifiedBadge(rUser.verified); const rCanDelete = currentUser && (currentUser.uid === r.uid || currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin); const rDeleteBtn = rCanDelete ? `<i class="fas fa-trash delete-comment-icon" onclick="deleteReply('${id}', '${commentId}', '${r.rId}')"></i>` : ''; const rLikeCount = r.likes ? r.likes.length : 0; const rHasLiked = r.likes && currentUser && r.likes.includes(currentUser.uid) ? 'liked-heart' : ''; const replyTimeString = timeAgo(r.rId);
+                        let rClass = ""; if(rUser.philPlusUntil && rUser.philPlusUntil > Date.now() && rUser.philPlusTier >= 1) rClass = "name-phil-plus";
+                        let rCreatorHeartHtml = ''; if (r.creatorHeart) rCreatorHeartHtml = `<div class="creator-heart-wrap" onclick="toggleCreatorHeart('${id}', '${commentId}', '${r.rId}')" style="cursor:${isCreator?'pointer':'default'};" title="Vom Creator geliket"><div class="creator-heart-img" style="background-image: url('${creatorPic}')"></div><i class="fas fa-heart creator-heart-badge"></i></div>`; else if (isCreator) rCreatorHeartHtml = `<div class="creator-heart-wrap creator-heart-inactive" onclick="toggleCreatorHeart('${id}', '${commentId}', '${r.rId}')" title="Creator Herz geben"><i class="far fa-heart creator-heart-badge-outline"></i></div>`;
+                        return `<div class="reply-item"><img src="${rUser.pic}" class="live-pic-${r.uid}" alt="User" onclick="openProfile('${r.uid}')" style="cursor:pointer;"><div style="flex:1; min-width: 0;"><strong onclick="openProfile('${r.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;"><span class="live-name-${r.uid} ${rClass}">${rUser.displayName}${rBadge}</span> <span class="live-username-${r.uid}" style="color:#888; font-weight:normal; font-size:12px;">@${rUser.username}</span> <span class="comment-time">${replyTimeString}</span></strong><p style="word-break: break-word;">${formatText(r.text)}</p><div class="comment-actions"><span onclick="toggleReplyBox('${commentId}')">Antworten</span><span class="${rHasLiked}" onclick="likeReply('${id}', '${commentId}', '${r.rId}')"><i class="fas fa-heart"></i> ${rLikeCount}</span>${rCreatorHeartHtml}</div></div>${rDeleteBtn}</div>`;
+                    }).join('') + `</div>`;
+                }
             }
             const replyBoxHtml = `<div class="reply-box" id="reply-box-${commentId}" style="display:none;"><input type="text" placeholder="Antworten..." id="reply-input-${commentId}" class="comment-input" style="font-size:16px; padding:8px 15px;"><button onclick="submitReply('${id}', '${commentId}')" class="chat-send-btn" style="width:32px; height:32px; font-size:12px; flex-shrink: 0;"><i class="fas fa-paper-plane"></i></button></div>`;
             return `<div class="comment-wrapper">${pinBadgeHtml}<div class="comment" style="display:flex; align-items:flex-start; width:100%;"><img src="${cUser.pic}" class="live-pic-${c.uid}" alt="User" onclick="openProfile('${c.uid}')" style="cursor:pointer;"><div style="flex:1; min-width: 0;"><strong onclick="openProfile('${c.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;"><span class="live-name-${c.uid} ${cClass}">${cUser.displayName}${badge}</span> <span class="live-username-${c.uid}" style="color:#888; font-weight:normal; font-size:12px;">@${cUser.username}</span> <span class="comment-time">${timeString}</span></strong><p id="comment-text-${commentId}" style="word-break: break-word;">${formatText(c.text)}${translateBtnHtml}</p>${renderedGif}<div class="comment-actions"><span onclick="toggleReplyBox('${commentId}')">Antworten</span><span class="${hasLiked}" onclick="likeComment('${id}', '${commentId}')"><i class="fas fa-heart"></i> ${likeCount}</span>${cCreatorHeartHtml}${pinActionHtml}</div></div>${deleteBtn}</div>${repliesHtml}${replyBoxHtml}</div>`;
@@ -1013,11 +1079,63 @@ window.toggleFollow = async function(targetUid, element, event) {
     }
 };
 
+window.toggleBlockUser = async function(targetUid) {
+    if(!currentUser) return;
+    const isBlocked = currentUser.blockedUsers && currentUser.blockedUsers.includes(targetUid);
+    try {
+        if(isBlocked) {
+            currentUser.blockedUsers = currentUser.blockedUsers.filter(id => id !== targetUid);
+            await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayRemove(targetUid) });
+            showToast("Nutzer entblockt.");
+        } else {
+            if(!currentUser.blockedUsers) currentUser.blockedUsers = [];
+            currentUser.blockedUsers.push(targetUid);
+            // Wenn man jemanden blockt, auch entfolgen
+            if(currentUser.following.includes(targetUid)) {
+                currentUser.following = currentUser.following.filter(id => id !== targetUid);
+                await updateDoc(doc(db, "users", currentUser.uid), { following: arrayRemove(targetUid) });
+            }
+            await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayUnion(targetUid) });
+            showToast("Nutzer blockiert. Lade neu...");
+            setTimeout(() => window.location.reload(), 1500); // Reload um überall Logs etc zu leeren
+        }
+        localStorage.setItem('phil_session', JSON.stringify(currentUser));
+        if(document.getElementById('view-profile').classList.contains('active')) {
+            openProfile(targetUid); // Reload profile UI
+        }
+    } catch(e) { showCustomAlert("Fehler", "Blockieren fehlgeschlagen."); }
+};
+
+window.currentProfileTab = 'grid'; // 'grid', 'likes', 'saved'
+
+window.switchProfileTab = function(tabName) {
+    window.currentProfileTab = tabName;
+    document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(`tab-profile-${tabName}`).classList.add('active');
+    const uid = document.getElementById('profile-action-btn').dataset.uid;
+    if(uid) renderProfileGrid(uid);
+};
+
 let currentProfileUnsubscribe = null; let profileUserStories = [];
+
 window.renderProfileGrid = function(targetUid) {
-    const grid = document.getElementById('profile-grid'); const userVideos = allVideosData.filter(v => v.authorUid === targetUid); grid.innerHTML = '';
-    if (userVideos.length === 0) { grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos</div>`; } 
-    else { userVideos.forEach(v => { const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`; const mediaTag = v.mediaType === 'images' ? `<img src="${previewSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<video src="${previewSrc}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`; const icon = v.mediaType === 'images' ? 'fa-images' : 'fa-play'; grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')">${mediaTag}<div class="grid-views"><i class="fas ${icon}"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`; }); }
+    const grid = document.getElementById('profile-grid'); 
+    let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
+    let videosToRender = [];
+
+    if(window.currentProfileTab === 'grid') {
+        videosToRender = allVideosData.filter(v => v.authorUid === targetUid && !blocked.includes(v.authorUid));
+    } else if (window.currentProfileTab === 'likes') {
+        videosToRender = allVideosData.filter(v => v.likedBy && v.likedBy.includes(targetUid) && !blocked.includes(v.authorUid));
+    } else if (window.currentProfileTab === 'saved') {
+        if(currentUser && targetUid === currentUser.uid) {
+            videosToRender = allVideosData.filter(v => currentUser.savedVideos.includes(v.id) && !blocked.includes(v.authorUid));
+        }
+    }
+
+    grid.innerHTML = '';
+    if (videosToRender.length === 0) { grid.innerHTML = `<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Keine Videos</div>`; } 
+    else { videosToRender.forEach(v => { const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`; const mediaTag = v.mediaType === 'images' ? `<img src="${previewSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<video src="${previewSrc}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`; const icon = v.mediaType === 'images' ? 'fa-images' : 'fa-play'; grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')">${mediaTag}<div class="grid-views"><i class="fas ${icon}"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`; }); }
 }
 
 window.openProfile = async function(targetUid) {
@@ -1063,16 +1181,68 @@ window.openProfile = async function(targetUid) {
         
         applyBorderStyles(document.getElementById('profile-pic'), targetUser.activeBorder, targetUser.customBorder);
         
-        const actionBtn = document.getElementById('profile-action-btn'); const msgBtn = document.getElementById('profile-message-btn'); const shopBtn = document.getElementById('profile-shop-btn'); actionBtn.dataset.uid = targetUid; const settingsIcon = document.getElementById('open-settings'); const adminDashboardBtn = document.getElementById('open-admin-dashboard'); const privateStats = document.getElementById('private-stats'); const adminControls = document.getElementById('admin-controls'); adminControls.innerHTML = '';
+        // Social Links Rendern
+        const socialContainer = document.getElementById('profile-social-links');
+        socialContainer.innerHTML = '';
+        if(targetUser.socialLinks) {
+            if(targetUser.socialLinks.ig) socialContainer.innerHTML += `<a href="https://instagram.com/${targetUser.socialLinks.ig}" target="_blank" class="social-btn"><i class="fab fa-instagram"></i></a>`;
+            if(targetUser.socialLinks.yt) socialContainer.innerHTML += `<a href="https://youtube.com/@${targetUser.socialLinks.yt}" target="_blank" class="social-btn"><i class="fab fa-youtube"></i></a>`;
+            if(targetUser.socialLinks.tt) socialContainer.innerHTML += `<a href="https://tiktok.com/@${targetUser.socialLinks.tt}" target="_blank" class="social-btn"><i class="fab fa-tiktok"></i></a>`;
+            if(targetUser.socialLinks.tw) socialContainer.innerHTML += `<a href="https://twitch.tv/${targetUser.socialLinks.tw}" target="_blank" class="social-btn"><i class="fab fa-twitch"></i></a>`;
+        }
+
+        const actionBtn = document.getElementById('profile-action-btn'); 
+        const msgBtn = document.getElementById('profile-message-btn'); 
+        const shopBtn = document.getElementById('profile-shop-btn'); 
+        const blockBtn = document.getElementById('profile-block-btn');
+        actionBtn.dataset.uid = targetUid; const settingsIcon = document.getElementById('open-settings'); const adminDashboardBtn = document.getElementById('open-admin-dashboard'); const privateStats = document.getElementById('private-stats'); const adminControls = document.getElementById('admin-controls'); adminControls.innerHTML = '';
+        
         if (currentUser && (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) && targetUid !== currentUser.uid) { const isVerif = targetUser.verified || false; adminControls.innerHTML = `<button onclick="toggleVerify('${targetUid}', ${isVerif})" class="profile-action-btn" style="background: transparent; color: #00f2fe; border: 1px solid #00f2fe; margin-top: 15px; width: 100%;">👑 Admin: ${isVerif ? 'Blauen Haken entfernen' : 'Blauen Haken geben'}</button>`; }
-        if (currentUser && targetUid === currentUser.uid) { msgBtn.style.display = 'none'; shopBtn.style.display = 'block'; actionBtn.innerText = "Profil bearbeiten"; actionBtn.classList.add('edit-btn'); actionBtn.onclick = () => { document.getElementById('edit-displayname-input').value = currentUser.displayName; document.getElementById('edit-username-input').value = currentUser.username || cleanUsername; document.getElementById('edit-pic-input').value = currentUser.photoURL; document.getElementById('edit-bio-input').value = currentUser.bio; document.getElementById('edit-song-input').value = currentUser.profileSong || ""; document.getElementById('edit-color-input').value = currentUser.profileColor || "#000000"; document.getElementById('settings-modal').classList.add('show'); }; settingsIcon.style.display = 'block'; settingsIcon.onclick = () => { updateNotifUI(); document.getElementById('app-settings-modal').classList.add('show'); }; adminDashboardBtn.style.display = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) ? 'block' : 'none'; privateStats.style.display = 'block'; document.getElementById('my-coins').innerText = targetUser.coins || 0; document.getElementById('my-views').innerText = targetUser.profileViews || 0; } 
-        else { adminDashboardBtn.style.display = 'none'; privateStats.style.display = 'none'; shopBtn.style.display = 'none'; if (currentUser) { msgBtn.style.display = 'block'; msgBtn.onclick = () => { window.openDM(targetUid, cleanUsername, targetUser.photoURL); }; } if (currentUser && currentUser.following && currentUser.following.includes(targetUid)) { actionBtn.innerText = "Entfolgen"; actionBtn.classList.add('edit-btn'); } else { actionBtn.innerText = "Folgen"; actionBtn.classList.remove('edit-btn'); } actionBtn.onclick = () => toggleFollow(targetUid); settingsIcon.style.display = 'none'; }
+        
+        if (currentUser && targetUid === currentUser.uid) { 
+            msgBtn.style.display = 'none'; shopBtn.style.display = 'block'; blockBtn.style.display = 'none';
+            document.getElementById('tab-profile-saved').style.display = 'block';
+            actionBtn.innerText = "Profil bearbeiten"; actionBtn.classList.add('edit-btn'); actionBtn.onclick = () => { 
+                document.getElementById('edit-displayname-input').value = currentUser.displayName; 
+                document.getElementById('edit-username-input').value = currentUser.username || cleanUsername; 
+                document.getElementById('edit-pic-input').value = currentUser.photoURL; 
+                document.getElementById('edit-bio-input').value = currentUser.bio; 
+                document.getElementById('edit-song-input').value = currentUser.profileSong || ""; 
+                document.getElementById('edit-color-input').value = currentUser.profileColor || "#000000"; 
+                document.getElementById('edit-social-ig').value = currentUser.socialLinks?.ig || "";
+                document.getElementById('edit-social-yt').value = currentUser.socialLinks?.yt || "";
+                document.getElementById('edit-social-tt').value = currentUser.socialLinks?.tt || "";
+                document.getElementById('edit-social-tw').value = currentUser.socialLinks?.tw || "";
+                document.getElementById('settings-modal').classList.add('show'); 
+            }; 
+            settingsIcon.style.display = 'block'; settingsIcon.onclick = () => { updateNotifUI(); document.getElementById('app-settings-modal').classList.add('show'); }; adminDashboardBtn.style.display = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) ? 'block' : 'none'; privateStats.style.display = 'block'; document.getElementById('my-coins').innerText = targetUser.coins || 0; document.getElementById('my-views').innerText = targetUser.profileViews || 0; 
+        } 
+        else { 
+            adminDashboardBtn.style.display = 'none'; privateStats.style.display = 'none'; shopBtn.style.display = 'none'; 
+            document.getElementById('tab-profile-saved').style.display = 'none';
+            if(window.currentProfileTab === 'saved') switchProfileTab('grid');
+            
+            if (currentUser) { 
+                msgBtn.style.display = 'block'; msgBtn.onclick = () => { window.openDM(targetUid, cleanUsername, targetUser.photoURL); }; 
+                blockBtn.style.display = 'block';
+                if(currentUser.blockedUsers && currentUser.blockedUsers.includes(targetUid)) {
+                    blockBtn.innerHTML = '<i class="fas fa-ban"></i> Entblocken';
+                    blockBtn.classList.add('blocked-user');
+                } else {
+                    blockBtn.innerHTML = '<i class="fas fa-ban"></i> Blockieren';
+                    blockBtn.classList.remove('blocked-user');
+                }
+                blockBtn.onclick = () => toggleBlockUser(targetUid);
+            } 
+            if (currentUser && currentUser.following && currentUser.following.includes(targetUid)) { actionBtn.innerText = "Entfolgen"; actionBtn.classList.add('edit-btn'); } else { actionBtn.innerText = "Folgen"; actionBtn.classList.remove('edit-btn'); } actionBtn.onclick = () => toggleFollow(targetUid); settingsIcon.style.display = 'none'; 
+        }
         
         let storyDuration = 86400000; 
         if (targetUser.philPlusUntil && targetUser.philPlusUntil > Date.now() && (targetUser.philPlusTier || 1) >= 1) { storyDuration = 172800000; } 
         profileUserStories = (targetUser.stories || []).filter(s => (Date.now() - s.timestamp) < storyDuration); 
         const picContainer = document.getElementById('profile-pic-container'); const storyBadge = document.getElementById('story-badge');
         if(profileUserStories.length > 0) { picContainer.classList.add('story-ring'); storyBadge.style.display = 'none'; } else { picContainer.classList.remove('story-ring'); if(currentUser && targetUid === currentUser.uid) storyBadge.style.display = 'flex'; else storyBadge.style.display = 'none'; }
+        
         window.renderProfileGrid(targetUid);
     });
     
@@ -1379,6 +1549,12 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
     const newDisplayName = document.getElementById('edit-displayname-input').value.trim(); const newUsernameRaw = document.getElementById('edit-username-input').value.trim(); const newUsername = newUsernameRaw.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase(); const newBio = document.getElementById('edit-bio-input').value.trim(); const newPic = document.getElementById('edit-pic-input').value.trim() || currentUser.photoURL;
     const newSong = document.getElementById('edit-song-input').value.trim();
     const newColor = document.getElementById('edit-color-input').value;
+    
+    // Social Links
+    const newIg = document.getElementById('edit-social-ig').value.trim().replace('@', '');
+    const newYt = document.getElementById('edit-social-yt').value.trim().replace('@', '');
+    const newTt = document.getElementById('edit-social-tt').value.trim().replace('@', '');
+    const newTw = document.getElementById('edit-social-tw').value.trim().replace('@', '');
 
     if (newUsername.length < 3) return showCustomAlert("Hinweis", "Dein Benutzername muss mindestens 3 Zeichen lang sein."); if (newDisplayName.length < 2) return showCustomAlert("Hinweis", "Dein Anzeigename ist zu kurz.");
     const btn = document.getElementById('save-settings-btn'); btn.innerText = "Prüfe Namen..."; btn.disabled = true;
@@ -1387,7 +1563,13 @@ document.getElementById('save-settings-btn').addEventListener('click', async() =
         if (nameTaken) { btn.innerText = "Profil Speichern"; btn.disabled = false; return showCustomAlert("Name vergeben", "Dieser @Benutzername existiert bereits!"); }
         btn.innerText = "Speichere..."; 
         
-        let updates = { displayName: newDisplayName, username: newUsername, bio: newBio, photoURL: newPic };
+        let updates = { 
+            displayName: newDisplayName, 
+            username: newUsername, 
+            bio: newBio, 
+            photoURL: newPic,
+            socialLinks: { ig: newIg, yt: newYt, tt: newTt, tw: newTw }
+        };
         if(checkPhilPlusStatus(3)) {
             updates.profileSong = newSong;
             updates.profileColor = newColor;
@@ -1431,9 +1613,13 @@ window.giveCoins = async function(targetUid) { try { await updateDoc(doc(db, "us
 
 document.getElementById('search-input').addEventListener('input', (e) => {
     const query = e.target.value.toLowerCase(); const resultsGrid = document.getElementById('search-results'); const trendingSection = document.getElementById('trending-tags');
+    let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
+    
     if (query.length < 2) { resultsGrid.style.display = 'none'; trendingSection.style.display = 'block'; return; } trendingSection.style.display = 'none'; resultsGrid.style.display = 'block';
-    const matchedUsers = allKnownUsers.filter(u => (u.displayName || "").toLowerCase().includes(query) || (u.username || "").toLowerCase().includes(query));
-    const matchedVideos = allVideosData.filter(v => (v.description || "").toLowerCase().includes(query) || (v.authorName || "").toLowerCase().includes(query) || (v.title || "").toLowerCase().includes(query));
+    
+    const matchedUsers = allKnownUsers.filter(u => !blocked.includes(u.uid) && ((u.displayName || "").toLowerCase().includes(query) || (u.username || "").toLowerCase().includes(query)));
+    const matchedVideos = allVideosData.filter(v => !blocked.includes(v.authorUid) && ((v.description || "").toLowerCase().includes(query) || (v.authorName || "").toLowerCase().includes(query) || (v.title || "").toLowerCase().includes(query)));
+    
     let html = '';
     if (matchedUsers.length > 0) {
         html += '<h4 style="padding: 10px 15px; color:#888; font-size:14px; text-transform:uppercase;">Benutzer</h4><div style="display:flex; flex-direction:column; gap:15px; padding: 0 15px 20px;">';
@@ -1456,11 +1642,20 @@ let inboxUnsubscribe = null; let isInitialNotifLoad = true;
 function initInbox() {
     const inboxBox = document.getElementById('inbox-notifications-box'); if (!currentUser) return; if (inboxUnsubscribe) inboxUnsubscribe(); isInitialNotifLoad = true;
     inboxUnsubscribe = onSnapshot(query(collection(db, "users", currentUser.uid, "notifications"), orderBy("timestamp", "desc")), (snapshot) => {
-        if (!isInitialNotifLoad) { snapshot.docChanges().forEach((change) => { if (change.type === "added") { const n = change.doc.data(); const isCurrentlyChatting = document.getElementById('view-dm').classList.contains('active') && window.currentChatPartner && window.currentChatPartner.uid === n.fromUid; if (!isCurrentlyChatting) { const nUser = getUserData(n.fromUid, n.fromName, n.fromUsername, n.fromPic, false); let toastMsg = `🔔 Aktivität von @${nUser.username}`; if (n.type === 'message') toastMsg = `💬 Nachricht von @${nUser.username}`; else if (n.type === 'like') toastMsg = `❤️ @${nUser.username} mag dein Post`; else if (n.type === 'follow') toastMsg = `👤 @${nUser.username} folgt dir`; else if (n.type === 'gift') toastMsg = `🎁 @${nUser.username} hat gespendet!`; else if (n.type === 'comment') toastMsg = `💬 @${nUser.username} hat kommentiert`; showToast(toastMsg); window.sendDesktopNotification("Phil Shorts", toastMsg, n.type); } } }); }
+        let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
+        if (!isInitialNotifLoad) { snapshot.docChanges().forEach((change) => { if (change.type === "added") { const n = change.doc.data(); if(blocked.includes(n.fromUid)) return; const isCurrentlyChatting = document.getElementById('view-dm').classList.contains('active') && window.currentChatPartner && window.currentChatPartner.uid === n.fromUid; if (!isCurrentlyChatting) { const nUser = getUserData(n.fromUid, n.fromName, n.fromUsername, n.fromPic, false); let toastMsg = `🔔 Aktivität von @${nUser.username}`; if (n.type === 'message') toastMsg = `💬 Nachricht von @${nUser.username}`; else if (n.type === 'like') toastMsg = `❤️ @${nUser.username} mag dein Post`; else if (n.type === 'follow') toastMsg = `👤 @${nUser.username} folgt dir`; else if (n.type === 'gift') toastMsg = `🎁 @${nUser.username} hat gespendet!`; else if (n.type === 'comment') toastMsg = `💬 @${nUser.username} hat kommentiert`; showToast(toastMsg); window.sendDesktopNotification("Phil Shorts", toastMsg, n.type); } } }); }
         isInitialNotifLoad = false; inboxBox.innerHTML = '';
-        if (snapshot.empty) { inboxBox.innerHTML = '<div class="empty-state" style="height: 100%;"><p>Keine neuen Benachrichtigungen</p></div>'; return; }
+        
+        let validNotifs = [];
         snapshot.forEach((doc) => {
-            const n = doc.data(); let icon = 'fa-bell'; let color = '#aaa';
+            const n = doc.data();
+            if(!blocked.includes(n.fromUid)) validNotifs.push(n);
+        });
+
+        if (validNotifs.length === 0) { inboxBox.innerHTML = '<div class="empty-state" style="height: 100%;"><p>Keine neuen Benachrichtigungen</p></div>'; return; }
+        
+        validNotifs.forEach((n) => {
+            let icon = 'fa-bell'; let color = '#aaa';
             if (n.type === 'like') { icon = 'fa-heart'; color = '#ff0050'; } if (n.type === 'follow') { icon = 'fa-user-plus'; color = '#00f2fe'; } if (n.type === 'comment') { icon = 'fa-comment-dots'; color = '#fff'; } if (n.type === 'gift') { icon = 'fa-gift'; color = '#ffd700'; } if (n.type === 'message') { icon = 'fa-envelope'; color = '#00f2fe'; }
             const nUser = getUserData(n.fromUid, n.fromName, n.fromUsername, n.fromPic, false); let clickAction = `openProfile('${n.fromUid}')`; if (n.type === 'message') clickAction = `openDM('${n.fromUid}', '${nUser.username.replace(/'/g, "\\'")}', '${nUser.pic}')`; else if (n.videoId) clickAction = `jumpToVideo('${n.videoId}')`; const isVerif = getVerifiedBadge(nUser.verified); let nameClass = nUser.philPlusUntil && nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 1 ? "name-phil-plus" : "";
             inboxBox.innerHTML += `<div class="inbox-msg" onclick="${clickAction}"><img src="${nUser.pic}" class="chat-avatar live-pic-${n.fromUid}" style="flex-shrink:0;"><div style="flex:1; min-width:0;"><span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span class="live-name-${n.fromUid} ${nameClass}">${nUser.displayName}${isVerif}</span> <span class="live-username-${n.fromUid}" style="color:#888; font-weight:normal; font-size:12px;">@${nUser.username}</span></span><div class="chat-bubble" style="background: transparent; padding: 0; word-break: break-word;"><i class="fas ${icon}" style="color:${color}; margin-right:5px;"></i> ${formatText(n.text)}</div><div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(n.timestamp)}</div></div></div>`;
@@ -1472,7 +1667,16 @@ let inboxChatsUnsubscribe = null;
 function initInboxChats() {
     if (!currentUser) return; const msgBox = document.getElementById('inbox-messages-box'); if (inboxChatsUnsubscribe) inboxChatsUnsubscribe();
     inboxChatsUnsubscribe = onSnapshot(collection(db, "chats"), (snapshot) => {
-        let chats = []; snapshot.forEach(doc => { const chat = doc.data(); if (chat.participants && chat.participants.includes(currentUser.uid)) chats.push({ id: doc.id, ...chat }); }); chats.sort((a, b) => b.lastMessageTime - a.lastMessageTime); msgBox.innerHTML = '';
+        let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
+        let chats = []; snapshot.forEach(doc => { 
+            const chat = doc.data(); 
+            if (chat.participants && chat.participants.includes(currentUser.uid)) {
+                const partnerUid = chat.participants.find(uid => uid !== currentUser.uid);
+                if(!blocked.includes(partnerUid)) {
+                    chats.push({ id: doc.id, ...chat });
+                }
+            } 
+        }); chats.sort((a, b) => b.lastMessageTime - a.lastMessageTime); msgBox.innerHTML = '';
         if (chats.length === 0) { msgBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Keine Nachrichten vorhanden</p></div>'; return; }
         chats.forEach(chat => {
             const partnerUid = chat.participants.find(uid => uid !== currentUser.uid); const partner = chat.users[partnerUid]; if (!partner) return; const nUser = getUserData(partnerUid, partner.name, partner.name, partner.pic, false); const safeName = nUser.username.replace(/'/g, "\\'"); const isVerif = getVerifiedBadge(nUser.verified); let nameClass = nUser.philPlusUntil && nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 1 ? "name-phil-plus" : "";
@@ -1629,7 +1833,16 @@ document.getElementById('admin-close-ticket-btn').addEventListener('click', asyn
 let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
 window.openDM = async function(targetUid, targetName, targetPic) {
     if (!currentUser) return; window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic }; const uids = [currentUser.uid, targetUid].sort(); window.currentChatId = `${uids[0]}_${uids[1]}`; const nUser = getUserData(targetUid, targetName, targetName, targetPic, false); const isVerif = getVerifiedBadge(nUser.verified);
-    document.getElementById('dm-title').innerHTML = '@' + targetName + ' ' + isVerif; switchView('dm');
+    document.getElementById('dm-name-span').innerHTML = '@' + targetName + ' ' + isVerif; switchView('dm');
+    
+    // Online Status anzeigen
+    let statusHtml = '';
+    if(nUser.lastActive) {
+        let diff = Date.now() - nUser.lastActive;
+        if(diff < 5 * 60000) statusHtml = '<span style="color:#39ff14;">🟢 Online</span>';
+        else statusHtml = 'Zuletzt online: ' + timeAgo(nUser.lastActive);
+    }
+    document.getElementById('dm-status-span').innerHTML = statusHtml;
     
     if(checkPhilPlusStatus(3)) document.getElementById('dm-img-btn').style.display = 'block';
     else document.getElementById('dm-img-btn').style.display = 'none';
