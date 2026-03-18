@@ -458,6 +458,11 @@ function initLiveUser() {
                     document.getElementById('phil-plus-badge-container').style.display = 'none';
                 }
             }
+            
+            // Falls das Settings-Modal offen ist, die Block-Liste updaten
+            if(document.getElementById('app-settings-modal').classList.contains('show')) {
+                renderBlockedUsersList();
+            }
         }
     });
 
@@ -482,7 +487,12 @@ function initSearchUsers() {
             if (u.philPlusUntil && u.philPlusUntil > Date.now() && u.philPlusTier === 3) tier3Badge = ' <i class="fas fa-gem" style="color: #00f2fe; font-size: 12px;" title="Plus+++ Legende"></i>';
 
             document.querySelectorAll(`.live-name-${u.uid}`).forEach(el => {
-                el.innerHTML = u.displayName + isVerif + tier3Badge;
+                // Wir packen den Name + Badges rein. WICHTIG: Das Blockiert-Badge wird dynamisch in der Search hinzugefügt.
+                let blockedBadge = '';
+                if(currentUser && currentUser.blockedUsers && currentUser.blockedUsers.includes(u.uid)) {
+                    blockedBadge = '<span style="color:#ff4444; font-size:10px; margin-left:5px; font-weight:bold;">[BLOCKIERT]</span>';
+                }
+                el.innerHTML = u.displayName + isVerif + tier3Badge + blockedBadge;
                 if (nameClass) el.classList.add(nameClass);
                 else el.classList.remove("name-phil-plus");
             });
@@ -592,7 +602,7 @@ document.getElementById('btn-live-stream').addEventListener('click', () => {
 async function addNotification(targetUid, type, text, videoId = null) {
     if (!currentUser || targetUid === currentUser.uid) return;
     let targetUser = allKnownUsers.find(u => u.uid === targetUid);
-    if(targetUser && targetUser.blockedUsers && targetUser.blockedUsers.includes(currentUser.uid)) return; // Blockierte User können keine Notifs senden
+    if(targetUser && targetUser.blockedUsers && targetUser.blockedUsers.includes(currentUser.uid)) return; 
     await addDoc(collection(db, "users", targetUid, "notifications"), { fromUid: currentUser.uid, fromName: currentUser.displayName, fromUsername: currentUser.username, fromPic: currentUser.photoURL, type: type, text: text, videoId: videoId, timestamp: Date.now() });
 }
 
@@ -654,7 +664,7 @@ function initLiveDatabase() {
         } else {
             snapshot.docChanges().forEach((change) => {
                 const vData = { id: change.doc.id, ...change.doc.data() };
-                if(blocked.includes(vData.authorUid)) return; // Ignoriere blockierte
+                if(blocked.includes(vData.authorUid)) return; 
 
                 if (change.type === "added") {
                     if (!document.querySelector(`.video[data-id="${vData.id}"]`)) {
@@ -866,7 +876,6 @@ videoContainer.addEventListener('wheel', (e) => {
     scrollTimeout = setTimeout(() => { scrollTimeout = null; }, 600);
 }, { passive: false });
 
-// Verbessertes Scroll-Verhalten für "RICHTIGEN" Feed
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         const el = e.target; const vidId = el.dataset.id;
@@ -1079,6 +1088,28 @@ window.toggleFollow = async function(targetUid, element, event) {
     }
 };
 
+window.renderBlockedUsersList = function() {
+    const list = document.getElementById('blocked-users-list');
+    if(!list) return;
+    if(!currentUser || !currentUser.blockedUsers || currentUser.blockedUsers.length === 0) {
+        list.innerHTML = '<p style="color:#888; font-size:13px; text-align:center;">Keine blockierten Nutzer.</p>';
+        return;
+    }
+    list.innerHTML = '';
+    currentUser.blockedUsers.forEach(uid => {
+        const u = allKnownUsers.find(x => x.uid === uid);
+        if(u) {
+            list.innerHTML += `<div class="blocked-user-item">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <img src="${u.photoURL}" style="width:30px; height:30px; border-radius:50%; object-fit:cover;">
+                    <span style="font-size:14px; font-weight:bold; color:white;">@${u.username}</span>
+                </div>
+                <button class="profile-action-btn edit-btn" onclick="toggleBlockUser('${uid}')" style="min-height:30px; font-size:12px; padding:0 10px; background:#ff4444; color:white; border:none;">Entblocken</button>
+            </div>`;
+        }
+    });
+};
+
 window.toggleBlockUser = async function(targetUid) {
     if(!currentUser) return;
     const isBlocked = currentUser.blockedUsers && currentUser.blockedUsers.includes(targetUid);
@@ -1090,23 +1121,23 @@ window.toggleBlockUser = async function(targetUid) {
         } else {
             if(!currentUser.blockedUsers) currentUser.blockedUsers = [];
             currentUser.blockedUsers.push(targetUid);
-            // Wenn man jemanden blockt, auch entfolgen
             if(currentUser.following.includes(targetUid)) {
                 currentUser.following = currentUser.following.filter(id => id !== targetUid);
                 await updateDoc(doc(db, "users", currentUser.uid), { following: arrayRemove(targetUid) });
             }
             await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayUnion(targetUid) });
             showToast("Nutzer blockiert. Lade neu...");
-            setTimeout(() => window.location.reload(), 1500); // Reload um überall Logs etc zu leeren
+            setTimeout(() => window.location.reload(), 1500); 
         }
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
         if(document.getElementById('view-profile').classList.contains('active')) {
-            openProfile(targetUid); // Reload profile UI
+            openProfile(targetUid); 
         }
+        renderBlockedUsersList();
     } catch(e) { showCustomAlert("Fehler", "Blockieren fehlgeschlagen."); }
 };
 
-window.currentProfileTab = 'grid'; // 'grid', 'likes', 'saved'
+window.currentProfileTab = 'grid'; 
 
 window.switchProfileTab = function(tabName) {
     window.currentProfileTab = tabName;
@@ -1181,7 +1212,6 @@ window.openProfile = async function(targetUid) {
         
         applyBorderStyles(document.getElementById('profile-pic'), targetUser.activeBorder, targetUser.customBorder);
         
-        // Social Links Rendern
         const socialContainer = document.getElementById('profile-social-links');
         socialContainer.innerHTML = '';
         if(targetUser.socialLinks) {
@@ -1215,7 +1245,7 @@ window.openProfile = async function(targetUid) {
                 document.getElementById('edit-social-tw').value = currentUser.socialLinks?.tw || "";
                 document.getElementById('settings-modal').classList.add('show'); 
             }; 
-            settingsIcon.style.display = 'block'; settingsIcon.onclick = () => { updateNotifUI(); document.getElementById('app-settings-modal').classList.add('show'); }; adminDashboardBtn.style.display = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) ? 'block' : 'none'; privateStats.style.display = 'block'; document.getElementById('my-coins').innerText = targetUser.coins || 0; document.getElementById('my-views').innerText = targetUser.profileViews || 0; 
+            settingsIcon.style.display = 'block'; settingsIcon.onclick = () => { updateNotifUI(); renderBlockedUsersList(); document.getElementById('app-settings-modal').classList.add('show'); }; adminDashboardBtn.style.display = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) ? 'block' : 'none'; privateStats.style.display = 'block'; document.getElementById('my-coins').innerText = targetUser.coins || 0; document.getElementById('my-views').innerText = targetUser.profileViews || 0; 
         } 
         else { 
             adminDashboardBtn.style.display = 'none'; privateStats.style.display = 'none'; shopBtn.style.display = 'none'; 
@@ -1617,13 +1647,26 @@ document.getElementById('search-input').addEventListener('input', (e) => {
     
     if (query.length < 2) { resultsGrid.style.display = 'none'; trendingSection.style.display = 'block'; return; } trendingSection.style.display = 'none'; resultsGrid.style.display = 'block';
     
-    const matchedUsers = allKnownUsers.filter(u => !blocked.includes(u.uid) && ((u.displayName || "").toLowerCase().includes(query) || (u.username || "").toLowerCase().includes(query)));
+    // In der Suche erlauben wir JEDEN anzuzeigen, markieren blockierte aber rot
+    const matchedUsers = allKnownUsers.filter(u => ((u.displayName || "").toLowerCase().includes(query) || (u.username || "").toLowerCase().includes(query)));
+    
+    // Videos von blockierten Nutzern in der Suche ausblenden
     const matchedVideos = allVideosData.filter(v => !blocked.includes(v.authorUid) && ((v.description || "").toLowerCase().includes(query) || (v.authorName || "").toLowerCase().includes(query) || (v.title || "").toLowerCase().includes(query)));
     
     let html = '';
     if (matchedUsers.length > 0) {
         html += '<h4 style="padding: 10px 15px; color:#888; font-size:14px; text-transform:uppercase;">Benutzer</h4><div style="display:flex; flex-direction:column; gap:15px; padding: 0 15px 20px;">';
-        matchedUsers.forEach(u => { const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : ''; const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase(); let nameClass = u.philPlusUntil && u.philPlusUntil > Date.now() && u.philPlusTier >= 1 ? "name-phil-plus" : ""; html += `<div style="display:flex; align-items:center; gap:15px; cursor:pointer;" onclick="openProfile('${u.uid}')"><img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}" style="width:50px; height:50px; border-radius:50%; object-fit:cover; border: 1px solid #333; flex-shrink:0;"><div style="flex:1; min-width:0;"><strong style="font-size:16px; display:block; margin-bottom:3px; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span class="live-name-${u.uid} ${nameClass}">${u.displayName}${isVerif}</span></strong><p class="live-username-${u.uid}" style="font-size:13px; color:#888;">@${cleanUsername}</p></div></div>`; });
+        matchedUsers.forEach(u => { 
+            const isVerif = u.verified ? '<i class="fas fa-check-circle verified-badge"></i>' : ''; 
+            const cleanUsername = u.username || u.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase(); 
+            let nameClass = u.philPlusUntil && u.philPlusUntil > Date.now() && u.philPlusTier >= 1 ? "name-phil-plus" : ""; 
+            
+            // NEU: Blockiert-Badge, wenn der User blockiert ist
+            let isBlocked = blocked.includes(u.uid);
+            let blockedBadge = isBlocked ? '<span style="color:#ff4444; font-size:10px; margin-left:5px; font-weight:bold; background:rgba(255,0,0,0.1); padding:2px 5px; border-radius:5px;">[BLOCKIERT]</span>' : '';
+
+            html += `<div style="display:flex; align-items:center; gap:15px; cursor:pointer;" onclick="openProfile('${u.uid}')"><img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}" style="width:50px; height:50px; border-radius:50%; object-fit:cover; border: 1px solid #333; flex-shrink:0;"><div style="flex:1; min-width:0;"><strong style="font-size:16px; display:block; margin-bottom:3px; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span class="live-name-${u.uid} ${nameClass}">${u.displayName}${isVerif}${blockedBadge}</span></strong><p class="live-username-${u.uid}" style="font-size:13px; color:#888;">@${cleanUsername}</p></div></div>`; 
+        });
         html += '</div>';
     }
     if (matchedVideos.length > 0) {
@@ -1835,7 +1878,6 @@ window.openDM = async function(targetUid, targetName, targetPic) {
     if (!currentUser) return; window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic }; const uids = [currentUser.uid, targetUid].sort(); window.currentChatId = `${uids[0]}_${uids[1]}`; const nUser = getUserData(targetUid, targetName, targetName, targetPic, false); const isVerif = getVerifiedBadge(nUser.verified);
     document.getElementById('dm-name-span').innerHTML = '@' + targetName + ' ' + isVerif; switchView('dm');
     
-    // Online Status anzeigen
     let statusHtml = '';
     if(nUser.lastActive) {
         let diff = Date.now() - nUser.lastActive;

@@ -2646,6 +2646,7 @@ input:checked+.slider:before {
     z-index: 99;
     pointer-events: none;
 }
+
 /* --- NEUE FEATURES STYLES (Socials, Blockieren, Favoriten) --- */
 
 .social-btn {
@@ -2674,4 +2675,14 @@ input:checked+.slider:before {
 
 .saved p {
     color: #ffd700;
+}
+
+.blocked-user-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(0,0,0,0.3);
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid #333;
 }
