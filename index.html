@@ -29,6 +29,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <meta name="google-site-verification" content="zbjLs6-a2zAdVq8Jbm-vtjvE2vEfJ7QDa4Ac32eSdaI" />
 
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
     <script>
         function handleGoogleLogin(response) {
             document.getElementById('login-text').innerText = "Wird authentifiziert...";
@@ -78,12 +80,84 @@
                 <span class="header__link" id="tab-following">Folge ich</span>
                 <span class="header__link active" id="tab-foryou">Für dich</span>
                 <i class="fas fa-search search-icon" onclick="switchView('search')"></i>
-                <div id="btn-live-stream" class="live-stream-btn" style="display:none;"><i class="fas fa-broadcast-tower"></i> Live</div>
+                <div id="btn-live-stream" class="live-stream-btn" onclick="switchView('live-list')" style="display:none;"><i class="fas fa-broadcast-tower"></i> Live</div>
             </div>
             <div class="app__videos" id="video-container">
                 <div class="loading-screen"><i class="fas fa-spinner fa-spin"></i>
                     <p>Lade Algorithmus...</p>
                 </div>
+            </div>
+        </div>
+
+        <div id="view-sound" class="view">
+            <div class="top-bar glass-nav">
+                <i class="fas fa-chevron-left back-btn" onclick="switchView('feed')"></i>
+                <h3 style="font-weight: 600;">Original Sound</h3>
+            </div>
+            <div class="profile-header" style="flex-direction:row; gap:15px; align-items:center; justify-content:flex-start; padding: 20px;">
+                <img src="" id="sound-pic" class="profile-image" style="width:80px; height:80px; border-radius:15px; border: 1px solid #333; margin:0;">
+                <div style="flex:1; text-align:left;">
+                    <h3 id="sound-name" style="font-size:18px; margin-bottom:5px;">Sound Name</h3>
+                    <p id="sound-author" style="color:#aaa; font-size:14px; margin-bottom:5px;">@author</p>
+                    <p id="sound-count" style="color:#888; font-size:12px; font-weight:bold;">0 Videos</p>
+                </div>
+            </div>
+            <div style="padding: 0 20px 20px;">
+                <button class="profile-action-btn" id="use-sound-btn" style="width:100%; background:#00f2fe; color:black;"><i class="fas fa-video"></i> Diesen Sound nutzen</button>
+            </div>
+            <div class="grid-container" id="sound-grid"></div>
+        </div>
+
+        <div id="view-duet" class="view" style="background:black; z-index: 5000;">
+            <div class="top-bar glass-nav" style="position:absolute; top:0; z-index:100; width:100%; background:transparent; border:none;">
+                <i class="fas fa-times back-btn" onclick="closeDuet()" style="color:white; text-shadow:0 2px 4px black; font-size: 28px;"></i>
+            </div>
+            <div class="duet-container" style="display:flex; height:100%; width:100%; align-items:center; padding-bottom: 120px;">
+                <video id="duet-orig-video" playsinline style="width:50%; height:80%; object-fit:cover; border-right:2px solid #333;"></video>
+                <video id="duet-cam-video" playsinline autoplay muted style="width:50%; height:80%; object-fit:cover; transform:scaleX(-1);"></video>
+            </div>
+            <canvas id="duet-canvas" style="display:none;"></canvas>
+            
+            <div class="duet-controls" style="position:absolute; bottom:30px; width:100%; display:flex; justify-content:center; flex-direction:column; align-items:center; z-index:100;">
+                <div id="duet-timer" style="color:white; text-shadow:0 2px 4px black; margin-bottom:15px; font-weight:bold; font-size:18px;">00:00</div>
+                <button id="duet-record-btn" class="chat-send-btn" style="width:80px; height:80px; background:#ff0050; border:4px solid white; transition: all 0.3s;"><i class="fas fa-video" id="duet-record-icon" style="font-size:24px;"></i></button>
+                <p id="duet-status" style="margin-top: 15px; font-size: 14px; font-weight: bold; color: #00f2fe; text-shadow: 0 1px 3px black;"></p>
+            </div>
+        </div>
+
+        <div id="view-live-list" class="view">
+            <div class="top-bar glass-nav">
+                <i class="fas fa-chevron-left back-btn" onclick="switchView('feed')"></i>
+                <h3 style="flex:1; text-align:center;">Aktuelle Live Streams</h3>
+                <i class="fas fa-video back-btn" id="start-my-live-btn" style="color:#ff0050;"></i>
+            </div>
+            <div id="live-streams-grid" style="padding:15px; display:flex; flex-direction:column; gap:15px; padding-bottom: 80px;">
+                <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i><p>Suche nach Streams...</p></div>
+            </div>
+        </div>
+
+        <div id="view-live-room" class="view" style="background:black; z-index: 4000;">
+            <div class="live-room-header">
+                <div style="display:flex; align-items:center; gap:10px; background: rgba(0,0,0,0.5); padding: 5px 15px 5px 5px; border-radius: 30px; backdrop-filter: blur(5px);">
+                    <img id="live-broadcaster-pic" src="" style="width:35px; height:35px; border-radius:50%; object-fit:cover;">
+                    <div>
+                        <strong id="live-broadcaster-name" style="font-size:14px; display:block;">Broadcaster</strong>
+                        <span class="live-badge">LIVE</span>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <div style="background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: bold;"><i class="fas fa-eye"></i> <span id="live-viewer-count">0</span></div>
+                    <i class="fas fa-times" onclick="leaveLiveRoom()" style="font-size:24px; cursor:pointer; text-shadow: 0 2px 4px black;"></i>
+                </div>
+            </div>
+            
+            <video id="live-video-player" autoplay playsinline style="width:100%; height:100%; object-fit:cover;"></video>
+            
+            <div class="live-chat-container" id="live-chat-box"></div>
+            
+            <div class="chat-input-wrapper glass-nav-bottom" style="z-index: 101;">
+                <input type="text" id="live-chat-input" placeholder="Chatte live..." class="chat-input">
+                <button id="send-live-chat-btn" class="chat-send-btn"><i class="fas fa-paper-plane"></i></button>
             </div>
         </div>
 
@@ -582,6 +656,15 @@
                 <h4>Post Erstellen</h4><i class="fas fa-times close-modal" id="close-upload"></i>
             </div>
             <div class="modal-body upload-body">
+                
+                <div id="upload-sound-preview" style="display:none; background: rgba(0, 242, 254, 0.1); border: 1px solid #00f2fe; padding: 10px 15px; border-radius: 15px; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                    <div>
+                        <span style="display:block; font-size:11px; color:#00f2fe; font-weight:bold; margin-bottom:3px;"><i class="fas fa-music"></i> Sound ausgewählt</span>
+                        <strong id="upload-sound-name" style="font-size:14px; color:white;">Sound Name</strong>
+                    </div>
+                    <i class="fas fa-times" style="color:#ff4444; font-size: 18px; cursor: pointer;" onclick="removeSelectedSound()"></i>
+                </div>
+
                 <div class="file-upload-wrapper">
                     <input type="file" id="up-file" class="file-input-hidden" accept="video/*, image/*" multiple required>
                     <div class="file-upload-design" id="up-file-btn" onclick="document.getElementById('up-file').click()">
@@ -591,229 +674,8 @@
                     </div>
                 </div>
 
-                <div id="video-advanced-editor" style="display:none; background: rgba(255, 255, 255, 0.05); padding:15px; border-radius:15px; border:1px solid #333; margin-top: 10px;">
-                    <label style="color:#00f2fe; font-size:14px; font-weight:bold; margin-bottom:15px; display:block;"><i class="fas fa-film"></i> Pro Video Editor</label>
-                    
-                    <div style="width:100%; background:#000; border-radius:10px; border: 1px solid #222; margin-bottom:15px; padding: 10px 0;">
-                        <div id="pro-editor-workspace" style="position: relative; width: 100%; height: 350px; margin: 0 auto; overflow: hidden; touch-action: none; transition: width 0.3s, aspect-ratio 0.3s;">
-                            <div id="pro-snap-v" class="snap-line-v"></div>
-                            <div id="pro-snap-h" class="snap-line-h"></div>
-
-                            <video id="pro-video-source" style="position: absolute; width: 100%; height: 100%; object-fit: contain; z-index: 1;" playsinline crossorigin="anonymous"></video>
-                            <canvas id="pro-video-canvas" style="position: absolute; width: 100%; height: 100%; object-fit: contain; z-index: 2; pointer-events: none;"></canvas>
-
-                            <div id="pro-editor-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 10;"></div>
-                        </div>
-                    </div>
-
-                    <audio id="pro-audio-player" style="display:none;"></audio>
-
-                    <div style="display: flex; gap: 15px; margin-bottom: 20px; align-items: center; justify-content: space-between;">
-                        <button id="btn-pro-play" class="profile-action-btn edit-btn" style="min-width: 50px; min-height: 40px; padding: 0; border-radius: 50%;"><i class="fas fa-play"></i></button>
-                        <div style="color: #aaa; font-size: 14px; font-weight: bold;">
-                            <span id="pro-time-current">0.0</span> / <span id="pro-time-total">0.0</span>s
-                        </div>
-                    </div>
-
-                    <div class="shop-tabs" style="margin-bottom: 15px; border-radius: 10px; overflow: hidden; background: rgba(0,0,0,0.5);">
-                        <div class="shop-tab pro-tab-btn active" data-tab="pro-tab-trim" onclick="switchProEditorTab('pro-tab-trim')"><i class="fas fa-cut"></i> Trim</div>
-                        <div class="shop-tab pro-tab-btn" data-tab="pro-tab-audio" onclick="switchProEditorTab('pro-tab-audio')"><i class="fas fa-music"></i> Audio</div>
-                        <div class="shop-tab pro-tab-btn" data-tab="pro-tab-fx" onclick="switchProEditorTab('pro-tab-fx')"><i class="fas fa-magic"></i> FX</div>
-                        <div class="shop-tab pro-tab-btn" data-tab="pro-tab-overlay" onclick="switchProEditorTab('pro-tab-overlay')"><i class="fas fa-layer-group"></i> Layer</div>
-                    </div>
-
-                    <div id="pro-tab-trim" class="pro-tab-content active" style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #222;">
-                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:10px;">Video Schneiden</label>
-                        <div id="pro-timeline-container" style="position: relative; height: 50px; background: #111; border-radius: 5px; margin-bottom: 15px; overflow: hidden; border: 1px solid #333;">
-                            <div id="pro-timeline-frames" style="display:flex; height: 100%; width: 100%; opacity: 0.5;"></div>
-                            <input type="range" id="pro-trim-start" min="0" value="0" step="0.1" class="trim-slider slider-blue" style="position: absolute; width: 100%; top: 20px; z-index: 2; background: transparent;">
-                            <input type="range" id="pro-trim-end" min="0" value="0" step="0.1" class="trim-slider slider-red" style="position: absolute; width: 100%; top: 20px; z-index: 1; background: transparent;">
-                        </div>
-                        <div style="display:flex; justify-content:space-between; font-size:12px; color:#aaa; font-weight: bold;">
-                            <div style="display:flex; align-items:center; gap:5px;">
-                                <button class="profile-action-btn edit-btn" style="min-height:24px; padding:0 8px;" id="pro-trim-start-minus">-</button>
-                                <span>Start: <strong id="pro-val-start" style="color:#00f2fe;">0.0</strong>s</span>
-                                <button class="profile-action-btn edit-btn" style="min-height:24px; padding:0 8px;" id="pro-trim-start-plus">+</button>
-                            </div>
-                            <div style="display:flex; align-items:center; gap:5px;">
-                                <button class="profile-action-btn edit-btn" style="min-height:24px; padding:0 8px;" id="pro-trim-end-minus">-</button>
-                                <span>Ende: <strong id="pro-val-end" style="color:#ff0050;">0.0</strong>s</span>
-                                <button class="profile-action-btn edit-btn" style="min-height:24px; padding:0 8px;" id="pro-trim-end-plus">+</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="pro-tab-audio" class="pro-tab-content" style="display:none; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #222;">
-                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;"><i class="fas fa-video"></i> Video Ton Lautstärke</label>
-                        <input type="range" id="pro-audio-orig-vol" min="0" max="1" step="0.05" value="1" class="trim-slider slider-blue" style="width: 100%; margin-bottom: 15px;">
-
-                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;"><i class="fas fa-music"></i> Eigene Musik hinzufügen</label>
-                        <input type="file" id="pro-audio-upload" accept="audio/*" style="display:none;">
-                        <button class="profile-action-btn edit-btn" onclick="document.getElementById('pro-audio-upload').click()" style="width: 100%; margin-bottom: 10px; font-size:14px;"><i class="fas fa-upload"></i> Musik wählen</button>
-                        <div id="pro-audio-bg-name" style="font-size:11px; color:#00f2fe; margin-bottom:10px; text-align:center;"></div>
-
-                        <div id="pro-audio-controls-extended" style="display:none;">
-                            <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;">Musik Lautstärke</label>
-                            <input type="range" id="pro-audio-bg-vol" min="0" max="1" step="0.05" value="0.5" class="trim-slider slider-red" style="width: 100%; margin-bottom: 15px;">
-
-                            <label style="font-size: 12px; color: #888; display:block; margin-bottom:5px;">Startpunkt der Musik</label>
-                            <input type="range" id="pro-audio-offset" min="0" value="0" step="0.1" class="trim-slider slider-blue" style="width: 100%;">
-                        </div>
-                    </div>
-
-                    <div id="pro-tab-fx" class="pro-tab-content" style="display:none; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #222;">
-                        <div style="display:flex; gap:15px; margin-bottom:15px;">
-                            <div style="flex:1;">
-                                <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Tempo</label>
-                                <select id="pro-speed-ctrl" class="comment-input" style="width: 100%; background: #111; color: white; padding: 8px; border-radius: 10px;">
-                                    <option value="0.5">0.5x (Slow)</option>
-                                    <option value="1" selected>1.0x (Normal)</option>
-                                    <option value="1.5">1.5x</option>
-                                    <option value="2">2.0x (Fast)</option>
-                                </select>
-                            </div>
-                            <div style="flex:1;">
-                                <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Format</label>
-                                <select id="pro-ratio-ctrl" class="comment-input" style="width: 100%; background: #111; color: white; padding: 8px; border-radius: 10px;">
-                                    <option value="original" selected>Original</option>
-                                    <option value="9:16">9:16 (Shorts)</option>
-                                    <option value="1:1">1:1 (Square)</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <label style="font-size: 12px; color: #888; display:block; margin-bottom:10px;"><i class="fas fa-magic"></i> Filter</label>
-                        <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 5px;">
-                            <div class="pro-filter-btn active" data-filter="none">Aus</div>
-                            <div class="pro-filter-btn" data-filter="grayscale">S/W</div>
-                            <div class="pro-filter-btn" data-filter="sepia">Sepia</div>
-                            <div class="pro-filter-btn" data-filter="blur">Global Blur</div>
-                            <div class="pro-filter-btn" data-filter="contrast">Kontrast</div>
-                            <div class="pro-filter-btn" data-filter="vintage">Vintage</div>
-                        </div>
-                    </div>
-
-                    <div id="pro-tab-overlay" class="pro-tab-content" style="display:none; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; border: 1px solid #222;">
-                        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                            <button id="btn-pro-add-text" class="profile-action-btn" style="flex: 1; background: white; color: black; min-height: 40px; padding:0;"><i class="fas fa-font"></i> Text</button>
-                            <button class="profile-action-btn" onclick="document.getElementById('pro-sticker-upload-input').click()" style="flex: 1; background: #ffd700; color: black; min-height: 40px; padding:0;"><i class="fas fa-sticky-note"></i> Sticker</button>
-                            <input type="file" id="pro-sticker-upload-input" accept="image/*" style="display:none;">
-                            <button id="btn-pro-add-blur" class="profile-action-btn" style="flex: 1; background: rgba(255,255,255,0.2); color: white; min-height: 40px; padding:0;"><i class="fas fa-droplet"></i> Blur</button>
-                        </div>
-
-                        <div id="pro-text-controls" style="display: none; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; border: 1px solid #444;">
-
-                            <div style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #333;">
-                                <label style="font-size: 12px; color: #00f2fe; display:block; margin-bottom:5px;"><i class="fas fa-clock"></i> Anzeigezeitraum (Frames)</label>
-                                <div style="display:flex; gap:10px; align-items: center;">
-                                    <span style="font-size:10px; color:#aaa;">Von:</span>
-                                    <input type="range" id="pro-overlay-start" min="0" step="0.1" class="trim-slider slider-blue" style="flex:1;">
-                                    <span style="font-size:10px; color:#aaa;">Bis:</span>
-                                    <input type="range" id="pro-overlay-end" min="0" step="0.1" class="trim-slider slider-red" style="flex:1;">
-                                </div>
-                            </div>
-
-                            <input type="text" id="pro-text-ctrl-input" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5);" placeholder="Textinhalt">
-
-                            <div id="pro-font-group" style="display:flex; gap:10px;">
-                                <div style="flex:1;">
-                                    <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Schriftart</label>
-                                    <select id="pro-text-ctrl-font" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5); color: white; padding: 10px; border-radius: 10px; outline: none;">
-                                        <option value="Arial, sans-serif">Arial</option>
-                                        <option value="'Courier New', Courier, monospace">Courier</option>
-                                        <option value="Impact, fantasy">Impact</option>
-                                        <option value="'Comic Sans MS', cursive, sans-serif">Comic Sans</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div id="pro-color-group">
-                                <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Farbe</label>
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 15px; gap: 5px;">
-                                    <div class="pro-color-dot color-dot" style="background: white;" data-color="#ffffff"></div>
-                                    <div class="pro-color-dot color-dot" style="background: black;" data-color="#000000"></div>
-                                    <div class="pro-color-dot color-dot" style="background: #ff0050;" data-color="#ff0050"></div>
-                                    <div class="pro-color-dot color-dot" style="background: #00f2fe;" data-color="#00f2fe"></div>
-                                    <div class="pro-color-dot color-dot" style="background: #ffd700;" data-color="#ffd700"></div>
-                                    <div class="pro-color-dot color-dot" style="background: #39ff14;" data-color="#39ff14"></div>
-                                </div>
-                            </div>
-
-                            <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Größe & Rotation</label>
-                            <div style="display:flex; gap:10px; margin-bottom:15px;">
-                                <input type="range" id="pro-text-ctrl-size" min="15" max="250" value="24" class="trim-slider slider-blue" style="flex:1;">
-                                <input type="range" id="pro-text-ctrl-rot" min="-180" max="180" value="0" class="trim-slider slider-red" style="flex:1;">
-                            </div>
-
-                            <button id="btn-pro-delete-text" class="profile-action-btn" style="width: 100%; background: #ff4444; color: white; min-height: 40px;"><i class="fas fa-trash"></i> Element löschen</button>
-                        </div>
-                    </div>
-
-                </div>
-
-                <div id="image-advanced-editor" style="display:none; background: rgba(255, 255, 255, 0.05); padding:10px; border-radius:15px; border:1px solid #333;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <label style="color:#888; font-size:12px;">Bild Editor</label>
-                        <button id="btn-toggle-grid" class="profile-action-btn edit-btn" style="min-height:30px; font-size:12px; padding: 0 10px;"><i class="fas fa-border-all"></i> Raster: Aus</button>
-                    </div>
-
-                    <div id="editor-workspace" style="position: relative; width: 100%; height: 350px; background: #000; overflow: hidden; border-radius: 10px; touch-action: none;">
-                        <div id="img-snap-v" class="snap-line-v"></div>
-                        <div id="img-snap-h" class="snap-line-h"></div>
-
-                        <img id="editor-bg" style="width: 100%; height: 100%; object-fit: contain; pointer-events: none; display: block;">
-                        <div id="editor-grid" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; display:none; background-image: linear-gradient(to right, rgba(255,255,255,0.2) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.2) 1px, transparent 1px); background-size: 33.33% 33.33%; z-index: 5;"></div>
-                        <div id="editor-layer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; z-index: 10;"></div>
-                    </div>
-
-                    <div id="editor-nav" style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-                        <button id="btn-prev-img" class="profile-action-btn edit-btn" style="min-height: 36px; padding: 0 15px;"><i class="fas fa-chevron-left"></i></button>
-                        <span id="editor-img-counter" style="font-size: 14px; font-weight: bold; color: #888;">1 / 1</span>
-                        <button id="btn-next-img" class="profile-action-btn edit-btn" style="min-height: 36px; padding: 0 15px;"><i class="fas fa-chevron-right"></i></button>
-                    </div>
-
-                    <div style="display: flex; gap: 10px; margin-top: 10px;">
-                        <button id="btn-add-text" class="profile-action-btn" style="flex: 1; background: white; color: black; min-height: 40px;"><i class="fas fa-font"></i> Text</button>
-                        <button class="profile-action-btn" onclick="document.getElementById('sticker-upload-input').click()" style="flex: 1; background: #ffd700; color: black; min-height: 40px;"><i class="fas fa-sticky-note"></i> Sticker</button>
-                        <input type="file" id="sticker-upload-input" accept="image/*" style="display:none;">
-                    </div>
-
-                    <div id="text-controls" style="display: none; margin-top: 15px; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; border: 1px solid #444;">
-                        <input type="text" id="text-ctrl-input" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5);" placeholder="Textinhalt">
-
-                        <div id="img-font-group">
-                            <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Schriftart</label>
-                            <select id="text-ctrl-font" class="comment-input" style="width: 100%; margin-bottom: 15px; background: rgba(0,0,0,0.5); color: white; padding: 10px; border-radius: 10px; border: 1px solid #444; outline: none;">
-                                <option value="Arial, sans-serif">Arial</option>
-                                <option value="'Courier New', Courier, monospace">Courier</option>
-                                <option value="'Times New Roman', Times, serif">Times New Roman</option>
-                                <option value="Impact, fantasy">Impact</option>
-                                <option value="'Comic Sans MS', cursive, sans-serif">Comic Sans</option>
-                            </select>
-                        </div>
-
-                        <div id="img-color-group">
-                            <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Farbe</label>
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 15px; gap: 5px;">
-                                <div class="color-dot" style="background: white;" data-color="#ffffff"></div>
-                                <div class="color-dot" style="background: black;" data-color="#000000"></div>
-                                <div class="color-dot" style="background: #ff0050;" data-color="#ff0050"></div>
-                                <div class="color-dot" style="background: #00f2fe;" data-color="#00f2fe"></div>
-                                <div class="color-dot" style="background: #ffd700;" data-color="#ffd700"></div>
-                                <div class="color-dot" style="background: #39ff14;" data-color="#39ff14"></div>
-                            </div>
-                        </div>
-
-                        <label style="font-size: 11px; color: #888; display:block; margin-bottom:5px;">Größe & Rotation</label>
-                        <div style="display:flex; gap:10px; margin-bottom:15px;">
-                            <input type="range" id="text-ctrl-size" min="15" max="300" value="24" class="trim-slider slider-blue" style="flex:1;">
-                            <input type="range" id="text-ctrl-rot" min="-180" max="180" value="0" class="trim-slider slider-red" style="flex:1;">
-                        </div>
-
-                        <button id="btn-delete-text" class="profile-action-btn" style="width: 100%; background: #ff4444; color: white; min-height: 40px;"><i class="fas fa-trash"></i> Element löschen</button>
-                    </div>
-                </div>
-
+                <div id="video-advanced-editor" style="display:none;"></div>
+                <div id="image-advanced-editor" style="display:none;"></div>
                 <hr style="border:0; border-top:1px solid #333; margin: 15px 0;">
                 <input type="text" id="up-title" class="comment-input" placeholder="Titel..." maxlength="60" style="border-radius:15px; margin-bottom:10px; width: 100%;">
                 <textarea id="up-desc" class="comment-input" placeholder="Beschreibe deinen Post... (@mention, #hashtag)" rows="4" style="resize:none; border-radius:15px; width:100%;"></textarea>
