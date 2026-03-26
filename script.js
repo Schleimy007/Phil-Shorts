@@ -17,7 +17,7 @@ let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || {
 
 window.currentSoundPreviewPlayer = new Audio();
 
-// Dynamische CSS für Live-Gifts und Bugfixes
+// Dynamische CSS für Live-Gifts und Bugfixes (Einfrier-Bug behoben durch scope auf active View)
 if(!document.getElementById('dynamic-live-styles')) {
     const style = document.createElement('style');
     style.id = 'dynamic-live-styles';
@@ -25,7 +25,8 @@ if(!document.getElementById('dynamic-live-styles')) {
         @keyframes liveFlyUpGift { 0% { transform: translateX(-50%) translateY(0) scale(0.5); opacity: 0; } 15% { transform: translateX(-50%) translateY(-50px) scale(1.2); opacity: 1; } 80% { transform: translateX(-50%) translateY(-150px) scale(1); opacity: 1; } 100% { transform: translateX(-50%) translateY(-300px) scale(0.8); opacity: 0; } }
         .live-chat-msg { animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        #live-chat-box { pointer-events: auto; }
+        #view-live-room.active #live-chat-box { pointer-events: auto !important; }
+        #live-chat-box { pointer-events: none; }
         @media (min-width: 769px) { .chat-input-wrapper { position: absolute !important; bottom: 0 !important; left: 0 !important; width: 100% !important; background: #0a0a0a !important; border-top: 1px solid #333 !important; } }
     `;
     document.head.appendChild(style);
@@ -1119,12 +1120,16 @@ window.initLiveStreamsList = function() {
 
     liveStreamsUnsub = onSnapshot(collection(db, "live_streams"), (snapshot) => {
         grid.innerHTML = '';
-        if(snapshot.empty) { grid.innerHTML = '<div class="empty-state"><p>Gerade ist niemand live.</p></div>'; return; }
+        let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
+        let hasStreams = false;
         snapshot.forEach(docSnap => {
             const stream = docSnap.data();
+            if (blocked.includes(stream.broadcasterUid)) return; 
+            hasStreams = true;
             const titleHtml = stream.title ? `<span style="display:block; font-size:12px; color:#ddd; margin-top:2px;">${stream.title}</span>` : '';
             grid.innerHTML += `<div class="live-stream-card" onclick="joinLive('${docSnap.id}', '${stream.broadcasterName.replace(/'/g, "\\'")}', '${stream.broadcasterPic}')"><img src="${stream.broadcasterPic}" style="width:60px; height:60px; border-radius:50%; border:2px solid #ff0050;"><div style="flex:1;"><strong style="font-size:16px; color:white; display:block;">${stream.broadcasterName}</strong><span style="color:#aaa; font-size:13px;">🔴 LIVE</span>${titleHtml}</div><div style="background:#222; padding:5px 10px; border-radius:10px; font-size:12px; font-weight:bold;"><i class="fas fa-eye"></i> ${stream.viewers || 0}</div></div>`;
         });
+        if(!hasStreams) grid.innerHTML = '<div class="empty-state"><p>Gerade ist niemand live.</p></div>';
     });
 }
 
@@ -1139,6 +1144,49 @@ function formatLiveTime(sec) {
     const s = (sec % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
 }
+
+window.toggleLiveCamera = function() {
+    if (myLocalStream) {
+        const videoTrack = myLocalStream.getVideoTracks().find(t => t.kind === 'video');
+        if (videoTrack) {
+            videoTrack.enabled = !videoTrack.enabled;
+            const btn = document.getElementById('live-toggle-cam-btn');
+            if(btn) {
+                if (videoTrack.enabled) {
+                    btn.innerHTML = '<i class="fas fa-video"></i> Kamera Aus';
+                    btn.style.background = '#333';
+                } else {
+                    btn.innerHTML = '<i class="fas fa-video-slash"></i> Kamera Ein';
+                    btn.style.background = '#ff4444';
+                }
+            }
+        }
+    }
+};
+
+window.deleteLiveMsg = async function(streamId, msgId) {
+    if(!isBroadcasting) return;
+    try {
+        await deleteDoc(doc(db, `live_streams/${streamId}/chat`, msgId));
+        showToast("Nachricht gelöscht.");
+    } catch(e) { console.error(e); }
+};
+
+window.banLiveUser = async function(targetUid) {
+    if(!isBroadcasting || !currentUser) return;
+    if(confirm("Diesen Nutzer wirklich bannen und aus dem Stream werfen?")) {
+        try {
+            if(!currentUser.blockedUsers) currentUser.blockedUsers = [];
+            if(!currentUser.blockedUsers.includes(targetUid)) {
+                currentUser.blockedUsers.push(targetUid);
+                await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayUnion(targetUid) });
+                localStorage.setItem('phil_session', JSON.stringify(currentUser));
+            }
+            showToast("Nutzer aus dem Stream gebannt.");
+            initLiveStreamsList(); 
+        } catch(e) { console.error(e); }
+    }
+};
 
 document.getElementById('start-stream-action-btn')?.addEventListener('click', async () => {
     const title = document.getElementById('live-stream-title').value.trim() || `${currentUser.displayName}'s Live Stream`;
@@ -1256,10 +1304,38 @@ function initLiveChat(streamId) {
         snapshot.docChanges().forEach(change => {
             if (change.type === "added") {
                 const msg = change.doc.data();
+                const msgId = change.doc.id;
+                
+                // Hide messages from blocked users locally
+                let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
+                if(blocked.includes(msg.uid) && msg.uid !== streamId) return;
+
                 const msgDiv = document.createElement('div');
                 msgDiv.className = 'live-chat-msg';
-                msgDiv.innerHTML = `<img src="${msg.pic}"><span style="color:#aaa; font-weight:bold;">${msg.name}:</span> <span style="flex:1;word-break:break-word;">${formatText(msg.text)}</span>`;
+                msgDiv.id = `live-msg-${msgId}`;
+                
+                const isBroadcaster = msg.uid === streamId;
+                if (isBroadcaster) {
+                    msgDiv.classList.add('broadcaster');
+                }
+
+                let badgeHtml = isBroadcaster ? '<span class="broadcaster-badge">Creator</span>' : '';
+                let nameHtml = `<span style="color:#aaa; font-weight:bold;" class="${isBroadcaster ? 'broadcaster-name' : ''}">${msg.name}${badgeHtml}:</span>`;
+                
+                let modHtml = '';
+                if (isBroadcasting && !isBroadcaster) { 
+                    modHtml = `<div style="display:flex; gap:8px; margin-left:auto; align-items:center; padding-left:10px;">
+                                 <i class="fas fa-trash" style="color:#ff4444; cursor:pointer; font-size:12px;" onclick="deleteLiveMsg('${streamId}', '${msgId}')" title="Nachricht löschen"></i>
+                                 <i class="fas fa-ban" style="color:#ff4444; cursor:pointer; font-size:12px;" onclick="banLiveUser('${msg.uid}')" title="Nutzer bannen"></i>
+                               </div>`;
+                }
+
+                msgDiv.innerHTML = `<img src="${msg.pic}">${nameHtml} <span style="word-break:break-word;">${formatText(msg.text)}</span>${modHtml}`;
                 box.appendChild(msgDiv);
+            }
+            if (change.type === "removed") {
+                const msgDiv = document.getElementById(`live-msg-${change.doc.id}`);
+                if (msgDiv) msgDiv.remove();
             }
         });
         box.scrollTop = box.scrollHeight;
