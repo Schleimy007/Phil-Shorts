@@ -175,8 +175,10 @@ function initLiveUser() {
             if (checkPhilPlusStatus(2)) { applyAppTheme(currentUser.appTheme); document.getElementById('app-theme-select').value = currentUser.appTheme; } else applyAppTheme('default');
             if (checkPhilPlusStatus(3) && currentUser.appIcon) { document.getElementById('app-icon-select').value = currentUser.appIcon; const favicon = document.getElementById('dynamic-favicon'); if (currentUser.appIcon === 'gold') favicon.href = "https://cdn-icons-png.flaticon.com/512/189/189118.png"; else if (currentUser.appIcon === 'dark') favicon.href = "https://cdn-icons-png.flaticon.com/512/32/32114.png"; else favicon.href = "https://i.imgur.com/JDPRzCc.png"; }
 
-            if (checkPhilPlusStatus(3)) { document.getElementById('tier3-settings-area').style.display = 'block'; document.getElementById('account-switcher-area').style.display = 'block'; document.getElementById('up-story-link').style.display = 'block'; document.getElementById('btn-live-stream').style.display = 'flex'; } 
-            else { document.getElementById('tier3-settings-area').style.display = 'none'; document.getElementById('account-switcher-area').style.display = 'none'; document.getElementById('up-story-link').style.display = 'none'; document.getElementById('btn-live-stream').style.display = 'none'; }
+            if (checkPhilPlusStatus(3)) { document.getElementById('tier3-settings-area').style.display = 'block'; document.getElementById('account-switcher-area').style.display = 'block'; document.getElementById('up-story-link').style.display = 'block'; } 
+            else { document.getElementById('tier3-settings-area').style.display = 'none'; document.getElementById('account-switcher-area').style.display = 'none'; document.getElementById('up-story-link').style.display = 'none'; }
+            
+            document.getElementById('btn-live-stream').style.display = checkPhilPlusStatus(2) ? 'flex' : 'none';
 
             const supportTab = document.getElementById('tab-support'); if (supportTab) supportTab.style.display = 'block'; if (window.initSupportTickets) window.initSupportTickets();
             const coinEl = document.getElementById('my-coins'); if (coinEl) coinEl.innerText = currentUser.coins;
@@ -287,7 +289,6 @@ function initLiveDatabase() {
                     document.querySelectorAll(`.like-btn[data-id="${vData.id}"] .like-count`).forEach(el => el.innerText = vData.likedBy ? vData.likedBy.length : 0);
                     document.querySelectorAll(`.like-btn[data-id="${vData.id}"]`).forEach(btn => { if (currentUser && vData.likedBy && vData.likedBy.includes(currentUser.uid)) btn.classList.add('liked'); else btn.classList.remove('liked'); });
                     document.querySelectorAll(`.comment-btn[data-id="${vData.id}"] .comment-count-txt`).forEach(el => el.innerText = vData.comments ? vData.comments.length : 0);
-                    document.querySelectorAll(`.gift-btn[data-id="${vData.id}"] .gift-count`).forEach(el => el.innerText = vData.gifts || 0);
                     document.querySelectorAll(`.video[data-id="${vData.id}"] .video__footer .video-desc-preview`).forEach(el => { let rawPreview = (vData.description || "").substring(0, 50); let previewHtml = formatText(rawPreview); if (vData.description && vData.description.length > 50) previewHtml += '... <strong>mehr anzeigen</strong>'; el.innerHTML = previewHtml; });
                     document.querySelectorAll(`.video[data-id="${vData.id}"] .video__footer .video-title`).forEach(el => el.innerText = vData.title || 'Ohne Titel');
                     if (window.currentCommentVideoId === vData.id && document.getElementById('comment-modal').classList.contains('show')) renderComments(vData.id);
@@ -327,6 +328,23 @@ window.updateGlobalVolumeUI = function() {
 };
 window.scrollCarousel = function(vidId, dir, event) { if (event) event.stopPropagation(); const container = document.querySelector(`.carousel-container[data-vid="${vidId}"]`); if (container) { const scrollAmount = container.clientWidth; container.scrollBy({ left: dir * scrollAmount, behavior: 'smooth' }); } };
 
+window.openMoreOptions = function(vidId) {
+    const video = allVideosData.find(v => v.id === vidId); if(!video) return;
+    const isMe = currentUser && video.authorUid === currentUser.uid;
+    const canDeleteVideo = currentUser && (isMe || currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
+    
+    let html = '';
+    html += `<div class="more-options-btn" onclick="openDuet('${vidId}'); document.getElementById('more-options-modal').classList.remove('show');"><i class="fas fa-user-friends"></i> Duett starten</div>`;
+    if(checkPhilPlusStatus(3)) html += `<div class="more-options-btn" onclick="window.open('${video.mediaType === 'images' ? video.urls[0] : video.url}', '_blank')"><i class="fas fa-download"></i> Video Downloaden</div>`;
+    if(isMe && checkPhilPlusStatus(3)) html += `<div class="more-options-btn" onclick="openAnalytics('${vidId}'); document.getElementById('more-options-modal').classList.remove('show');"><i class="fas fa-chart-line"></i> Analytics ansehen</div>`;
+    if(isMe) html += `<div class="more-options-btn" onclick="openEditVideo('${vidId}'); document.getElementById('more-options-modal').classList.remove('show');"><i class="fas fa-pen"></i> Bearbeiten</div>`;
+    if(canDeleteVideo) html += `<div class="more-options-btn delete" onclick="deleteVideo('${vidId}'); document.getElementById('more-options-modal').classList.remove('show');"><i class="fas fa-trash"></i> Video löschen</div>`;
+    
+    document.getElementById('more-options-content').innerHTML = html;
+    document.getElementById('more-options-modal').classList.add('show');
+};
+document.getElementById('close-more-options')?.addEventListener('click', () => document.getElementById('more-options-modal').classList.remove('show'));
+
 function createVideoElement(video) {
     const div = document.createElement('div'); div.className = "video"; div.dataset.id = video.id;
     const commentCount = video.comments ? video.comments.length : 0; const isMe = currentUser && video.authorUid === currentUser.uid; const isFollowing = currentUser && currentUser.following && currentUser.following.includes(video.authorUid); const hasSaved = currentUser && currentUser.savedVideos && currentUser.savedVideos.includes(video.id) ? 'saved' : '';
@@ -335,13 +353,7 @@ function createVideoElement(video) {
     const authorData = getUserData(video.authorUid, video.authorName, video.authorUsername || video.authorName, video.authorPic, video.authorVerified);
     const verifiedBadge = getVerifiedBadge(authorData.verified); let tier3Badge = authorData.philPlusUntil > Date.now() && authorData.philPlusTier === 3 ? ' <i class="fas fa-gem" style="color: #00f2fe; font-size: 12px;" title="Plus+++ Legende"></i>' : ""; let nameClass = (authorData.philPlusUntil > Date.now() && authorData.philPlusTier >= 1) ? "name-phil-plus" : "";
     const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : ''; const realLikes = video.likedBy ? video.likedBy.length : 0;
-    const canDeleteVideo = currentUser && (video.authorUid === currentUser.uid || currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
-    const deleteVideoBtn = canDeleteVideo ? `<div class="videoSidebar__button" onclick="deleteVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-trash" style="color: #ff4444; font-size:24px;"></i></div>` : '';
-    const editVideoBtn = isMe ? `<div class="videoSidebar__button" onclick="openEditVideo('${video.id}')" style="margin-top:15px;"><i class="fas fa-pen" style="font-size:24px;"></i></div>` : '';
-    const downloadVideoBtn = checkPhilPlusStatus(3) ? `<div class="videoSidebar__button" onclick="window.open('${video.mediaType === 'images' ? video.urls[0] : video.url}', '_blank')" style="margin-top:15px;"><i class="fas fa-download" style="color: #00f2fe; font-size:24px;"></i><p>Download</p></div>` : '';
-    const analyticsBtn = isMe && checkPhilPlusStatus(3) ? `<div class="videoSidebar__button" onclick="openAnalytics('${video.id}')" style="margin-top:15px;"><i class="fas fa-chart-line" style="color: #ffd700; font-size:24px;"></i><p>Analytics</p></div>` : '';
-
-    const duetBtn = `<div class="videoSidebar__button" onclick="openDuet('${video.id}')" style="margin-top:15px;"><i class="fas fa-user-friends" style="font-size:24px; color: #fff;"></i><p>Duett</p></div>`;
+    
     const soundDataId = video.soundId || video.id; const soundDataName = video.soundName || `Originalton - ${authorData.displayName}`;
     const soundDataUrl = video.soundUrl || video.url;
     const soundDisc = `<div class="videoSidebar__button" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')" style="margin-top:15px;"><img src="${authorData.pic}" class="sound-disc"></div>`;
@@ -359,7 +371,25 @@ function createVideoElement(video) {
 
     const soundUI = `<div style="font-size:12px; margin-top:8px; display:flex; align-items:center; gap:5px; pointer-events:auto; cursor:pointer;" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')"><i class="fas fa-music"></i> <marquee scrollamount="3" style="width:120px;">${soundDataName}</marquee></div>`;
 
-    div.innerHTML = `<div class="video-inner is-paused"><div class="video-wrapper">${mediaHTML}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div><div class="video__footer"><h3 class="creator-name" onclick="openProfile('${video.authorUid}')"><span class="live-name-${video.authorUid} ${nameClass}">${authorData.displayName}${verifiedBadge}${tier3Badge}</span></h3><p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p><h4 class="video-title" onclick="openVideoDetails('${video.id}')">${video.title || 'Ohne Titel'}</h4><p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${previewHtml}</p>${soundUI}</div><div class="video__sidebar"><div class="sidebar__profile" onclick="openProfile('${video.authorUid}')"><img src="${authorData.pic}" class="live-pic-${video.authorUid} ${bClass}" style="${inlineStyle}" alt="Profil">${plusButton}</div><div class="videoSidebar__button like-btn ${hasLiked}" data-id="${video.id}"><i class="fas fa-heart"></i><p class="like-count">${realLikes}</p></div><div class="videoSidebar__button comment-btn" data-id="${video.id}"><i class="fas fa-comment-dots"></i><p class="comment-count-txt">${commentCount}</p></div><div class="videoSidebar__button bookmark-btn ${hasSaved}" data-id="${video.id}" onclick="toggleSaveVideo('${video.id}', this)"><i class="fas fa-bookmark"></i><p>Speichern</p></div><div class="videoSidebar__button share-btn" data-id="${video.id}"><i class="fas fa-share"></i><p>Teilen</p></div>${duetBtn}${soundDisc}${downloadVideoBtn}${analyticsBtn}${editVideoBtn}${deleteVideoBtn}</div></div>`;
+    div.innerHTML = `
+        <div class="video-inner is-paused">
+            <div class="video-wrapper">${mediaHTML}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div>
+            <div class="video__footer">
+                <h3 class="creator-name" onclick="openProfile('${video.authorUid}')"><span class="live-name-${video.authorUid} ${nameClass}">${authorData.displayName}${verifiedBadge}${tier3Badge}</span></h3>
+                <p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p>
+                <h4 class="video-title" onclick="openVideoDetails('${video.id}')">${video.title || 'Ohne Titel'}</h4>
+                <p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${previewHtml}</p>${soundUI}
+            </div>
+            <div class="video__sidebar">
+                <div class="sidebar__profile" onclick="openProfile('${video.authorUid}')"><img src="${authorData.pic}" class="live-pic-${video.authorUid} ${bClass}" style="${inlineStyle}" alt="Profil">${plusButton}</div>
+                <div class="videoSidebar__button like-btn ${hasLiked}" data-id="${video.id}"><i class="fas fa-heart"></i><p class="like-count">${realLikes}</p></div>
+                <div class="videoSidebar__button comment-btn" data-id="${video.id}"><i class="fas fa-comment-dots"></i><p class="comment-count-txt">${commentCount}</p></div>
+                <div class="videoSidebar__button bookmark-btn ${hasSaved}" data-id="${video.id}" onclick="toggleSaveVideo('${video.id}', this)"><i class="fas fa-bookmark"></i><p>Speichern</p></div>
+                <div class="videoSidebar__button share-btn" data-id="${video.id}"><i class="fas fa-share"></i><p>Teilen</p></div>
+                <div class="videoSidebar__button" onclick="openMoreOptions('${video.id}')"><i class="fas fa-ellipsis-h" style="font-size:24px;"></i><p>Mehr</p></div>
+                ${soundDisc}
+            </div>
+        </div>`;
     
     if(video.soundUrl) {
         const audioEl = new Audio(video.soundUrl); audioEl.loop = true; const v = div.querySelector('.video__player');
@@ -425,8 +455,11 @@ const videoObserver = new IntersectionObserver(entries => {
 
 const allGifts = [ { id: 'g1', name: 'Rose', emoji: '🌹', price: 1 }, { id: 'g2', name: 'Kaffee', emoji: '☕', price: 1 }, { id: 'g3', name: 'Herz', emoji: '❤️', price: 5 }, { id: 'g4', name: 'GG', emoji: '🎮', price: 5 }, { id: 'g5', name: 'Mini 3663', emoji: '🧊', price: 10 }, { id: 'g6', name: 'Flamme', emoji: '🔥', price: 10 }, { id: 'g7', name: 'Applaus', emoji: '👏', price: 15 }, { id: 'g8', name: 'Brille', emoji: '🕶️', price: 20 }, { id: 'g9', name: 'Party', emoji: '🎉', price: 20 }, { id: 'g10', name: 'Flex', emoji: '💪', price: 50 }, { id: 'g11', name: '3663 Schild', emoji: '🛡️', price: 50 }, { id: 'g12', name: 'Diamant', emoji: '💎', price: 100 }, { id: 'g13', name: '3663 Krone', emoji: '👑', price: 100 }, { id: 'g14', name: 'Rakete', emoji: '🚀', price: 200 }, { id: 'g15', name: '3663 Kette', emoji: '⛓️', price: 250 }, { id: 'g16', name: 'Löwe', emoji: '🦁', price: 500 }, { id: 'g17', name: '3663 Auto', emoji: '🏎️', price: 500 }, { id: 'g18', name: 'Universum', emoji: '🌌', price: 1000, reqTier: 2 }, { id: 'g19', name: '3663 Villa', emoji: '🏰', price: 1000, reqTier: 2 }, { id: 'g20', name: '3663 Legende', emoji: '🦅', price: 5000, reqTier: 2 } ];
 
-window.openGiftModal = function(videoId) {
-    if (!currentUser) return showCustomAlert("Fehler", "Bitte logge dich ein."); window.currentGiftVideoId = videoId; document.getElementById('gift-modal-coins').innerText = currentUser.coins || 0;
+window.openGiftModal = function(contextId) {
+    if (!currentUser) return showCustomAlert("Fehler", "Bitte logge dich ein.");
+    window.currentGiftContextId = contextId; 
+    window.isGiftingLive = document.getElementById('view-live-room').classList.contains('active');
+    document.getElementById('gift-modal-coins').innerText = currentUser.coins || 0;
     const grid = document.getElementById('gift-grid'); 
     grid.innerHTML = allGifts.map(g => { if(g.reqTier && !checkPhilPlusStatus(g.reqTier)) { return `<div class="gift-card" style="opacity:0.3; cursor:not-allowed;" onclick="showCustomAlert('Plus++ erforderlich', 'Exklusiv für Phil Shorts++ User!')"><span class="gift-emoji">${g.emoji}</span><span class="gift-name">${g.name}</span><span class="gift-price"><i class="fas fa-lock"></i> Plus++</span></div>`; } return `<div class="gift-card" onclick="sendSpecificGift('${g.id}', ${g.price}, '${g.emoji}', '${g.name}')"><span class="gift-emoji">${g.emoji}</span><span class="gift-name">${g.name}</span><span class="gift-price"><i class="fas fa-coins"></i> ${g.price}</span></div>`; }).join('');
     document.getElementById('gift-modal').classList.add('show');
@@ -434,14 +467,33 @@ window.openGiftModal = function(videoId) {
 document.getElementById('close-gift-modal')?.addEventListener('click', () => document.getElementById('gift-modal').classList.remove('show'));
 
 window.sendSpecificGift = async function(giftId, price, emoji, name) {
-    if (!currentUser || !window.currentGiftVideoId) return; if (currentUser.coins < price) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins.");
-    const targetVidData = allVideosData.find(vd => vd.id === window.currentGiftVideoId); if (!targetVidData || !targetVidData.authorUid) return showToast("Fehler beim Spenden!");
-    document.getElementById('gift-modal').classList.remove('show'); currentUser.coins -= price; const myCoinsEl = document.getElementById('my-coins'); if (myCoinsEl) myCoinsEl.innerText = currentUser.coins;
-    document.querySelectorAll(`.gift-btn[data-id="${window.currentGiftVideoId}"] .gift-count`).forEach(el => { let currentGifts = Number(el.innerText) || 0; el.innerText = currentGifts + price; });
-    const anim = document.getElementById(`gift-anim-${window.currentGiftVideoId}`); if(anim) { anim.innerHTML = `${emoji}<span class="gift-animation-name">${name}</span>`; anim.style.animation = 'none'; void anim.offsetWidth; anim.style.animation = 'flyUpGift 2s ease-out forwards'; }
-    showToast(`${name} gesendet! 🎁`);
-    try { await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-price) }); await updateDoc(doc(db, "videos", window.currentGiftVideoId), { gifts: increment(price) }); await updateDoc(doc(db, "users", targetVidData.authorUid), { coins: increment(price) }); addNotification(targetVidData.authorUid, "gift", `hat dir ein ${name} ${emoji} gesendet!`, window.currentGiftVideoId); } catch (err) {}
+    if (!currentUser || !window.currentGiftContextId) return; 
+    if (currentUser.coins < price) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins.");
+    
+    document.getElementById('gift-modal').classList.remove('show'); 
+    currentUser.coins -= price; 
+    const myCoinsEl = document.getElementById('my-coins'); if (myCoinsEl) myCoinsEl.innerText = currentUser.coins;
+    
+    if (window.isGiftingLive) {
+        const streamId = window.currentGiftContextId;
+        showToast(`${name} gesendet! 🎁`);
+        try {
+            await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-price) }); 
+            await updateDoc(doc(db, "users", streamId), { coins: increment(price) }); 
+            await addDoc(collection(db, `live_streams/${streamId}/gifts`), { uid: currentUser.uid, name: currentUser.displayName, emoji: emoji, giftName: name, price: price, timestamp: Date.now() });
+        } catch (err) { console.error(err); }
+    } else {
+        const videoId = window.currentGiftContextId;
+        const targetVidData = allVideosData.find(vd => vd.id === videoId); if (!targetVidData || !targetVidData.authorUid) return showToast("Fehler beim Spenden!");
+        
+        document.querySelectorAll(`.gift-btn[data-id="${videoId}"] .gift-count`).forEach(el => { let currentGifts = Number(el.innerText) || 0; el.innerText = currentGifts + price; });
+        const anim = document.getElementById(`gift-anim-${videoId}`); if(anim) { anim.innerHTML = `${emoji}<span class="gift-animation-name">${name}</span>`; anim.style.animation = 'none'; void anim.offsetWidth; anim.style.animation = 'flyUpGift 2s ease-out forwards'; }
+        showToast(`${name} gesendet! 🎁`);
+        try { await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-price) }); await updateDoc(doc(db, "videos", videoId), { gifts: increment(price) }); await updateDoc(doc(db, "users", targetVidData.authorUid), { coins: increment(price) }); addNotification(targetVidData.authorUid, "gift", `hat dir ein ${name} ${emoji} gesendet!`, videoId); } catch (err) {}
+    }
 };
+
+document.getElementById('live-gift-btn')?.addEventListener('click', () => { if(currentLiveStreamId) window.openGiftModal(currentLiveStreamId); });
 
 function attachInteractionsToVideo(videoContainerEl) {
     const v = videoContainerEl.querySelector('.video__player'); const c = videoContainerEl.querySelector('.carousel-container'); const container = videoContainerEl.querySelector('.video-inner'); videoObserver.observe(videoContainerEl); 
@@ -461,7 +513,6 @@ function attachInteractionsToVideo(videoContainerEl) {
     document.addEventListener('mouseup', () => document.querySelectorAll('.mute-container').forEach(mc => mc.classList.remove('active-slider'))); document.addEventListener('touchend', () => document.querySelectorAll('.mute-container').forEach(mc => mc.classList.remove('active-slider')));
     const mc = container.querySelector('.mute-container'); if (mc) mc.addEventListener('click', (e) => e.stopPropagation());
     container.querySelector('.like-btn')?.addEventListener('click', async(e) => { const btn = e.currentTarget; const id = btn.dataset.id; const isLiked = btn.classList.contains('liked'); const targetVidData = allVideosData.find(vd => vd.id === id); document.querySelectorAll(`.like-btn[data-id="${id}"]`).forEach(el => { const countEl = el.querySelector('.like-count'); let currentLikes = Number(countEl.innerText) || 0; if (isLiked) { el.classList.remove('liked'); countEl.innerText = Math.max(0, currentLikes - 1); } else { el.classList.add('liked'); countEl.innerText = currentLikes + 1; } }); if (isLiked) await updateDoc(doc(db, "videos", id), { likedBy: arrayRemove(currentUser.uid) }); else { await updateDoc(doc(db, "videos", id), { likedBy: arrayUnion(currentUser.uid) }); if (targetVidData) addNotification(targetVidData.authorUid, "like", "hat dein Post geliket.", id); } });
-    container.querySelector('.gift-btn')?.addEventListener('click', (e) => { openGiftModal(e.currentTarget.dataset.id); });
     container.querySelector('.comment-btn')?.addEventListener('click', (e) => { window.currentCommentVideoId = e.currentTarget.dataset.id; renderComments(window.currentCommentVideoId); document.getElementById('comment-modal').classList.add('show'); });
     container.querySelector('.share-btn')?.addEventListener('click', async(e) => { const vidId = e.currentTarget.dataset.id; const shareUrl = `${window.location.origin}${window.location.pathname}?video=${vidId}`; if (navigator.share) { try { await navigator.share({ title: 'Phil Shorts', text: 'Schau dir dieses an!', url: shareUrl }); } catch (err) {} } else { navigator.clipboard.writeText(shareUrl); showToast("Link kopiert!"); } });
 }
@@ -1030,11 +1081,11 @@ document.getElementById('duet-record-btn')?.addEventListener('click', async () =
     }
 });
 
-
 // ----------------------------------------------------
 // FEATURE 2: LIVE STREAMING DASHBOARD & SCREEN SHARE
 // ----------------------------------------------------
-let peer = null; let currentLiveStreamId = null; let isBroadcasting = false; let myLocalStream = null; let liveStreamsUnsub = null; let liveChatUnsub = null;
+let peer = null; let currentLiveStreamId = null; let isBroadcasting = false; let myLocalStream = null; let liveStreamsUnsub = null; let liveChatUnsub = null; let liveGiftsUnsub = null;
+let liveStreamTimer = null; let liveStreamSeconds = 0;
 window.currentLiveSource = 'cam';
 
 window.initLiveStreamsList = function() {
@@ -1043,9 +1094,9 @@ window.initLiveStreamsList = function() {
     
     const startLiveBtn = document.getElementById('start-my-live-btn');
     if (startLiveBtn) {
-        startLiveBtn.style.display = checkPhilPlusStatus(3) ? 'block' : 'none';
+        startLiveBtn.style.display = checkPhilPlusStatus(2) ? 'block' : 'none';
         startLiveBtn.onclick = () => {
-            if(!checkPhilPlusStatus(3)) return showCustomAlert("Premium", "Live-Streaming erfordert Plus+++!");
+            if(!checkPhilPlusStatus(2)) return showCustomAlert("Premium", "Live-Streaming erfordert Plus++!");
             switchView('live-dashboard');
             document.getElementById('live-dash-name').innerText = currentUser.displayName;
             document.getElementById('live-dash-pic').src = currentUser.photoURL;
@@ -1070,6 +1121,12 @@ window.selectLiveSource = function(source) {
     document.getElementById('source-' + source).classList.add('active');
 };
 
+function formatLiveTime(sec) {
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = (sec % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+}
+
 document.getElementById('start-stream-action-btn')?.addEventListener('click', async () => {
     const title = document.getElementById('live-stream-title').value.trim() || `${currentUser.displayName}'s Live Stream`;
     try {
@@ -1087,7 +1144,16 @@ document.getElementById('start-stream-action-btn')?.addEventListener('click', as
         document.getElementById('live-video-player').muted = true;
         document.getElementById('live-broadcaster-name').innerText = currentUser.displayName;
         document.getElementById('live-broadcaster-pic').src = currentUser.photoURL;
+        
         isBroadcasting = true; currentLiveStreamId = currentUser.uid;
+        document.getElementById('live-streamer-hud').style.display = 'flex';
+        document.getElementById('live-input-area').style.display = 'none';
+        document.getElementById('live-close-btn').style.display = 'none';
+        
+        liveStreamSeconds = 0;
+        document.getElementById('live-hud-time').innerText = "00:00";
+        document.getElementById('live-hud-coins').innerText = "0";
+        liveStreamTimer = setInterval(() => { liveStreamSeconds++; document.getElementById('live-hud-time').innerText = formatLiveTime(liveStreamSeconds); }, 1000);
 
         peer = new Peer(currentUser.uid);
         peer.on('open', async (id) => {
@@ -1103,6 +1169,10 @@ window.joinLive = function(streamId, name, pic) {
     switchView('live-room');
     document.getElementById('live-broadcaster-name').innerText = name; document.getElementById('live-broadcaster-pic').src = pic;
     isBroadcasting = false; currentLiveStreamId = streamId;
+    
+    document.getElementById('live-streamer-hud').style.display = 'none';
+    document.getElementById('live-input-area').style.display = 'flex';
+    document.getElementById('live-close-btn').style.display = 'block';
 
     peer = new Peer();
     peer.on('open', async (id) => {
@@ -1121,7 +1191,12 @@ window.leaveLiveRoom = async function() {
     if(peer) { peer.destroy(); peer = null; }
     if(myLocalStream) { myLocalStream.getTracks().forEach(t => t.stop()); myLocalStream = null; }
     document.getElementById('live-video-player').srcObject = null;
+    
+    clearInterval(liveStreamTimer);
     if(liveChatUnsub) liveChatUnsub();
+    if(liveGiftsUnsub) liveGiftsUnsub();
+    document.getElementById('live-gift-animation-container').innerHTML = '';
+
     if(isBroadcasting) {
         await deleteDoc(doc(db, "live_streams", currentUser.uid));
     } else if (currentLiveStreamId) {
@@ -1141,9 +1216,37 @@ function initLiveChat(streamId) {
         });
         box.scrollTop = box.scrollHeight;
     });
+    
     onSnapshot(doc(db, "live_streams", streamId), (docSnap) => {
         if(docSnap.exists()) document.getElementById('live-viewer-count').innerText = docSnap.data().viewers || 0;
         else if(!isBroadcasting) { showCustomAlert("Beendet", "Live-Stream wurde beendet."); leaveLiveRoom(); }
+    });
+
+    if(liveGiftsUnsub) liveGiftsUnsub();
+    let initialGiftsLoad = true;
+    let sessionCoins = 0;
+    liveGiftsUnsub = onSnapshot(query(collection(db, `live_streams/${streamId}/gifts`), orderBy("timestamp", "asc")), (snapshot) => {
+        if(initialGiftsLoad) {
+            snapshot.forEach(docSnap => { sessionCoins += docSnap.data().price; });
+            if(isBroadcasting) document.getElementById('live-hud-coins').innerText = sessionCoins;
+            initialGiftsLoad = false;
+            return;
+        }
+        snapshot.docChanges().forEach((change) => {
+            if (change.type === "added") {
+                const g = change.doc.data();
+                if(isBroadcasting) {
+                    sessionCoins += g.price;
+                    document.getElementById('live-hud-coins').innerText = sessionCoins;
+                }
+                const container = document.getElementById('live-gift-animation-container');
+                const giftEl = document.createElement('div');
+                giftEl.className = 'live-gift-item';
+                giftEl.innerHTML = `<span class="live-gift-sender">${g.name} sendet ${g.giftName}</span>${g.emoji}`;
+                container.appendChild(giftEl);
+                setTimeout(() => giftEl.remove(), 3000);
+            }
+        });
     });
 }
 
@@ -1204,62 +1307,6 @@ document.getElementById('sound-play-btn')?.addEventListener('click', () => {
 });
 
 window.removeSelectedSound = function() { window.selectedUploadSound = null; document.getElementById('upload-sound-preview').style.display = 'none'; }
-
-
-// --- UPLOAD LOGIC (Erweitert um Sound) ---
-document.getElementById('up-file')?.addEventListener('change', function(e) {
-    const files = e.target.files; const txt = document.querySelector('#up-file-btn p'); const icon = document.querySelector('#up-file-btn i'); 
-    if (!files || files.length === 0) { txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; return; }
-    if (files.length === 1) { txt.innerText = files[0].name; icon.className = files[0].type.startsWith('video/') ? "fas fa-video" : "fas fa-image"; icon.style.color = "#00f2fe"; } 
-    else { txt.innerText = `${files.length} Dateien ausgewählt`; icon.className = "fas fa-images"; icon.style.color = "#ffd700"; }
-});
-
-document.getElementById('submit-upload')?.addEventListener('click', async() => {
-    const files = document.getElementById('up-file').files; const titleInput = document.getElementById('up-title'); const descInput = document.getElementById('up-desc');
-    const titleVal = titleInput ? titleInput.value.trim() : ""; const desc = descInput ? descInput.value.trim() : "";
-    if (!files || files.length === 0) return showCustomAlert("Fehlende Daten", "Bitte wähle mindestens eine Datei aus.");
-    if (!titleVal || !desc) return showCustomAlert("Fehlende Daten", "Bitte gib einen Titel UND eine Beschreibung ein.");
-    
-    let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
-    for(let i=0; i<files.length; i++) { if(files[i].size > maxSize) return showCustomAlert("Zu groß", `Dateien dürfen maximal ${limitText} MB groß sein!`); }
-    
-    const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); 
-    btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
-    
-    try {
-        const isVideo = files[0].type.startsWith('video/');
-        let uploadObj = { 
-            authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
-            title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() 
-        };
-
-        if(window.selectedUploadSound) {
-            uploadObj.soundId = window.selectedUploadSound.id;
-            uploadObj.soundName = window.selectedUploadSound.name;
-            uploadObj.soundUrl = window.selectedUploadSound.url;
-        }
-
-        if (isVideo) {
-            const finalUrl = await uploadFileToFirebase(files[0], 'videos');
-            await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, ...uploadObj });
-        } else {
-            let uploadedUrls = [];
-            for(let i=0; i<files.length; i++) { const secure_url = await uploadFileToFirebase(files[i], 'images'); uploadedUrls.push(secure_url); }
-            await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, ...uploadObj });
-        }
-        
-        showToast("Erfolgreich veröffentlicht! 🎉"); document.getElementById('upload-modal').classList.remove('show');
-        document.getElementById('up-file').value = ''; if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
-        document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; document.querySelector('#up-file-btn i').style.color = "#aaa"; 
-        removeSelectedSound();
-    } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
-});
-
-document.getElementById('open-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
-document.getElementById('close-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.remove('show'));
-document.getElementById('close-comments')?.addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
-document.getElementById('close-settings')?.addEventListener('click', () => document.getElementById('settings-modal').classList.remove('show'));
-document.getElementById('close-app-settings')?.addEventListener('click', () => document.getElementById('app-settings-modal').classList.remove('show'));
 
 function initResponsiveLayout() {
     const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;

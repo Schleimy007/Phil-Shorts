@@ -15,16 +15,6 @@
     <title>Phil Shorts</title>
     <meta name="description" content="Entdecke angesagte Kurzvideos, teile deine Stories und werde Teil der Community auf Phil Shorts!">
 
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://phil-shorts.vercel.app/">
-    <meta property="og:title" content="Phil Shorts">
-    <meta property="og:description" content="Entdecke angesagte Kurzvideos, teile deine Stories und werde Teil der Community auf Phil Shorts!">
-    <meta property="og:image" content="https://i.imgur.com/l1luc1q.png">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:url" content="https://phil-shorts.vercel.app/">
-    <meta name="twitter:title" content="Phil Shorts">
-    <meta name="twitter:description" content="Entdecke angesagte Kurzvideos, teile deine Stories und werde Teil der Community auf Phil Shorts!">
-    <meta name="twitter:image" content="https://i.imgur.com/l1luc1q.png">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <meta name="google-site-verification" content="zbjLs6-a2zAdVq8Jbm-vtjvE2vEfJ7QDa4Ac32eSdaI" />
@@ -34,9 +24,7 @@
     <script>
         function handleGoogleLogin(response) {
             document.getElementById('login-text').innerText = "Wird authentifiziert...";
-            window.dispatchEvent(new CustomEvent('googleLoginSuccess', {
-                detail: response
-            }));
+            window.dispatchEvent(new CustomEvent('googleLoginSuccess', { detail: response }));
         }
 
         function switchPlusTier(tier) {
@@ -44,13 +32,6 @@
             document.querySelector('.plus-tier-tab[onclick="switchPlusTier(' + tier + ')"]').classList.add('active');
             document.querySelectorAll('.plus-tier-content').forEach(c => c.style.display = 'none');
             document.getElementById('plus-tier-' + tier).style.display = 'block';
-        }
-
-        function switchProEditorTab(tabId) {
-            document.querySelectorAll('.pro-tab-btn').forEach(t => t.classList.remove('active'));
-            document.querySelector(`.pro-tab-btn[data-tab="${tabId}"]`).classList.add('active');
-            document.querySelectorAll('.pro-tab-content').forEach(c => c.style.display = 'none');
-            document.getElementById(tabId).style.display = 'block';
         }
     </script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -67,8 +48,7 @@
                 <img src="https://i.imgur.com/l1luc1q.png" class="app-logo" alt="Logo">
                 <h2>Willkommen bei Phil Shorts</h2>
                 <p id="login-text" style="color: #aaa; margin-bottom: 30px; font-size: 14px;">Logge dich mit deinem offiziellen Google Account ein.</p>
-                <div id="g_id_onload" data-client_id="825368838802-830ev6a720t4hb5qrb7jo5de7orb4pr0.apps.googleusercontent.com" data-context="signin" data-ux_mode="popup" data-callback="handleGoogleLogin" data-auto_prompt="false">
-                </div>
+                <div id="g_id_onload" data-client_id="825368838802-830ev6a720t4hb5qrb7jo5de7orb4pr0.apps.googleusercontent.com" data-context="signin" data-ux_mode="popup" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
                 <div style="display: flex; justify-content: center; width: 100%;">
                     <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_black" data-text="signin_with" data-size="large" data-width="250"></div>
                 </div>
@@ -80,12 +60,10 @@
                 <span class="header__link" id="tab-following">Folge ich</span>
                 <span class="header__link active" id="tab-foryou">Für dich</span>
                 <i class="fas fa-search search-icon" onclick="switchView('search')"></i>
-                <div id="btn-live-stream" class="live-stream-btn" onclick="switchView('live-list')" style="display:none;"><i class="fas fa-broadcast-tower"></i> Live</div>
+                <div id="btn-live-stream" class="live-stream-btn" onclick="switchView('live-list')"><i class="fas fa-broadcast-tower"></i> Live</div>
             </div>
             <div class="app__videos" id="video-container">
-                <div class="loading-screen"><i class="fas fa-spinner fa-spin"></i>
-                    <p>Lade Algorithmus...</p>
-                </div>
+                <div class="loading-screen"><i class="fas fa-spinner fa-spin"></i><p>Lade Algorithmus...</p></div>
             </div>
         </div>
 
@@ -134,7 +112,7 @@
             <div class="top-bar glass-nav">
                 <i class="fas fa-chevron-left back-btn" onclick="switchView('feed')"></i>
                 <h3 style="flex:1; text-align:center;">Aktuelle Live Streams</h3>
-                <i class="fas fa-video back-btn" id="start-my-live-btn" style="color:#ff0050;"></i>
+                <i class="fas fa-video back-btn" id="start-my-live-btn" style="color:#ff0050; display:none;"></i>
             </div>
             <div id="live-streams-grid" style="padding:15px; display:flex; flex-direction:column; gap:15px; padding-bottom: 80px;">
                 <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i><p>Suche nach Streams...</p></div>
@@ -164,16 +142,13 @@
                     <h4 style="margin-bottom: 10px; color: #888; font-size: 13px; text-transform: uppercase; text-align:center;">Übertragungs-Quelle wählen</h4>
                     <div style="display: flex; gap: 10px; justify-content: center;">
                         <div class="live-source-card active" id="source-cam" onclick="selectLiveSource('cam')">
-                            <i class="fas fa-camera"></i>
-                            <span>Kamera</span>
+                            <i class="fas fa-camera"></i><span>Kamera</span>
                         </div>
                         <div class="live-source-card" id="source-screen" onclick="selectLiveSource('screen')">
-                            <i class="fas fa-desktop"></i>
-                            <span>Screen</span>
+                            <i class="fas fa-desktop"></i><span>Screen</span>
                         </div>
                         <div class="live-source-card" id="source-audio" onclick="selectLiveSource('audio')">
-                            <i class="fas fa-microphone"></i>
-                            <span>Mic Only</span>
+                            <i class="fas fa-microphone"></i><span>Mic Only</span>
                         </div>
                     </div>
                 </div>
@@ -184,7 +159,13 @@
             </div>
         </div>
 
-        <div id="view-live-room" class="view" style="background:black; z-index: 4000;">
+        <div id="view-live-room" class="view" style="background:black; z-index: 4000; overflow:hidden;">
+            <div id="live-streamer-hud" style="display:none; position:absolute; top:80px; right:15px; background:rgba(0,0,0,0.6); backdrop-filter:blur(5px); border-radius:15px; padding:15px; z-index:150; border:1px solid rgba(255,255,255,0.1); width:150px; flex-direction:column; gap:10px; text-align:center;">
+                <div style="color:#ffd700; font-size:14px; font-weight:bold;"><i class="fas fa-coins"></i> <span id="live-hud-coins">0</span></div>
+                <div style="color:#00f2fe; font-size:12px;"><i class="fas fa-clock"></i> <span id="live-hud-time">00:00</span></div>
+                <button class="profile-action-btn" onclick="leaveLiveRoom()" style="background:#ff4444; min-height:30px; font-size:12px; padding:5px; border-radius:8px; margin-top:5px;">Stream beenden</button>
+            </div>
+
             <div class="live-room-header">
                 <div style="display:flex; align-items:center; gap:10px; background: rgba(0,0,0,0.5); padding: 5px 15px 5px 5px; border-radius: 30px; backdrop-filter: blur(5px);">
                     <img id="live-broadcaster-pic" src="" style="width:35px; height:35px; border-radius:50%; object-fit:cover;">
@@ -195,17 +176,19 @@
                 </div>
                 <div style="display: flex; gap: 15px; align-items: center;">
                     <div style="background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: bold;"><i class="fas fa-eye"></i> <span id="live-viewer-count">0</span></div>
-                    <i class="fas fa-times" onclick="leaveLiveRoom()" style="font-size:24px; cursor:pointer; text-shadow: 0 2px 4px black;"></i>
+                    <i class="fas fa-times" id="live-close-btn" onclick="leaveLiveRoom()" style="font-size:24px; cursor:pointer; text-shadow: 0 2px 4px black;"></i>
                 </div>
             </div>
             
             <video id="live-video-player" autoplay playsinline style="width:100%; height:100%; object-fit:contain;"></video>
+            <div id="live-gift-animation-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index: 200; overflow:hidden;"></div>
             
             <div class="live-chat-container" id="live-chat-box"></div>
             
-            <div class="chat-input-wrapper glass-nav-bottom" style="z-index: 101;">
+            <div class="chat-input-wrapper glass-nav-bottom" id="live-input-area" style="z-index: 101;">
                 <input type="text" id="live-chat-input" placeholder="Chatte live..." class="chat-input">
                 <button id="send-live-chat-btn" class="chat-send-btn"><i class="fas fa-paper-plane"></i></button>
+                <button id="live-gift-btn" class="chat-send-btn" style="background:#ffd700; color:black; margin-left:5px;"><i class="fas fa-gift"></i></button>
             </div>
         </div>
 
@@ -401,6 +384,15 @@
             </div>
         </div>
 
+        <div id="more-options-modal" class="modal" style="height: 45%; z-index: 300;">
+            <div class="modal-header">
+                <h4>Optionen</h4>
+                <i class="fas fa-times close-modal" id="close-more-options"></i>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 15px;" id="more-options-content">
+                </div>
+        </div>
+
         <div id="giphy-modal" class="modal" style="height: 60%; z-index: 300;">
             <div class="modal-header">
                 <h4>GIF Auswählen</h4>
@@ -413,7 +405,7 @@
             </div>
         </div>
 
-        <div id="gift-modal" class="modal">
+        <div id="gift-modal" class="modal" style="z-index: 5000;">
             <div class="modal-header">
                 <h4>Geschenk senden</h4>
                 <div style="font-size: 14px; color: #ffd700; font-weight: bold;"><i class="fas fa-coins"></i> <span id="gift-modal-coins">0</span></div>
@@ -538,6 +530,7 @@
                             <li><i class="fas fa-check"></i> 100% Werbefrei</li>
                             <li><i class="fas fa-check"></i> Lesebestätigungen in DMs</li>
                             <li><i class="fas fa-check"></i> Spezielle "Plus++"-Geschenke im Shop</li>
+                            <li style="color:#00f2fe; font-weight:bold;"><i class="fas fa-broadcast-tower"></i> Live-Streaming Freischaltung</li>
                         </ul>
                         <div class="plus-plan-card" onclick="buyPhilPlus(5, 15000, 2)">
                             <div>
@@ -579,7 +572,6 @@
                             <li><i class="fas fa-check"></i> Videos ohne Watermark speichern</li>
                             <li><i class="fas fa-check"></i> Links in Stories (Swipe Up)</li>
                             <li><i class="fas fa-check"></i> Bilder in DMs versenden</li>
-                            <li><i class="fas fa-check"></i> Live Streaming Zugang (Beta)</li>
                             <li><i class="fas fa-check"></i> Multi-Account Fast Switch</li>
                             <li><i class="fas fa-check"></i> Geheime Profil-Badges</li>
                             <li><i class="fas fa-check"></i> Custom Creator Rahmen (Farbe & Gradient wählbar)</li>
@@ -792,7 +784,7 @@
                     <span style="font-weight: bold; font-size: 16px;">Desktop Benachrichtigungen</span>
                     <label class="switch"><input type="checkbox" id="notif-master"><span class="slider round"></span></label>
                 </div>
-                <p style="font-size: 11px; color: #888; margin-bottom: 15px;">Erlaube Benachrichtigungen in deinem Browser, um nichts zu verpassen.</p>
+                <p style="font-size: 11px; color: #888; margin-bottom: 15px;">Erlaube Benachrichtigungen in deinem Browser.</p>
 
                 <div id="notif-sub-settings" class="sub-settings-box">
                     <div class="setting-toggle-row">
