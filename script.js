@@ -17,7 +17,7 @@ let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || {
 
 window.currentSoundPreviewPlayer = new Audio();
 
-// Dynamische CSS für Live-Gifts und Bugfixes laden
+// Dynamische CSS für Live-Gifts und Bugfixes
 if(!document.getElementById('dynamic-live-styles')) {
     const style = document.createElement('style');
     style.id = 'dynamic-live-styles';
@@ -192,7 +192,6 @@ function initLiveUser() {
             if (checkPhilPlusStatus(3)) { document.getElementById('tier3-settings-area').style.display = 'block'; document.getElementById('account-switcher-area').style.display = 'block'; document.getElementById('up-story-link').style.display = 'block'; } 
             else { document.getElementById('tier3-settings-area').style.display = 'none'; document.getElementById('account-switcher-area').style.display = 'none'; document.getElementById('up-story-link').style.display = 'none'; }
             
-            // JEDER sieht Live, aber nur ab Plus++ (Tier 2) darf man streamen
             document.getElementById('btn-live-stream').style.display = 'flex'; 
 
             const supportTab = document.getElementById('tab-support'); if (supportTab) supportTab.style.display = 'block'; if (window.initSupportTickets) window.initSupportTickets();
@@ -386,7 +385,6 @@ function createVideoElement(video) {
 
     const soundUI = `<div style="font-size:12px; margin-top:8px; display:flex; align-items:center; gap:5px; pointer-events:auto; cursor:pointer;" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')"><i class="fas fa-music"></i> <marquee scrollamount="3" style="width:120px;">${soundDataName}</marquee></div>`;
 
-    // CLEAN MOBILE UI: Nur Haupt-Buttons, Rest in 3-Dots Menu
     div.innerHTML = `
         <div class="video-inner is-paused">
             <div class="video-wrapper">${mediaHTML}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div>
@@ -1174,7 +1172,7 @@ document.getElementById('start-stream-action-btn')?.addEventListener('click', as
         
         isBroadcasting = true; currentLiveStreamId = currentUser.uid;
         document.getElementById('live-streamer-hud').style.display = 'flex';
-        document.getElementById('live-input-area').style.display = 'flex';
+        document.getElementById('live-input-area').style.display = 'none';
         document.getElementById('live-close-btn').style.display = 'none';
         
         liveStreamSeconds = 0; document.getElementById('live-hud-time').innerText = "00:00"; document.getElementById('live-hud-coins').innerText = "0";
@@ -1311,7 +1309,6 @@ document.getElementById('send-live-chat-btn')?.addEventListener('click', async (
     input.value = ''; await addDoc(collection(db, `live_streams/${currentLiveStreamId}/chat`), { uid: currentUser.uid, name: currentUser.displayName, pic: currentUser.photoURL, text: text, timestamp: Date.now() });
 });
 document.getElementById('live-chat-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-live-chat-btn').click(); });
-
 
 // ----------------------------------------------------
 // FEATURE 3: TIKTOK STYLE SOUNDS LOGIK
