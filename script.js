@@ -17,11 +17,25 @@ let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || {
 
 window.currentSoundPreviewPlayer = new Audio();
 
+// Dynamische CSS für Live-Gifts und Bugfixes laden
+if(!document.getElementById('dynamic-live-styles')) {
+    const style = document.createElement('style');
+    style.id = 'dynamic-live-styles';
+    style.innerHTML = `
+        @keyframes liveFlyUpGift { 0% { transform: translateX(-50%) translateY(0) scale(0.5); opacity: 0; } 15% { transform: translateX(-50%) translateY(-50px) scale(1.2); opacity: 1; } 80% { transform: translateX(-50%) translateY(-150px) scale(1); opacity: 1; } 100% { transform: translateX(-50%) translateY(-300px) scale(0.8); opacity: 0; } }
+        .live-chat-msg { animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        #live-chat-box { pointer-events: auto; }
+        @media (min-width: 769px) { .chat-input-wrapper { position: absolute !important; bottom: 0 !important; left: 0 !important; width: 100% !important; background: #0a0a0a !important; border-top: 1px solid #333 !important; } }
+    `;
+    document.head.appendChild(style);
+}
+
 async function uploadFileToFirebase(file, folderName) {
     return new Promise(async (resolve, reject) => {
         try {
             const statusEl = document.getElementById('upload-status') || document.getElementById('story-upload-status') || document.getElementById('duet-status');
-            if(statusEl) statusEl.innerText = `Lade hoch zu Supabase...`;
+            if(statusEl) statusEl.innerText = `Lade hoch zu Datenbank...`;
             let fileExt = 'webm'; if(file.name) fileExt = file.name.split('.').pop();
             const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
             const filePath = `${folderName}/${fileName}`; 
@@ -178,7 +192,8 @@ function initLiveUser() {
             if (checkPhilPlusStatus(3)) { document.getElementById('tier3-settings-area').style.display = 'block'; document.getElementById('account-switcher-area').style.display = 'block'; document.getElementById('up-story-link').style.display = 'block'; } 
             else { document.getElementById('tier3-settings-area').style.display = 'none'; document.getElementById('account-switcher-area').style.display = 'none'; document.getElementById('up-story-link').style.display = 'none'; }
             
-            document.getElementById('btn-live-stream').style.display = checkPhilPlusStatus(2) ? 'flex' : 'none';
+            // JEDER sieht Live, aber nur ab Plus++ (Tier 2) darf man streamen
+            document.getElementById('btn-live-stream').style.display = 'flex'; 
 
             const supportTab = document.getElementById('tab-support'); if (supportTab) supportTab.style.display = 'block'; if (window.initSupportTickets) window.initSupportTickets();
             const coinEl = document.getElementById('my-coins'); if (coinEl) coinEl.innerText = currentUser.coins;
@@ -371,6 +386,7 @@ function createVideoElement(video) {
 
     const soundUI = `<div style="font-size:12px; margin-top:8px; display:flex; align-items:center; gap:5px; pointer-events:auto; cursor:pointer;" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')"><i class="fas fa-music"></i> <marquee scrollamount="3" style="width:120px;">${soundDataName}</marquee></div>`;
 
+    // CLEAN MOBILE UI: Nur Haupt-Buttons, Rest in 3-Dots Menu
     div.innerHTML = `
         <div class="video-inner is-paused">
             <div class="video-wrapper">${mediaHTML}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div>
@@ -476,7 +492,6 @@ window.sendSpecificGift = async function(giftId, price, emoji, name) {
     
     if (window.isGiftingLive) {
         const streamId = window.currentGiftContextId;
-        showToast(`${name} gesendet! 🎁`);
         try {
             await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-price) }); 
             await updateDoc(doc(db, "users", streamId), { coins: increment(price) }); 
@@ -1129,9 +1144,17 @@ function formatLiveTime(sec) {
 
 document.getElementById('start-stream-action-btn')?.addEventListener('click', async () => {
     const title = document.getElementById('live-stream-title').value.trim() || `${currentUser.displayName}'s Live Stream`;
+    const btn = document.getElementById('start-stream-action-btn');
+    btn.disabled = true; btn.innerText = "Verbinde...";
+    
     try {
         if(window.currentLiveSource === 'screen') {
-            myLocalStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            let micStream; try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch(e) {}
+            let tracks = [...screenStream.getVideoTracks()];
+            if(screenStream.getAudioTracks().length > 0) tracks.push(...screenStream.getAudioTracks());
+            if(micStream) tracks.push(...micStream.getAudioTracks());
+            myLocalStream = new MediaStream(tracks);
             myLocalStream.getVideoTracks()[0].addEventListener('ended', () => { leaveLiveRoom(); showToast("Screen-Sharing beendet."); });
         } else if (window.currentLiveSource === 'audio') {
             myLocalStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
@@ -1140,32 +1163,45 @@ document.getElementById('start-stream-action-btn')?.addEventListener('click', as
         }
         
         switchView('live-room');
-        document.getElementById('live-video-player').srcObject = myLocalStream;
-        document.getElementById('live-video-player').muted = true;
+        const videoEl = document.getElementById('live-video-player');
+        videoEl.srcObject = myLocalStream;
+        videoEl.muted = true; 
+        if(window.currentLiveSource !== 'screen') videoEl.style.transform = 'scaleX(-1)'; else videoEl.style.transform = 'none';
+        videoEl.play().catch(e=>{});
+        
         document.getElementById('live-broadcaster-name').innerText = currentUser.displayName;
         document.getElementById('live-broadcaster-pic').src = currentUser.photoURL;
         
         isBroadcasting = true; currentLiveStreamId = currentUser.uid;
         document.getElementById('live-streamer-hud').style.display = 'flex';
-        document.getElementById('live-input-area').style.display = 'none';
+        document.getElementById('live-input-area').style.display = 'flex';
         document.getElementById('live-close-btn').style.display = 'none';
         
-        liveStreamSeconds = 0;
-        document.getElementById('live-hud-time').innerText = "00:00";
-        document.getElementById('live-hud-coins').innerText = "0";
+        liveStreamSeconds = 0; document.getElementById('live-hud-time').innerText = "00:00"; document.getElementById('live-hud-coins').innerText = "0";
         liveStreamTimer = setInterval(() => { liveStreamSeconds++; document.getElementById('live-hud-time').innerText = formatLiveTime(liveStreamSeconds); }, 1000);
 
+        if(peer) peer.destroy();
         peer = new Peer(currentUser.uid);
         peer.on('open', async (id) => {
             await setDoc(doc(db, "live_streams", currentUser.uid), { broadcasterUid: currentUser.uid, broadcasterName: currentUser.displayName, broadcasterPic: currentUser.photoURL, title: title, viewers: 0, timestamp: Date.now() });
-            initLiveChat(currentLiveStreamId); showToast("Du bist jetzt LIVE!");
+            initLiveChat(currentLiveStreamId); 
+            showToast("Du bist jetzt LIVE!");
+            btn.disabled = false; btn.innerHTML = `<i class="fas fa-broadcast-tower"></i> Jetzt LIVE gehen`;
         });
         peer.on('call', (call) => { call.answer(myLocalStream); });
-    } catch(e) { showCustomAlert("Fehler", "Zugriff verweigert oder abgebrochen."); }
+    } catch(e) { 
+        showCustomAlert("Fehler", "Zugriff verweigert oder abgebrochen."); 
+        btn.disabled = false; btn.innerHTML = `<i class="fas fa-broadcast-tower"></i> Jetzt LIVE gehen`;
+    }
 });
 
 window.joinLive = function(streamId, name, pic) {
     if(!currentUser) return showCustomAlert("Fehler", "Bitte einloggen.");
+    if(streamId === currentUser.uid) {
+        if(isBroadcasting) { switchView('live-room'); return; }
+        else { deleteDoc(doc(db, "live_streams", currentUser.uid)).catch(e=>{}); return showCustomAlert("Hinweis", "Alter Stream bereinigt. Bitte starte neu."); }
+    }
+    
     switchView('live-room');
     document.getElementById('live-broadcaster-name').innerText = name; document.getElementById('live-broadcaster-pic').src = pic;
     isBroadcasting = false; currentLiveStreamId = streamId;
@@ -1174,13 +1210,21 @@ window.joinLive = function(streamId, name, pic) {
     document.getElementById('live-input-area').style.display = 'flex';
     document.getElementById('live-close-btn').style.display = 'block';
 
+    const videoEl = document.getElementById('live-video-player');
+    videoEl.srcObject = null; videoEl.style.transform = 'none';
+
     peer = new Peer();
     peer.on('open', async (id) => {
-        const call = peer.call(streamId, null);
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const dummyStream = audioCtx.createMediaStreamDestination().stream;
+        const call = peer.call(streamId, dummyStream);
+        
         call.on('stream', (remoteStream) => {
-            document.getElementById('live-video-player').srcObject = remoteStream;
-            document.getElementById('live-video-player').muted = false;
+            videoEl.srcObject = remoteStream;
+            videoEl.muted = false;
+            videoEl.play().catch(e=>{});
         });
+        
         await updateDoc(doc(db, "live_streams", streamId), { viewers: increment(1) });
         initLiveChat(streamId);
     });
@@ -1208,11 +1252,17 @@ window.leaveLiveRoom = async function() {
 function initLiveChat(streamId) {
     const box = document.getElementById('live-chat-box');
     if(liveChatUnsub) liveChatUnsub();
+    
+    box.innerHTML = '';
     liveChatUnsub = onSnapshot(query(collection(db, `live_streams/${streamId}/chat`), orderBy("timestamp", "asc")), (snapshot) => {
-        box.innerHTML = '';
-        snapshot.forEach(docSnap => {
-            const msg = docSnap.data();
-            box.innerHTML += `<div class="live-chat-msg"><img src="${msg.pic}"><span style="color:#aaa; font-weight:bold;">${msg.name}:</span> ${formatText(msg.text)}</div>`;
+        snapshot.docChanges().forEach(change => {
+            if (change.type === "added") {
+                const msg = change.doc.data();
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'live-chat-msg';
+                msgDiv.innerHTML = `<img src="${msg.pic}"><span style="color:#aaa; font-weight:bold;">${msg.name}:</span> <span style="flex:1;word-break:break-word;">${formatText(msg.text)}</span>`;
+                box.appendChild(msgDiv);
+            }
         });
         box.scrollTop = box.scrollHeight;
     });
@@ -1235,16 +1285,22 @@ function initLiveChat(streamId) {
         snapshot.docChanges().forEach((change) => {
             if (change.type === "added") {
                 const g = change.doc.data();
-                if(isBroadcasting) {
-                    sessionCoins += g.price;
-                    document.getElementById('live-hud-coins').innerText = sessionCoins;
-                }
+                if(isBroadcasting) { sessionCoins += g.price; document.getElementById('live-hud-coins').innerText = sessionCoins; }
+                
                 const container = document.getElementById('live-gift-animation-container');
                 const giftEl = document.createElement('div');
                 giftEl.className = 'live-gift-item';
-                giftEl.innerHTML = `<span class="live-gift-sender">${g.name} sendet ${g.giftName}</span>${g.emoji}`;
+                giftEl.style.position = 'absolute'; giftEl.style.bottom = '20%'; giftEl.style.left = '50%'; giftEl.style.transform = 'translateX(-50%)'; giftEl.style.zIndex = '200'; giftEl.style.textAlign = 'center'; giftEl.style.animation = 'liveFlyUpGift 3s ease-out forwards';
+                giftEl.innerHTML = `<span style="font-size:14px; color:#ffd700; background:rgba(0,0,0,0.6); padding:4px 12px; border-radius:20px; display:block; margin-bottom:10px; border:1px solid #ffd700; white-space:nowrap;">${g.name} sendet ${g.giftName}</span><span style="font-size:120px; filter:drop-shadow(0 0 10px rgba(255,215,0,0.5));">${g.emoji}</span>`;
                 container.appendChild(giftEl);
-                setTimeout(() => giftEl.remove(), 3000);
+                
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'live-chat-msg';
+                msgDiv.style.background = 'rgba(255, 215, 0, 0.2)'; msgDiv.style.borderLeft = '3px solid #ffd700';
+                msgDiv.innerHTML = `<span style="color:#ffd700; font-weight:bold;">🎁 ${g.name} sendet ${g.giftName} ${g.emoji}</span>`;
+                box.appendChild(msgDiv); box.scrollTop = box.scrollHeight;
+
+                setTimeout(() => giftEl.remove(), 3500);
             }
         });
     });
@@ -1308,6 +1364,62 @@ document.getElementById('sound-play-btn')?.addEventListener('click', () => {
 
 window.removeSelectedSound = function() { window.selectedUploadSound = null; document.getElementById('upload-sound-preview').style.display = 'none'; }
 
+
+// --- UPLOAD LOGIC (Erweitert um Sound) ---
+document.getElementById('up-file')?.addEventListener('change', function(e) {
+    const files = e.target.files; const txt = document.querySelector('#up-file-btn p'); const icon = document.querySelector('#up-file-btn i'); 
+    if (!files || files.length === 0) { txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; return; }
+    if (files.length === 1) { txt.innerText = files[0].name; icon.className = files[0].type.startsWith('video/') ? "fas fa-video" : "fas fa-image"; icon.style.color = "#00f2fe"; } 
+    else { txt.innerText = `${files.length} Dateien ausgewählt`; icon.className = "fas fa-images"; icon.style.color = "#ffd700"; }
+});
+
+document.getElementById('submit-upload')?.addEventListener('click', async() => {
+    const files = document.getElementById('up-file').files; const titleInput = document.getElementById('up-title'); const descInput = document.getElementById('up-desc');
+    const titleVal = titleInput ? titleInput.value.trim() : ""; const desc = descInput ? descInput.value.trim() : "";
+    if (!files || files.length === 0) return showCustomAlert("Fehlende Daten", "Bitte wähle mindestens eine Datei aus.");
+    if (!titleVal || !desc) return showCustomAlert("Fehlende Daten", "Bitte gib einen Titel UND eine Beschreibung ein.");
+    
+    let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
+    for(let i=0; i<files.length; i++) { if(files[i].size > maxSize) return showCustomAlert("Zu groß", `Dateien dürfen maximal ${limitText} MB groß sein!`); }
+    
+    const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); 
+    btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
+    
+    try {
+        const isVideo = files[0].type.startsWith('video/');
+        let uploadObj = { 
+            authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
+            title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() 
+        };
+
+        if(window.selectedUploadSound) {
+            uploadObj.soundId = window.selectedUploadSound.id;
+            uploadObj.soundName = window.selectedUploadSound.name;
+            uploadObj.soundUrl = window.selectedUploadSound.url;
+        }
+
+        if (isVideo) {
+            const finalUrl = await uploadFileToFirebase(files[0], 'videos');
+            await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, ...uploadObj });
+        } else {
+            let uploadedUrls = [];
+            for(let i=0; i<files.length; i++) { const secure_url = await uploadFileToFirebase(files[i], 'images'); uploadedUrls.push(secure_url); }
+            await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, ...uploadObj });
+        }
+        
+        showToast("Erfolgreich veröffentlicht! 🎉"); document.getElementById('upload-modal').classList.remove('show');
+        document.getElementById('up-file').value = ''; if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
+        document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; document.querySelector('#up-file-btn i').style.color = "#aaa"; 
+        removeSelectedSound();
+    } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
+});
+
+document.getElementById('open-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
+document.getElementById('close-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.remove('show'));
+document.getElementById('close-comments')?.addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
+document.getElementById('close-settings')?.addEventListener('click', () => document.getElementById('settings-modal').classList.remove('show'));
+document.getElementById('close-app-settings')?.addEventListener('click', () => document.getElementById('app-settings-modal').classList.remove('show'));
+
 function initResponsiveLayout() {
     const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;
     function createPCContainers() { if (!pcSidebar) { pcSidebar = document.createElement('div'); pcSidebar.id = 'pc-nav-sidebar'; pcSidebar.innerHTML = `<div class="logo-area"><img src="https://i.imgur.com/JDPRzCc.png" class="app-logo" alt="Logo">Phil Shorts</div>`; appContainer.prepend(pcSidebar); } }
@@ -1315,7 +1427,10 @@ function initResponsiveLayout() {
     function rollBackVideoForHandy(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; const infoPanel = inner.querySelector('.pc-info-panel-container'); if (infoPanel) { const videoFooter = infoPanel.querySelector('.video__footer'); const videoSidebar = infoPanel.querySelector('.video__sidebar'); if (videoFooter) inner.appendChild(videoFooter); if (videoSidebar) inner.appendChild(videoSidebar); infoPanel.remove(); } }
     function checkResponsiveMode() { const isPC = window.innerWidth > 768; if (isPC && currentMode !== 'pc') { currentMode = 'pc'; createPCContainers(); if (originalNav) pcSidebar.appendChild(originalNav); document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC); } else if (!isPC && currentMode !== 'handy') { currentMode = 'handy'; if (originalNav) appContainer.appendChild(originalNav); if (pcSidebar) { pcSidebar.remove(); pcSidebar = null; } document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy); } }
     checkResponsiveMode(); window.addEventListener('resize', checkResponsiveMode);
-    if (window.innerWidth > 768) { const videoObserver2 = new MutationObserver(function(mutations) { if (currentMode === 'pc') mutations.forEach(mutation => mutation.addedNodes.forEach(node => { if (node.classList && node.classList.contains('video')) restructureVideoForPC(node); })); }); const videoContainer = document.getElementById('video-container'); if (videoContainer) videoObserver2.observe(videoContainer, { childList: true }); }
+    if (window.innerWidth > 768) { 
+        document.querySelectorAll('.chat-input-wrapper').forEach(el => { el.style.position = 'absolute'; el.style.bottom = '0'; el.style.left = '0'; el.style.width = '100%'; el.style.background = '#0a0a0a'; el.style.borderTop = '1px solid #333'; });
+        const videoObserver2 = new MutationObserver(function(mutations) { if (currentMode === 'pc') mutations.forEach(mutation => mutation.addedNodes.forEach(node => { if (node.classList && node.classList.contains('video')) restructureVideoForPC(node); })); }); const videoContainer = document.getElementById('video-container'); if (videoContainer) videoObserver2.observe(videoContainer, { childList: true }); 
+    }
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
