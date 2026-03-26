@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
+// NEU: Supabase anstelle von Firebase Storage importieren
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 const firebaseConfig = {
     apiKey: "AIzaSyAF-QW_MtVBkImqh1gXwhKrc2pLLCAe3Ek",
@@ -14,9 +15,15 @@ const firebaseConfig = {
 
 const GIPHY_API_KEY = "Vj2uCqfOmAT1sXEKQgQvneGy60VIxgCk";
 
+// Firebase Datenbank initialisieren
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-const storage = getStorage(app);
+
+// NEU: Supabase Storage initialisieren (mit deinen Keys)
+const supabaseUrl = 'https://smxxafxqtehgegyziplm.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNteHhhZnhxdGVoZ2VneXppcGxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NDAxNTQsImV4cCI6MjA5MDExNjE1NH0.sZ1Oasg08RLluHjFavz6cR-dntcgAQboAUdMsfVqYBY';
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 
 let allVideosData = [];
 let allKnownUsers = [];
@@ -25,29 +32,49 @@ if (currentUser) currentUser.verified = false;
 
 let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || { master: false, comments: true, likes: true, dms: true, follows: true };
 
-// --- HILFSFUNKTION FÜR FIREBASE UPLOADS ---
+// --- HILFSFUNKTION FÜR UPLOADS (Jetzt über SUPABASE!) ---
 async function uploadFileToFirebase(file, folderName) {
-    return new Promise((resolve, reject) => {
-        const fileRef = ref(storage, `${folderName}/${Date.now()}_${file.name || 'upload'}`);
-        const uploadTask = uploadBytesResumable(fileRef, file);
-
-        uploadTask.on('state_changed', 
-            (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                const statusEl = document.getElementById('upload-status');
-                if(statusEl) {
-                    statusEl.innerText = `Lade hoch... ${Math.round(progress)}%`;
-                }
-            }, 
-            (error) => {
-                console.error("Upload Error:", error);
-                reject(error);
-            }, 
-            async () => {
-                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                resolve(downloadURL);
+    // Der Name der Funktion bleibt gleich, damit wir nicht den ganzen Code ändern müssen, 
+    // aber im Hintergrund läuft das jetzt komplett über dein kostenloses Supabase!
+    return new Promise(async (resolve, reject) => {
+        try {
+            const statusEl = document.getElementById('upload-status');
+            if(statusEl) {
+                statusEl.innerText = `Lade hoch zu Supabase...`;
             }
-        );
+
+            // Sicheren Dateinamen generieren
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+            const filePath = `${folderName}/${fileName}`; // Erstellt automatisch Ordner (videos, images, etc.)
+
+            // 1. Datei in Supabase Bucket hochladen
+            const { data, error } = await supabase.storage
+                .from('phil-shorts-media') // Der Bucket, den du anlegen musstest
+                .upload(filePath, file, {
+                    cacheControl: '3600',
+                    upsert: false
+                });
+
+            if (error) {
+                throw error;
+            }
+
+            // 2. Den öffentlichen Link zum Bild/Video generieren
+            const { data: publicUrlData } = supabase.storage
+                .from('phil-shorts-media')
+                .getPublicUrl(filePath);
+
+            if(statusEl) {
+                statusEl.innerText = `Upload erfolgreich!`;
+            }
+            
+            resolve(publicUrlData.publicUrl);
+
+        } catch (error) {
+            console.error("Supabase Upload Error:", error);
+            reject(error);
+        }
     });
 }
 
