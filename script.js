@@ -15,6 +15,8 @@ let allVideosData = []; let allKnownUsers = []; let currentUser = JSON.parse(loc
 if (currentUser) currentUser.verified = false;
 let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || { master: false, comments: true, likes: true, dms: true, follows: true };
 
+window.currentSoundPreviewPlayer = new Audio();
+
 async function uploadFileToFirebase(file, folderName) {
     return new Promise(async (resolve, reject) => {
         try {
@@ -61,6 +63,12 @@ let currentFeedMode = 'foryou'; let isInitialLoad = true; let sortedFeed = []; c
 window.globalVolume = 1; window.globalMuted = false;
 
 window.switchView = function(viewId) {
+    if(viewId !== 'sound' && window.currentSoundPreviewPlayer) {
+        window.currentSoundPreviewPlayer.pause();
+        const icon = document.getElementById('sound-play-icon');
+        if(icon) icon.className = 'fas fa-play';
+    }
+
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById('view-' + viewId).classList.add('active');
     document.querySelectorAll('.nav__item').forEach(n => n.classList.remove('active'));
@@ -68,6 +76,7 @@ window.switchView = function(viewId) {
     if (viewId === 'search') document.querySelectorAll('.nav__item')[1].classList.add('active');
     if (viewId === 'inbox' || viewId === 'dm' || viewId === 'ticket') document.querySelectorAll('.nav__item')[3].classList.add('active');
     if (viewId === 'profile' && currentUser && document.getElementById('profile-name').innerText.includes(currentUser.displayName)) document.querySelectorAll('.nav__item')[4].classList.add('active');
+    
     if (viewId !== 'feed' && viewId !== 'duet' && viewId !== 'live-room') document.querySelectorAll('.video__player').forEach(v => { v.pause(); v.currentTime = 0; });
     const audioPlayer = document.getElementById('profile-audio-player'); if (viewId !== 'profile' && audioPlayer) audioPlayer.pause();
     if (viewId === 'live-list') initLiveStreamsList();
@@ -332,10 +341,10 @@ function createVideoElement(video) {
     const downloadVideoBtn = checkPhilPlusStatus(3) ? `<div class="videoSidebar__button" onclick="window.open('${video.mediaType === 'images' ? video.urls[0] : video.url}', '_blank')" style="margin-top:15px;"><i class="fas fa-download" style="color: #00f2fe; font-size:24px;"></i><p>Download</p></div>` : '';
     const analyticsBtn = isMe && checkPhilPlusStatus(3) ? `<div class="videoSidebar__button" onclick="openAnalytics('${video.id}')" style="margin-top:15px;"><i class="fas fa-chart-line" style="color: #ffd700; font-size:24px;"></i><p>Analytics</p></div>` : '';
 
-    // FEATURE 1 & 3: Duett & Sound
     const duetBtn = `<div class="videoSidebar__button" onclick="openDuet('${video.id}')" style="margin-top:15px;"><i class="fas fa-user-friends" style="font-size:24px; color: #fff;"></i><p>Duett</p></div>`;
     const soundDataId = video.soundId || video.id; const soundDataName = video.soundName || `Originalton - ${authorData.displayName}`;
-    const soundDisc = `<div class="videoSidebar__button" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}')" style="margin-top:15px;"><img src="${authorData.pic}" class="sound-disc"></div>`;
+    const soundDataUrl = video.soundUrl || video.url;
+    const soundDisc = `<div class="videoSidebar__button" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')" style="margin-top:15px;"><img src="${authorData.pic}" class="sound-disc"></div>`;
 
     const mutedAttr = window.globalMuted ? 'muted' : ''; let mediaHTML = ''; let muteUIHtml = '';
     if (video.mediaType === 'images' && video.urls && video.urls.length > 0) {
@@ -348,7 +357,7 @@ function createVideoElement(video) {
     let rawPreview = (video.description || "").substring(0, 50); let previewHtml = formatText(rawPreview); if ((video.description && video.description.length > 50)) previewHtml += '... <strong>mehr anzeigen</strong>';
     const inlineStyle = getInlineBorderStyle(authorData.activeBorder, authorData.customBorder); const bClass = getBorderClass(authorData.activeBorder);
 
-    const soundUI = `<div style="font-size:12px; margin-top:8px; display:flex; align-items:center; gap:5px; pointer-events:auto; cursor:pointer;" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}')"><i class="fas fa-music"></i> <marquee scrollamount="3" style="width:120px;">${soundDataName}</marquee></div>`;
+    const soundUI = `<div style="font-size:12px; margin-top:8px; display:flex; align-items:center; gap:5px; pointer-events:auto; cursor:pointer;" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')"><i class="fas fa-music"></i> <marquee scrollamount="3" style="width:120px;">${soundDataName}</marquee></div>`;
 
     div.innerHTML = `<div class="video-inner is-paused"><div class="video-wrapper">${mediaHTML}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div><div class="video__footer"><h3 class="creator-name" onclick="openProfile('${video.authorUid}')"><span class="live-name-${video.authorUid} ${nameClass}">${authorData.displayName}${verifiedBadge}${tier3Badge}</span></h3><p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p><h4 class="video-title" onclick="openVideoDetails('${video.id}')">${video.title || 'Ohne Titel'}</h4><p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${previewHtml}</p>${soundUI}</div><div class="video__sidebar"><div class="sidebar__profile" onclick="openProfile('${video.authorUid}')"><img src="${authorData.pic}" class="live-pic-${video.authorUid} ${bClass}" style="${inlineStyle}" alt="Profil">${plusButton}</div><div class="videoSidebar__button like-btn ${hasLiked}" data-id="${video.id}"><i class="fas fa-heart"></i><p class="like-count">${realLikes}</p></div><div class="videoSidebar__button comment-btn" data-id="${video.id}"><i class="fas fa-comment-dots"></i><p class="comment-count-txt">${commentCount}</p></div><div class="videoSidebar__button bookmark-btn ${hasSaved}" data-id="${video.id}" onclick="toggleSaveVideo('${video.id}', this)"><i class="fas fa-bookmark"></i><p>Speichern</p></div><div class="videoSidebar__button share-btn" data-id="${video.id}"><i class="fas fa-share"></i><p>Teilen</p></div>${duetBtn}${soundDisc}${downloadVideoBtn}${analyticsBtn}${editVideoBtn}${deleteVideoBtn}</div></div>`;
     
@@ -523,7 +532,7 @@ function renderComments(id) {
 
 let currentPendingGifUrl = null;
 document.getElementById('btn-gif-comment')?.addEventListener('click', () => { 
-    if(!checkPhilPlusStatus(2)) return showCustomAlert("Phil Shorts++", "GIFs erfordern Phil Shorts++!"); 
+    if(!checkPhilPlusStatus(2)) return showCustomAlert("Phil Shorts++", "GIFs in Kommentaren erfordern Phil Shorts++!"); 
     document.getElementById('giphy-modal').classList.add('show'); fetchGiphyTrending(); 
 });
 document.getElementById('close-giphy-modal')?.addEventListener('click', () => document.getElementById('giphy-modal').classList.remove('show'));
@@ -979,18 +988,15 @@ document.getElementById('duet-record-btn')?.addEventListener('click', async () =
     const canvas = document.getElementById('duet-canvas'); const ctx = canvas.getContext('2d');
     
     if(btn.classList.contains('recording')) {
-        // STOP RECORDING
         btn.classList.remove('recording'); icon.className = "fas fa-video"; btn.style.borderRadius = "50%";
         if(duetRecorder) duetRecorder.stop(); origVid.pause();
     } else {
-        // START RECORDING
         btn.classList.add('recording'); icon.className = "fas fa-square"; btn.style.borderRadius = "20%";
         status.innerText = "Nimmt auf..."; origVid.currentTime = 0; origVid.play();
         
-        canvas.width = 720; canvas.height = 1280; // 9:16 format (2x 360 wide)
-        const canvasStream = canvas.captureStream(30); // 30 FPS
+        canvas.width = 720; canvas.height = 1280;
+        const canvasStream = canvas.captureStream(30);
         
-        // Merge Audio from both videos
         const audioCtx = new AudioContext(); const dest = audioCtx.createMediaStreamDestination();
         const src1 = audioCtx.createMediaElementSource(origVid); src1.connect(dest);
         const src2 = audioCtx.createMediaStreamSource(duetStream); src2.connect(dest);
@@ -1016,9 +1022,7 @@ document.getElementById('duet-record-btn')?.addEventListener('click', async () =
         function drawFrame() {
             if(!btn.classList.contains('recording')) return;
             ctx.fillStyle = "black"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            // Draw Original Video Left
             ctx.drawImage(origVid, 0, 0, 360, 1280);
-            // Draw Camera Right (flipped)
             ctx.save(); ctx.translate(1080, 0); ctx.scale(-1, 1); ctx.drawImage(camVid, 0, 0, 360, 1280); ctx.restore();
             requestAnimationFrame(drawFrame);
         }
@@ -1028,43 +1032,70 @@ document.getElementById('duet-record-btn')?.addEventListener('click', async () =
 
 
 // ----------------------------------------------------
-// FEATURE 2: ECHTES LIVE STREAMING (PeerJS)
+// FEATURE 2: LIVE STREAMING DASHBOARD & SCREEN SHARE
 // ----------------------------------------------------
 let peer = null; let currentLiveStreamId = null; let isBroadcasting = false; let myLocalStream = null; let liveStreamsUnsub = null; let liveChatUnsub = null;
+window.currentLiveSource = 'cam';
 
 window.initLiveStreamsList = function() {
     if(liveStreamsUnsub) liveStreamsUnsub();
     const grid = document.getElementById('live-streams-grid'); grid.innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i></div>';
-    document.getElementById('start-my-live-btn').style.display = checkPhilPlusStatus(3) ? 'block' : 'none';
+    
+    const startLiveBtn = document.getElementById('start-my-live-btn');
+    if (startLiveBtn) {
+        startLiveBtn.style.display = checkPhilPlusStatus(3) ? 'block' : 'none';
+        startLiveBtn.onclick = () => {
+            if(!checkPhilPlusStatus(3)) return showCustomAlert("Premium", "Live-Streaming erfordert Plus+++!");
+            switchView('live-dashboard');
+            document.getElementById('live-dash-name').innerText = currentUser.displayName;
+            document.getElementById('live-dash-pic').src = currentUser.photoURL;
+            window.selectLiveSource('cam');
+        };
+    }
+
     liveStreamsUnsub = onSnapshot(collection(db, "live_streams"), (snapshot) => {
         grid.innerHTML = '';
         if(snapshot.empty) { grid.innerHTML = '<div class="empty-state"><p>Gerade ist niemand live.</p></div>'; return; }
         snapshot.forEach(docSnap => {
             const stream = docSnap.data();
-            grid.innerHTML += `<div class="live-stream-card" onclick="joinLive('${docSnap.id}', '${stream.broadcasterName.replace(/'/g, "\\'")}', '${stream.broadcasterPic}')"><img src="${stream.broadcasterPic}" style="width:60px; height:60px; border-radius:50%; border:2px solid #ff0050;"><div style="flex:1;"><strong style="font-size:16px; color:white; display:block;">${stream.broadcasterName}</strong><span style="color:#aaa; font-size:13px;">🔴 LIVE</span></div><div style="background:#222; padding:5px 10px; border-radius:10px; font-size:12px; font-weight:bold;"><i class="fas fa-eye"></i> ${stream.viewers || 0}</div></div>`;
+            const titleHtml = stream.title ? `<span style="display:block; font-size:12px; color:#ddd; margin-top:2px;">${stream.title}</span>` : '';
+            grid.innerHTML += `<div class="live-stream-card" onclick="joinLive('${docSnap.id}', '${stream.broadcasterName.replace(/'/g, "\\'")}', '${stream.broadcasterPic}')"><img src="${stream.broadcasterPic}" style="width:60px; height:60px; border-radius:50%; border:2px solid #ff0050;"><div style="flex:1;"><strong style="font-size:16px; color:white; display:block;">${stream.broadcasterName}</strong><span style="color:#aaa; font-size:13px;">🔴 LIVE</span>${titleHtml}</div><div style="background:#222; padding:5px 10px; border-radius:10px; font-size:12px; font-weight:bold;"><i class="fas fa-eye"></i> ${stream.viewers || 0}</div></div>`;
         });
     });
 }
 
-document.getElementById('start-my-live-btn')?.addEventListener('click', async () => {
-    if(!checkPhilPlusStatus(3)) return showCustomAlert("Premium", "Live-Streaming erfordert Plus+++!");
+window.selectLiveSource = function(source) {
+    window.currentLiveSource = source;
+    document.querySelectorAll('.live-source-card').forEach(c => c.classList.remove('active'));
+    document.getElementById('source-' + source).classList.add('active');
+};
+
+document.getElementById('start-stream-action-btn')?.addEventListener('click', async () => {
+    const title = document.getElementById('live-stream-title').value.trim() || `${currentUser.displayName}'s Live Stream`;
     try {
-        myLocalStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        if(window.currentLiveSource === 'screen') {
+            myLocalStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+            myLocalStream.getVideoTracks()[0].addEventListener('ended', () => { leaveLiveRoom(); showToast("Screen-Sharing beendet."); });
+        } else if (window.currentLiveSource === 'audio') {
+            myLocalStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+        } else {
+            myLocalStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        }
+        
         switchView('live-room');
         document.getElementById('live-video-player').srcObject = myLocalStream;
-        document.getElementById('live-video-player').muted = true; // Mute self
+        document.getElementById('live-video-player').muted = true;
         document.getElementById('live-broadcaster-name').innerText = currentUser.displayName;
         document.getElementById('live-broadcaster-pic').src = currentUser.photoURL;
         isBroadcasting = true; currentLiveStreamId = currentUser.uid;
 
-        // Start Peer
         peer = new Peer(currentUser.uid);
         peer.on('open', async (id) => {
-            await setDoc(doc(db, "live_streams", currentUser.uid), { broadcasterUid: currentUser.uid, broadcasterName: currentUser.displayName, broadcasterPic: currentUser.photoURL, viewers: 0, timestamp: Date.now() });
+            await setDoc(doc(db, "live_streams", currentUser.uid), { broadcasterUid: currentUser.uid, broadcasterName: currentUser.displayName, broadcasterPic: currentUser.photoURL, title: title, viewers: 0, timestamp: Date.now() });
             initLiveChat(currentLiveStreamId); showToast("Du bist jetzt LIVE!");
         });
-        peer.on('call', (call) => { call.answer(myLocalStream); }); // Answer all calls automatically with my stream
-    } catch(e) { showCustomAlert("Fehler", "Kamera-Zugriff verweigert."); }
+        peer.on('call', (call) => { call.answer(myLocalStream); });
+    } catch(e) { showCustomAlert("Fehler", "Zugriff verweigert oder abgebrochen."); }
 });
 
 window.joinLive = function(streamId, name, pic) {
@@ -1075,10 +1106,10 @@ window.joinLive = function(streamId, name, pic) {
 
     peer = new Peer();
     peer.on('open', async (id) => {
-        const call = peer.call(streamId, null); // Call broadcaster without a stream
+        const call = peer.call(streamId, null);
         call.on('stream', (remoteStream) => {
             document.getElementById('live-video-player').srcObject = remoteStream;
-            document.getElementById('live-video-player').muted = false; // Hear broadcaster
+            document.getElementById('live-video-player').muted = false;
         });
         await updateDoc(doc(db, "live_streams", streamId), { viewers: increment(1) });
         initLiveChat(streamId);
@@ -1093,7 +1124,6 @@ window.leaveLiveRoom = async function() {
     if(liveChatUnsub) liveChatUnsub();
     if(isBroadcasting) {
         await deleteDoc(doc(db, "live_streams", currentUser.uid));
-        // Delete chat collection logic omitted for brevity (Firebase auto deletes empty collections)
     } else if (currentLiveStreamId) {
         await updateDoc(doc(db, "live_streams", currentLiveStreamId), { viewers: increment(-1) }).catch(e=>{});
     }
@@ -1111,7 +1141,6 @@ function initLiveChat(streamId) {
         });
         box.scrollTop = box.scrollHeight;
     });
-    // Listen to viewers count
     onSnapshot(doc(db, "live_streams", streamId), (docSnap) => {
         if(docSnap.exists()) document.getElementById('live-viewer-count').innerText = docSnap.data().viewers || 0;
         else if(!isBroadcasting) { showCustomAlert("Beendet", "Live-Stream wurde beendet."); leaveLiveRoom(); }
@@ -1126,33 +1155,54 @@ document.getElementById('live-chat-input')?.addEventListener('keypress', (e) => 
 
 
 // ----------------------------------------------------
-// FEATURE 3: SOUNDS LOGIK
+// FEATURE 3: TIKTOK STYLE SOUNDS LOGIK
 // ----------------------------------------------------
 window.selectedUploadSound = null;
-window.openSound = function(id, name, pic) {
+window.openSound = function(id, name, pic, url) {
     switchView('sound');
-    document.getElementById('sound-name').innerText = name; document.getElementById('sound-pic').src = pic;
+    document.getElementById('sound-name').innerText = name;
+    document.getElementById('sound-author').innerText = name.includes('-') ? "@" + name.split(' - ')[1].trim() : "@Originalton";
+    document.getElementById('sound-pic').src = pic;
+    
     const grid = document.getElementById('sound-grid'); grid.innerHTML = '';
     let vids = allVideosData.filter(v => v.soundId === id || v.id === id);
     document.getElementById('sound-count').innerText = vids.length + " Videos";
+    
     vids.forEach(v => {
         const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`;
         const mediaTag = v.mediaType === 'images' ? `<img src="${previewSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<video src="${previewSrc}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`;
         grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')">${mediaTag}</div>`;
     });
-    // Button setup
+    
+    if(url) {
+        window.currentSoundPreviewPlayer.src = url;
+        window.currentSoundPreviewPlayer.loop = true;
+    }
+
     const useBtn = document.getElementById('use-sound-btn');
     useBtn.onclick = () => {
         if(!currentUser) return showCustomAlert("Fehler", "Bitte einloggen.");
-        const origVideo = allVideosData.find(v => v.id === id);
-        if(origVideo) {
-            window.selectedUploadSound = { id: id, name: name, url: origVideo.url };
-            document.getElementById('upload-sound-name').innerText = name;
-            document.getElementById('upload-sound-preview').style.display = 'flex';
-            switchView('feed'); document.getElementById('upload-modal').classList.add('show');
-        }
+        window.currentSoundPreviewPlayer.pause();
+        const icon = document.getElementById('sound-play-icon'); if(icon) icon.className = 'fas fa-play';
+        window.selectedUploadSound = { id: id, name: name, url: url };
+        document.getElementById('upload-sound-name').innerText = name;
+        document.getElementById('upload-sound-preview').style.display = 'flex';
+        switchView('feed'); document.getElementById('upload-modal').classList.add('show');
     };
 }
+
+document.getElementById('sound-play-btn')?.addEventListener('click', () => {
+    const icon = document.getElementById('sound-play-icon');
+    if(!window.currentSoundPreviewPlayer.src) return;
+    if(window.currentSoundPreviewPlayer.paused) {
+        window.currentSoundPreviewPlayer.play().catch(e=>{});
+        icon.className = 'fas fa-pause';
+    } else {
+        window.currentSoundPreviewPlayer.pause();
+        icon.className = 'fas fa-play';
+    }
+});
+
 window.removeSelectedSound = function() { window.selectedUploadSound = null; document.getElementById('upload-sound-preview').style.display = 'none'; }
 
 

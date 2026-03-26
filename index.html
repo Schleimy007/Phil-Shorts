@@ -89,23 +89,28 @@
             </div>
         </div>
 
-        <div id="view-sound" class="view">
-            <div class="top-bar glass-nav">
+        <div id="view-sound" class="view" style="background: #000;">
+            <div class="top-bar glass-nav" style="background:transparent; border:none;">
                 <i class="fas fa-chevron-left back-btn" onclick="switchView('feed')"></i>
-                <h3 style="font-weight: 600;">Original Sound</h3>
             </div>
-            <div class="profile-header" style="flex-direction:row; gap:15px; align-items:center; justify-content:flex-start; padding: 20px;">
-                <img src="" id="sound-pic" class="profile-image" style="width:80px; height:80px; border-radius:15px; border: 1px solid #333; margin:0;">
-                <div style="flex:1; text-align:left;">
-                    <h3 id="sound-name" style="font-size:18px; margin-bottom:5px;">Sound Name</h3>
-                    <p id="sound-author" style="color:#aaa; font-size:14px; margin-bottom:5px;">@author</p>
-                    <p id="sound-count" style="color:#888; font-size:12px; font-weight:bold;">0 Videos</p>
+            <div class="sound-header" style="display: flex; gap: 20px; padding: 0 20px 20px; align-items: flex-start;">
+                <div style="position: relative; width: 120px; height: 120px; flex-shrink: 0;">
+                    <img src="" id="sound-pic" style="width: 100%; height: 100%; border-radius: 8px; object-fit: cover;">
+                    <div id="sound-play-btn" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; background: rgba(0,0,0,0.6); border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; color: white; border: 1px solid rgba(255,255,255,0.3);">
+                        <i class="fas fa-play" id="sound-play-icon"></i>
+                    </div>
+                </div>
+                <div style="flex: 1; padding-top: 10px;">
+                    <h2 id="sound-name" style="font-size: 20px; margin-bottom: 5px; word-break: break-word;">Originalton</h2>
+                    <p id="sound-author" style="color: #aaa; font-size: 15px; margin-bottom: 10px;">@author</p>
+                    <p id="sound-count" style="color: #888; font-size: 13px; font-weight: bold;">0 Videos</p>
                 </div>
             </div>
-            <div style="padding: 0 20px 20px;">
-                <button class="profile-action-btn" id="use-sound-btn" style="width:100%; background:#00f2fe; color:black;"><i class="fas fa-video"></i> Diesen Sound nutzen</button>
+            <div class="grid-container" id="sound-grid" style="padding-bottom: 120px;"></div>
+            
+            <div style="position: fixed; bottom: 0; left: 0; width: 100%; padding: 15px 20px; background: linear-gradient(to top, rgba(0,0,0,1) 60%, rgba(0,0,0,0)); z-index: 100; padding-bottom: calc(15px + env(safe-area-inset-bottom));">
+                <button class="profile-action-btn" id="use-sound-btn" style="width: 100%; background: #ff0050; color: white; font-size: 16px; border-radius: 30px; box-shadow: 0 4px 15px rgba(255,0,80,0.4);"><i class="fas fa-video"></i> Diesen Sound nutzen</button>
             </div>
-            <div class="grid-container" id="sound-grid"></div>
         </div>
 
         <div id="view-duet" class="view" style="background:black; z-index: 5000;">
@@ -136,6 +141,49 @@
             </div>
         </div>
 
+        <div id="view-live-dashboard" class="view" style="background: #050505;">
+            <div class="top-bar glass-nav" style="border:none;">
+                <i class="fas fa-chevron-left back-btn" onclick="switchView('live-list')"></i>
+                <h3 style="flex:1; text-align:center;">Live Setup</h3>
+                <i class="fas fa-cog back-btn" style="opacity: 0;"></i>
+            </div>
+            <div style="padding: 20px; display: flex; flex-direction: column; gap: 20px;">
+                <div style="text-align: center;">
+                    <div class="profile-pic-container" style="margin-bottom: 10px;">
+                        <img src="" id="live-dash-pic" class="profile-image" style="width:80px; height:80px; margin:0; border: 2px solid #ff0050;">
+                    </div>
+                    <h3 id="live-dash-name">Name</h3>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333;">
+                    <label style="color:#888; font-size:12px; margin-bottom:5px; display:block;">Titel deines Streams</label>
+                    <input type="text" id="live-stream-title" class="comment-input" placeholder="Wir chillen und zocken..." style="width:100%; border-radius:10px; border:none; background:rgba(0,0,0,0.5);">
+                </div>
+                
+                <div>
+                    <h4 style="margin-bottom: 10px; color: #888; font-size: 13px; text-transform: uppercase; text-align:center;">Übertragungs-Quelle wählen</h4>
+                    <div style="display: flex; gap: 10px; justify-content: center;">
+                        <div class="live-source-card active" id="source-cam" onclick="selectLiveSource('cam')">
+                            <i class="fas fa-camera"></i>
+                            <span>Kamera</span>
+                        </div>
+                        <div class="live-source-card" id="source-screen" onclick="selectLiveSource('screen')">
+                            <i class="fas fa-desktop"></i>
+                            <span>Screen</span>
+                        </div>
+                        <div class="live-source-card" id="source-audio" onclick="selectLiveSource('audio')">
+                            <i class="fas fa-microphone"></i>
+                            <span>Mic Only</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="profile-action-btn" id="start-stream-action-btn" style="background:#ff0050; width:100%; font-size:18px; min-height: 60px; margin-top: 10px; border-radius: 30px; box-shadow: 0 4px 15px rgba(255,0,80,0.4);">
+                    <i class="fas fa-broadcast-tower"></i> Jetzt LIVE gehen
+                </button>
+            </div>
+        </div>
+
         <div id="view-live-room" class="view" style="background:black; z-index: 4000;">
             <div class="live-room-header">
                 <div style="display:flex; align-items:center; gap:10px; background: rgba(0,0,0,0.5); padding: 5px 15px 5px 5px; border-radius: 30px; backdrop-filter: blur(5px);">
@@ -151,7 +199,7 @@
                 </div>
             </div>
             
-            <video id="live-video-player" autoplay playsinline style="width:100%; height:100%; object-fit:cover;"></video>
+            <video id="live-video-player" autoplay playsinline style="width:100%; height:100%; object-fit:contain;"></video>
             
             <div class="live-chat-container" id="live-chat-box"></div>
             
@@ -676,6 +724,7 @@
 
                 <div id="video-advanced-editor" style="display:none;"></div>
                 <div id="image-advanced-editor" style="display:none;"></div>
+
                 <hr style="border:0; border-top:1px solid #333; margin: 15px 0;">
                 <input type="text" id="up-title" class="comment-input" placeholder="Titel..." maxlength="60" style="border-radius:15px; margin-bottom:10px; width: 100%;">
                 <textarea id="up-desc" class="comment-input" placeholder="Beschreibe deinen Post... (@mention, #hashtag)" rows="4" style="resize:none; border-radius:15px; width:100%;"></textarea>

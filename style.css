@@ -2610,9 +2610,6 @@ input:checked+.slider:before {
     display: block;
 }
 
-
-/* NEU: Blur Box Styling & Einrast-Linien */
-
 .blur-box-content {
     width: 100%;
     height: 100%;
@@ -2646,8 +2643,6 @@ input:checked+.slider:before {
     z-index: 99;
     pointer-events: none;
 }
-
-/* --- NEUE FEATURES STYLES (Socials, Blockieren, Favoriten) --- */
 
 .social-btn {
     color: #aaa;
@@ -2775,4 +2770,28 @@ input:checked+.slider:before {
 }
 .live-stream-card:active {
     background: #222;
+}
+
+.live-source-card {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border: 2px solid #333;
+    border-radius: 12px;
+    padding: 20px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    color: #aaa;
+}
+.live-source-card i {
+    font-size: 24px;
+}
+.live-source-card.active {
+    border-color: #00f2fe;
+    color: #00f2fe;
+    background: rgba(0,242,254,0.1);
 }
