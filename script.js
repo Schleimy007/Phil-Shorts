@@ -17,6 +17,10 @@ let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || {
 
 window.currentSoundPreviewPlayer = new Audio();
 
+// Global Upload Editor State
+let currentUploadFilter = 'none';
+let currentUploadOverlays = [];
+
 if(!document.getElementById('dynamic-live-styles')) {
     const style = document.createElement('style');
     style.id = 'dynamic-live-styles';
@@ -27,6 +31,9 @@ if(!document.getElementById('dynamic-live-styles')) {
         #view-live-room.active #live-chat-box { pointer-events: auto !important; }
         #live-chat-box { pointer-events: none; }
         @media (min-width: 769px) { .chat-input-wrapper { position: absolute !important; bottom: 0 !important; left: 0 !important; width: 100% !important; background: #0a0a0a !important; border-top: 1px solid #333 !important; } }
+        
+        .draggable-text { position: absolute; font-size: 24px; font-weight: bold; cursor: grab; user-select: none; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); z-index: 50; padding: 5px; border: 2px dashed transparent; }
+        .draggable-text.active { border-color: #00f2fe; }
     `;
     document.head.appendChild(style);
 }
@@ -359,13 +366,22 @@ function createVideoElement(video) {
     const soundDisc = `<div class="videoSidebar__button" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')" style="margin-top:15px;"><img src="${authorData.pic}" class="sound-disc"></div>`;
 
     const mutedAttr = window.globalMuted ? 'muted' : ''; let mediaHTML = ''; let muteUIHtml = '';
+    
+    // Apply Filters & Overlays visually
+    const appliedFilter = video.filter && video.filter !== 'none' ? `filter: ${video.filter};` : '';
+    let overlaysHtml = '';
+    if(video.overlays && video.overlays.length > 0) {
+        overlaysHtml = video.overlays.map(o => `<div style="position:absolute; top:${o.top}; left:${o.left}; transform:translate(-50%, -50%); color:${o.color}; font-weight:bold; font-size:24px; text-shadow:2px 2px 4px rgba(0,0,0,0.8); z-index:20; pointer-events:none; white-space:nowrap;">${o.text}</div>`).join('');
+    }
+
     if (video.mediaType === 'images' && video.urls && video.urls.length > 0) {
         let arrowsHTML = ''; if (video.urls.length > 1) { arrowsHTML = `<div class="carousel-arrow left" onclick="window.scrollCarousel('${video.id}', -1, event)"><i class="fas fa-chevron-left"></i></div><div class="carousel-arrow right" onclick="window.scrollCarousel('${video.id}', 1, event)"><i class="fas fa-chevron-right"></i></div>`; }
-        mediaHTML = `<div class="carousel-container" data-vid="${video.id}">${video.urls.map(u => `<div class="carousel-item"><img src="${u}"></div>`).join('')}</div>${arrowsHTML}<div class="carousel-dots">${video.urls.map((_, i) => `<div class="dot ${i===0 ? 'active' : ''}"></div>`).join('')}</div>`; muteUIHtml = `<div class="mute-container" style="display:none;"></div>`;
+        mediaHTML = `<div class="carousel-container" data-vid="${video.id}">${video.urls.map(u => `<div class="carousel-item"><img src="${u}" style="${appliedFilter}"></div>`).join('')}</div>${arrowsHTML}<div class="carousel-dots">${video.urls.map((_, i) => `<div class="dot ${i===0 ? 'active' : ''}"></div>`).join('')}</div>`; muteUIHtml = `<div class="mute-container" style="display:none;"></div>`;
     } else {
-        mediaHTML = `<video class="video__player" data-vid="${video.id}" preload="auto" loop playsinline ${mutedAttr} src="${video.url}"></video><div class="play-indicator"><i class="fas fa-play"></i></div><div class="player-progress-bar"><div class="player-progress-filled"></div></div>`;
+        mediaHTML = `<video class="video__player" data-vid="${video.id}" preload="auto" loop playsinline ${mutedAttr} src="${video.url}" style="${appliedFilter}"></video><div class="play-indicator"><i class="fas fa-play"></i></div><div class="player-progress-bar"><div class="player-progress-filled"></div></div>`;
         muteUIHtml = `<div class="mute-container"><div class="mute-btn"><i class="fas fa-volume-up"></i></div><div class="volume-slider-wrapper"><input type="range" class="volume-slider" min="0" max="1" step="0.05" value="1"></div></div>`;
     }
+    
     let rawPreview = (video.description || "").substring(0, 50); let previewHtml = formatText(rawPreview); if ((video.description && video.description.length > 50)) previewHtml += '... <strong>mehr anzeigen</strong>';
     const inlineStyle = getInlineBorderStyle(authorData.activeBorder, authorData.customBorder); const bClass = getBorderClass(authorData.activeBorder);
 
@@ -373,7 +389,7 @@ function createVideoElement(video) {
 
     div.innerHTML = `
         <div class="video-inner is-paused">
-            <div class="video-wrapper">${mediaHTML}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div>
+            <div class="video-wrapper">${mediaHTML}${overlaysHtml}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div>
             <div class="video__footer">
                 <h3 class="creator-name" onclick="openProfile('${video.authorUid}')"><span class="live-name-${video.authorUid} ${nameClass}">${authorData.displayName}${verifiedBadge}${tier3Badge}</span></h3>
                 <p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p>
@@ -869,211 +885,175 @@ document.getElementById('search-input')?.addEventListener('input', (e) => {
     if (matchedUsers.length === 0 && matchedVideos.length === 0) { html = '<div style="text-align: center; margin-top: 50px; color: #555;">Nichts gefunden</div>'; } resultsGrid.innerHTML = html;
 });
 
-document.getElementById('tab-notifications')?.addEventListener('click', function() { this.classList.add('active'); document.getElementById('tab-messages').classList.remove('active'); document.getElementById('tab-support').classList.remove('active'); document.getElementById('inbox-notifications-box').style.display = 'flex'; document.getElementById('inbox-messages-box').style.display = 'none'; document.getElementById('inbox-support-box').style.display = 'none'; });
-document.getElementById('tab-messages')?.addEventListener('click', function() { this.classList.add('active'); document.getElementById('tab-notifications').classList.remove('active'); document.getElementById('tab-support').classList.remove('active'); document.getElementById('inbox-notifications-box').style.display = 'none'; document.getElementById('inbox-messages-box').style.display = 'flex'; document.getElementById('inbox-support-box').style.display = 'none'; });
-document.getElementById('tab-support')?.addEventListener('click', function() { this.classList.add('active'); document.getElementById('tab-notifications').classList.remove('active'); document.getElementById('tab-messages').classList.remove('active'); document.getElementById('inbox-notifications-box').style.display = 'none'; document.getElementById('inbox-messages-box').style.display = 'none'; document.getElementById('inbox-support-box').style.display = 'flex'; });
-
-let inboxUnsubscribe = null; let isInitialNotifLoad = true;
-function initInbox() {
-    const inboxBox = document.getElementById('inbox-notifications-box'); if (!currentUser) return; if (inboxUnsubscribe) inboxUnsubscribe(); isInitialNotifLoad = true;
-    inboxUnsubscribe = onSnapshot(query(collection(db, "users", currentUser.uid, "notifications"), orderBy("timestamp", "desc")), (snapshot) => {
-        let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
-        if (!isInitialNotifLoad) { snapshot.docChanges().forEach((change) => { if (change.type === "added") { const n = change.doc.data(); if(blocked.includes(n.fromUid)) return; const isCurrentlyChatting = document.getElementById('view-dm').classList.contains('active') && window.currentChatPartner && window.currentChatPartner.uid === n.fromUid; if (!isCurrentlyChatting) { const nUser = getUserData(n.fromUid, n.fromName, n.fromUsername, n.fromPic, false); let toastMsg = `🔔 Aktivität von @${nUser.username}`; if (n.type === 'message') toastMsg = `💬 Nachricht von @${nUser.username}`; else if (n.type === 'like') toastMsg = `❤️ @${nUser.username} mag dein Post`; else if (n.type === 'follow') toastMsg = `👤 @${nUser.username} folgt dir`; else if (n.type === 'gift') toastMsg = `🎁 @${nUser.username} hat gespendet!`; else if (n.type === 'comment') toastMsg = `💬 @${nUser.username} hat kommentiert`; showToast(toastMsg); window.sendDesktopNotification("Phil Shorts", toastMsg, n.type); } } }); }
-        isInitialNotifLoad = false; inboxBox.innerHTML = '';
-        let validNotifs = []; snapshot.forEach((doc) => { const n = doc.data(); if(!blocked.includes(n.fromUid)) validNotifs.push(n); });
-        if (validNotifs.length === 0) { inboxBox.innerHTML = '<div class="empty-state" style="height: 100%;"><p>Keine neuen Benachrichtigungen</p></div>'; return; }
-        validNotifs.forEach((n) => {
-            let icon = 'fa-bell'; let color = '#aaa'; if (n.type === 'like') { icon = 'fa-heart'; color = '#ff0050'; } if (n.type === 'follow') { icon = 'fa-user-plus'; color = '#00f2fe'; } if (n.type === 'comment') { icon = 'fa-comment-dots'; color = '#fff'; } if (n.type === 'gift') { icon = 'fa-gift'; color = '#ffd700'; } if (n.type === 'message') { icon = 'fa-envelope'; color = '#00f2fe'; }
-            const nUser = getUserData(n.fromUid, n.fromName, n.fromUsername, n.fromPic, false); let clickAction = `openProfile('${n.fromUid}')`; if (n.type === 'message') clickAction = `openDM('${n.fromUid}', '${nUser.username.replace(/'/g, "\\'")}', '${nUser.pic}')`; else if (n.videoId) clickAction = `jumpToVideo('${n.videoId}')`; const isVerif = getVerifiedBadge(nUser.verified); let nameClass = nUser.philPlusUntil && nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 1 ? "name-phil-plus" : "";
-            inboxBox.innerHTML += `<div class="inbox-msg" onclick="${clickAction}"><img src="${nUser.pic}" class="chat-avatar live-pic-${n.fromUid}" style="flex-shrink:0;"><div style="flex:1; min-width:0;"><span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span class="live-name-${n.fromUid} ${nameClass}">${nUser.displayName}${isVerif}</span></span><div class="chat-bubble" style="background: transparent; padding: 0;">${formatText(n.text)}</div><div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(n.timestamp)}</div></div></div>`;
-        });
-    });
-}
-
-let inboxChatsUnsubscribe = null;
-function initInboxChats() {
-    if (!currentUser) return; const msgBox = document.getElementById('inbox-messages-box'); if (inboxChatsUnsubscribe) inboxChatsUnsubscribe();
-    inboxChatsUnsubscribe = onSnapshot(collection(db, "chats"), (snapshot) => {
-        let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
-        let chats = []; snapshot.forEach(doc => { const chat = doc.data(); if (chat.participants && chat.participants.includes(currentUser.uid)) { const partnerUid = chat.participants.find(uid => uid !== currentUser.uid); if(!blocked.includes(partnerUid)) chats.push({ id: doc.id, ...chat }); } }); 
-        chats.sort((a, b) => b.lastMessageTime - a.lastMessageTime); msgBox.innerHTML = '';
-        if (chats.length === 0) { msgBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Keine Nachrichten</p></div>'; return; }
-        chats.forEach(chat => {
-            const partnerUid = chat.participants.find(uid => uid !== currentUser.uid); const partner = chat.users[partnerUid]; if (!partner) return; const nUser = getUserData(partnerUid, partner.name, partner.name, partner.pic, false); const safeName = nUser.username.replace(/'/g, "\\'"); const isVerif = getVerifiedBadge(nUser.verified); let nameClass = nUser.philPlusUntil && nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 1 ? "name-phil-plus" : "";
-            let previewText = chat.lastMessage; if(previewText && previewText.startsWith('[IMAGE]')) previewText = "📸 Bild gesendet";
-            msgBox.innerHTML += `<div class="inbox-msg" onclick="openDM('${partnerUid}', '${safeName}', '${nUser.pic}')"><img src="${nUser.pic}" class="chat-avatar live-pic-${partnerUid}" style="flex-shrink:0;"><div style="flex:1; min-width:0;"><span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span class="live-name-${partnerUid} ${nameClass}">${nUser.displayName}${isVerif}</span></span><div class="chat-bubble" style="background: transparent; padding: 0; color: #888;">${formatText(previewText) || 'Neuer Chat...'}</div><div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(chat.lastMessageTime)}</div></div></div>`;
-        });
-    });
-}
-
-let supportUnsubscribe = null;
-window.initSupportTickets = function() {
-    if (!currentUser) return; const supportBox = document.getElementById('inbox-support-box'); const isAdmin = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
-    if (supportUnsubscribe) supportUnsubscribe();
-    supportUnsubscribe = onSnapshot(query(collection(db, "reports"), orderBy("timestamp", "desc")), (snapshot) => {
-        supportBox.innerHTML = ''; let foundAny = false;
-        snapshot.forEach(docSnap => {
-            const ticket = docSnap.data(); if (!isAdmin && ticket.uid !== currentUser.uid) return; foundAny = true;
-            const ticketId = docSnap.id; const isVip = ticket.hasPlus ? 'vip' : ''; 
-            let plusText = ticket.tier === 3 ? "PLUS+++" : (ticket.tier === 2 ? "PLUS++" : "PLUS");
-            const vipBadge = ticket.hasPlus ? `<span class="phil-plus-badge" style="font-size:9px; margin-left:5px;">${plusText}</span>` : ''; 
-            const uData = getUserData(ticket.uid, ticket.name, ticket.name, 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback', false);
-            let adminButtons = '';
-            if (isAdmin) {
-                if (ticket.status === 'closed') adminButtons = `<button class="profile-action-btn edit-btn" onclick="deleteTicket(event, '${ticketId}')" style="min-height:26px; font-size:11px; background:transparent; border:1px solid #ff4444; color:#ff4444; padding:0 8px;"><i class="fas fa-trash"></i> Löschen</button>`;
-                else adminButtons = `<button class="profile-action-btn edit-btn" onclick="resolveTicket(event, '${ticketId}')" style="min-height:26px; font-size:11px; background:transparent; border:1px solid #ffd700; color:#ffd700; padding:0 8px;"><i class="fas fa-lock"></i> Schließen</button>`;
-            }
-            supportBox.innerHTML += `<div class="support-ticket ${isVip}" onclick="openTicketChat('${ticketId}', '${uData.username.replace(/'/g, "\\'")}', '${ticket.uid}')" style="cursor:pointer; display:flex; flex-direction:column; gap:8px;"><div style="display:flex; justify-content:space-between; align-items:center;"><strong style="color:white; font-size:14px;">@${uData.username} ${vipBadge}</strong><span style="color:#888; font-size:11px;">${timeAgo(ticket.timestamp)}</span></div><div style="display:flex; justify-content:space-between; align-items:center;"><div style="font-size:12px; color:#aaa;"><i class="fas fa-ticket-alt"></i> Status: <span style="color:${ticket.status === 'closed' ? '#ff4444' : '#39ff14'}; font-weight:bold;">${ticket.status === 'closed' ? 'Geschlossen' : 'Offen'}</span></div>${adminButtons}</div></div>`;
-        });
-        if (!foundAny) supportBox.innerHTML = '<div class="empty-state" style="height:100%;"><i class="fas fa-check-circle" style="color:#00f2fe; font-size:40px; margin-bottom:10px;"></i><p>Keine Support-Tickets gefunden!</p></div>';
-    });
-}
-
-window.resolveTicket = async function(event, ticketId) { event.stopPropagation(); if(confirm("Ticket schließen?")) { await updateDoc(doc(db, "reports", ticketId), { status: 'closed' }); showToast("Geschlossen."); } };
-window.deleteTicket = async function(event, ticketId) { event.stopPropagation(); if(confirm("Ticket löschen?")) { await deleteDoc(doc(db, "reports", ticketId)); showToast("Gelöscht."); } };
-
-let currentTicketSnapshot = null; let currentTicketMetaSnapshot = null; window.currentActiveTicketId = null;
-window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
-    if (!currentUser) return; window.currentActiveTicketId = ticketId; document.getElementById('ticket-title').innerText = "Ticket: @" + username; switchView('ticket');
-    const ticketBox = document.getElementById('ticket-box'); ticketBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
-    const isAdmin = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
-    if (currentTicketSnapshot) currentTicketSnapshot(); if (currentTicketMetaSnapshot) currentTicketMetaSnapshot();
-    currentTicketSnapshot = onSnapshot(query(collection(db, `reports/${ticketId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
-        ticketBox.innerHTML = '';
-        if (snapshot.empty) ticketBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Keine Nachrichten</p></div>'; 
-        else {
-            snapshot.forEach(docSnap => {
-                const msg = docSnap.data(); const isMe = msg.senderUid === currentUser.uid ? 'me' : ''; const isSupportSender = msg.senderUid !== ticketOwnerUid;
-                const pic = isSupportSender ? 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin' : (msg.senderUid === currentUser.uid ? currentUser.photoURL : `https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.senderUid}`);
-                let bg = isMe ? '#ff0050' : '#333'; let adminLabel = isSupportSender ? '<div style="font-size:10px; color:#ffd700; margin-bottom:4px;"><i class="fas fa-shield-alt"></i> Support Team</div>' : '';
-                ticketBox.innerHTML += `<div class="chat-msg ${isMe}"><img src="${pic}" class="chat-avatar" style="flex-shrink:0;"><div style="min-width:0; max-width: 100%;"><div class="chat-bubble" style="background:${bg}; border-color:${bg};">${adminLabel}${formatText(msg.text)}</div><div class="chat-time" style="font-size: 10px; color: #666; margin-top: 4px; text-align: ${isMe ? 'right' : 'left'};">${timeAgo(msg.timestamp)}</div></div></div>`;
-            });
-        }
-        ticketBox.scrollTop = ticketBox.scrollHeight;
-    });
-    currentTicketMetaSnapshot = onSnapshot(doc(db, "reports", ticketId), (docSnap) => {
-        const statEl = document.getElementById('ticket-status');
-        if(docSnap.exists()) {
-            const tData = docSnap.data(); 
-            if(tData.status === 'closed') { statEl.innerText = "Geschlossen"; statEl.style.background = "#ff4444"; statEl.style.color = "white"; document.getElementById('ticket-input-area').style.display = 'none'; document.getElementById('admin-close-ticket-btn').style.display = 'none'; } 
-            else { statEl.innerText = "Offen"; statEl.style.background = "#39ff14"; statEl.style.color = "black"; document.getElementById('ticket-input-area').style.display = 'flex'; document.getElementById('admin-close-ticket-btn').style.display = isAdmin ? 'block' : 'none'; }
-        } else { statEl.innerText = "Gelöscht"; statEl.style.background = "#ff4444"; document.getElementById('ticket-input-area').style.display = 'none'; document.getElementById('admin-close-ticket-btn').style.display = 'none'; }
-    });
-};
-
-document.getElementById('send-ticket-btn')?.addEventListener('click', async() => { const input = document.getElementById('ticket-input'); const text = input.value.trim(); if (!text || !window.currentActiveTicketId || !currentUser) return; input.value = ''; await addDoc(collection(db, `reports/${window.currentActiveTicketId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); });
-document.getElementById('ticket-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-ticket-btn').click(); });
-document.getElementById('admin-close-ticket-btn')?.addEventListener('click', async() => { if(!window.currentActiveTicketId) return; if(confirm("Ticket schließen?")) { await updateDoc(doc(db, "reports", window.currentActiveTicketId), { status: 'closed' }); showToast("Ticket geschlossen."); } });
-
-let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
-window.openDM = async function(targetUid, targetName, targetPic) {
-    if (!currentUser) return; window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic }; const uids = [currentUser.uid, targetUid].sort(); window.currentChatId = `${uids[0]}_${uids[1]}`; const nUser = getUserData(targetUid, targetName, targetName, targetPic, false); const isVerif = getVerifiedBadge(nUser.verified);
-    document.getElementById('dm-name-span').innerHTML = '@' + targetName + ' ' + isVerif; switchView('dm');
+// --- ADVANCED PRO EDITOR FOR UPLOADS ---
+document.getElementById('up-file')?.addEventListener('change', function(e) {
+    const files = e.target.files; const txt = document.querySelector('#up-file-btn p'); const icon = document.querySelector('#up-file-btn i'); 
+    if (!files || files.length === 0) { txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; return; }
     
-    let statusHtml = ''; if(nUser.lastActive) { let diff = Date.now() - nUser.lastActive; statusHtml = diff < 5 * 60000 ? '<span style="color:#39ff14;">🟢 Online</span>' : 'Zuletzt online: ' + timeAgo(nUser.lastActive); }
-    document.getElementById('dm-status-span').innerHTML = statusHtml;
-    document.getElementById('dm-img-btn').style.display = checkPhilPlusStatus(3) ? 'block' : 'none';
+    document.querySelector('.file-upload-design').style.display = 'none';
+    currentUploadFilter = 'none';
+    currentUploadOverlays = [];
+    
+    const isVideo = files[0].type.startsWith('video/');
+    const advEd = document.getElementById(isVideo ? 'video-advanced-editor' : 'image-advanced-editor');
+    if(advEd) advEd.style.display = 'block';
 
-    if (currentDMSnapshot) currentDMSnapshot(); const dmBox = document.getElementById('dm-box'); dmBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
-    const chatRef = doc(db, "chats", window.currentChatId); const chatSnap = await getDoc(chatRef);
-    if (!chatSnap.exists()) await setDoc(chatRef, { participants: [currentUser.uid, targetUid], users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [targetUid]: { name: targetName, pic: targetPic } }, lastMessage: "", lastMessageTime: Date.now() });
-    currentDMSnapshot = onSnapshot(query(collection(db, `chats/${window.currentChatId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
-        dmBox.innerHTML = '';
-        if (snapshot.empty) dmBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Schreib die erste Nachricht!</p></div>'; 
-        else { 
-            snapshot.forEach(doc => { 
-                const msg = doc.data(); const isMe = msg.senderUid === currentUser.uid ? 'me' : ''; const pic = isMe ? currentUser.photoURL : targetPic; 
-                let readReceipt = isMe && checkPhilPlusStatus(2) ? `<span style="font-size:10px; color:#00f2fe; margin-left:5px;">✓✓</span>` : '';
-                let extraClass = isMe && checkPhilPlusStatus(2) ? 'gold-bubble' : ''; 
-                let bubbleContent = formatText(msg.text);
-                if(msg.text && msg.text.startsWith('[IMAGE]')) { const imgUrl = msg.text.replace('[IMAGE]', '').trim(); bubbleContent = `<img src="${imgUrl}" style="max-width: 200px; border-radius: 10px;">`; }
-                dmBox.innerHTML += `<div class="chat-msg ${isMe}"><img src="${pic}" class="chat-avatar" style="flex-shrink:0;"><div style="min-width:0; max-width: 100%;"><div class="chat-bubble ${extraClass}">${bubbleContent}</div><div class="chat-time" style="font-size: 10px; color: #666; margin-top: 4px; text-align: ${isMe ? 'right' : 'left'};">${timeAgo(msg.timestamp)}${readReceipt}</div></div></div>`; 
-            }); 
-        }
-        dmBox.scrollTop = dmBox.scrollHeight;
-    });
-};
-
-document.getElementById('send-dm-btn')?.addEventListener('click', async() => { const input = document.getElementById('dm-input'); const text = input.value.trim(); if (!text || !window.currentChatId || !currentUser) return; input.value = ''; await addDoc(collection(db, `chats/${window.currentChatId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); await updateDoc(doc(db, "chats", window.currentChatId), { lastMessage: text, lastMessageTime: Date.now(), users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic } } }); addNotification(window.currentChatPartner.uid, "message", `hat geschrieben: "${text}"`); });
-document.getElementById('dm-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-dm-btn').click(); });
-document.getElementById('dm-img-btn')?.addEventListener('click', () => document.getElementById('dm-file-upload').click());
-document.getElementById('dm-file-upload')?.addEventListener('change', async(e) => {
-    const file = e.target.files[0]; if(!file) return; showToast("Bild wird gesendet...");
-    try {
-        const secure_url = await uploadFileToFirebase(file, 'dms'); const text = "[IMAGE] " + secure_url;
-        await addDoc(collection(db, `chats/${window.currentChatId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); 
-        await updateDoc(doc(db, "chats", window.currentChatId), { lastMessage: text, lastMessageTime: Date.now(), users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic } } }); 
-        addNotification(window.currentChatPartner.uid, "message", `hat ein Bild gesendet.`);
-    } catch(err) {} document.getElementById('dm-file-upload').value = '';
+    const objUrl = URL.createObjectURL(files[0]);
+    const mediaHtml = isVideo ? `<video src="${objUrl}" id="editor-media" style="width:100%; height:100%; object-fit:contain;" controls></video>` : `<img src="${objUrl}" id="editor-media" style="width:100%; height:100%; object-fit:contain;">`;
+    
+    if(advEd) advEd.innerHTML = `
+        <div style="position:relative; width:100%; height:400px; background:#000; border-radius:10px; overflow:hidden; touch-action:none;" id="editor-preview-container">
+            ${mediaHtml}
+            <div id="editor-overlays-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
+        </div>
+        <div style="margin-top:15px; display:flex; gap:10px; overflow-x:auto; padding-bottom:10px;">
+            <button class="pro-filter-btn active" onclick="applyUploadFilter('none', this)">Normal</button>
+            <button class="pro-filter-btn" onclick="applyUploadFilter('grayscale(100%)', this)">Graustufe</button>
+            <button class="pro-filter-btn" onclick="applyUploadFilter('sepia(100%)', this)">Sepia</button>
+            <button class="pro-filter-btn" onclick="applyUploadFilter('invert(100%)', this)">Invertiert</button>
+            <button class="pro-filter-btn" onclick="applyUploadFilter('blur(5px)', this)">Blur</button>
+            <button class="pro-filter-btn" onclick="applyUploadFilter('hue-rotate(90deg)', this)">Neon</button>
+        </div>
+        <div style="margin-top:10px; display:flex; gap:10px;">
+            <input type="text" id="add-overlay-text" class="comment-input" placeholder="Text Overlay..." style="flex:1;">
+            <input type="color" id="add-overlay-color" value="#ffffff" style="width:40px; height:40px; border-radius:10px; border:none; padding:0; cursor:pointer;">
+            <button class="profile-action-btn" onclick="addTextOverlay()" style="min-height:40px; padding:0 15px;">Add Text</button>
+        </div>
+        <button class="profile-action-btn edit-btn" onclick="resetUploadEditor()" style="width:100%; margin-top:15px; min-height:40px;">Abbrechen / Neu auswählen</button>
+    `;
 });
 
-let duetStream = null; let duetRecorder = null; let duetChunks = []; window.duetVideoId = null;
+window.applyUploadFilter = function(filter, btn) {
+    currentUploadFilter = filter;
+    document.getElementById('editor-media').style.filter = filter;
+    document.querySelectorAll('.pro-filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+};
 
-window.openDuet = async function(vidId) {
-    if(!currentUser) return showCustomAlert("Fehler", "Bitte einloggen!");
-    const v = allVideosData.find(x => x.id === vidId); if(!v || v.mediaType !== 'video') return showCustomAlert("Hinweis", "Duetts gehen nur mit echten Videos.");
-    window.duetVideoId = vidId; switchView('duet');
-    const origVid = document.getElementById('duet-orig-video'); origVid.src = v.url; origVid.loop = true;
-    try {
-        duetStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        document.getElementById('duet-cam-video').srcObject = duetStream;
-    } catch(e) { showCustomAlert("Kamera-Fehler", "Kamera konnte nicht gestartet werden."); }
-}
-
-window.closeDuet = function() {
-    switchView('feed');
-    if(duetStream) duetStream.getTracks().forEach(t => t.stop());
-    const origVid = document.getElementById('duet-orig-video'); origVid.pause(); origVid.src = "";
-    document.getElementById('duet-cam-video').srcObject = null;
-}
-
-document.getElementById('duet-record-btn')?.addEventListener('click', async () => {
-    const btn = document.getElementById('duet-record-btn'); const icon = document.getElementById('duet-record-icon'); const status = document.getElementById('duet-status');
-    const origVid = document.getElementById('duet-orig-video'); const camVid = document.getElementById('duet-cam-video');
-    const canvas = document.getElementById('duet-canvas'); const ctx = canvas.getContext('2d');
+window.addTextOverlay = function() {
+    const text = document.getElementById('add-overlay-text').value.trim();
+    const color = document.getElementById('add-overlay-color').value;
+    if(!text) return;
     
-    if(btn.classList.contains('recording')) {
-        btn.classList.remove('recording'); icon.className = "fas fa-video"; btn.style.borderRadius = "50%";
-        if(duetRecorder) duetRecorder.stop(); origVid.pause();
-    } else {
-        btn.classList.add('recording'); icon.className = "fas fa-square"; btn.style.borderRadius = "20%";
-        status.innerText = "Nimmt auf..."; origVid.currentTime = 0; origVid.play();
+    const overlayId = Date.now();
+    const overlayObj = { id: overlayId, text: text, color: color, top: '50%', left: '50%' };
+    currentUploadOverlays.push(overlayObj);
+    
+    const container = document.getElementById('editor-overlays-container');
+    const el = document.createElement('div');
+    el.className = 'draggable-text active';
+    el.id = `overlay-${overlayId}`;
+    el.style.top = '50%'; el.style.left = '50%'; el.style.transform = 'translate(-50%, -50%)';
+    el.style.color = color;
+    el.innerText = text;
+    
+    let isDragging = false;
+    
+    const startDrag = (e) => { isDragging = true; el.classList.add('active'); e.preventDefault(); };
+    const stopDrag = () => { isDragging = false; el.classList.remove('active'); };
+    const doDrag = (e) => {
+        if(!isDragging) return;
+        e.preventDefault();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const previewRect = document.getElementById('editor-preview-container').getBoundingClientRect();
         
-        canvas.width = 720; canvas.height = 1280;
-        const canvasStream = canvas.captureStream(30);
+        let x = clientX - previewRect.left; 
+        let y = clientY - previewRect.top;
         
-        const audioCtx = new AudioContext(); const dest = audioCtx.createMediaStreamDestination();
-        const src1 = audioCtx.createMediaElementSource(origVid); src1.connect(dest);
-        const src2 = audioCtx.createMediaStreamSource(duetStream); src2.connect(dest);
-        dest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
+        let px = (x / previewRect.width) * 100; 
+        let py = (y / previewRect.height) * 100;
+        
+        el.style.left = px + '%'; 
+        el.style.top = py + '%';
+        
+        const ov = currentUploadOverlays.find(o => o.id === overlayId);
+        if(ov) { ov.left = px + '%'; ov.top = py + '%'; }
+    };
 
-        duetChunks = [];
-        duetRecorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm' });
-        duetRecorder.ondataavailable = e => { if(e.data.size > 0) duetChunks.push(e.data); };
-        duetRecorder.onstop = async () => {
-            status.innerText = "Verarbeite Duett...";
-            const finalBlob = new Blob(duetChunks, { type: 'video/webm' });
-            const file = new File([finalBlob], "duet.webm", { type: 'video/webm' });
-            try {
-                const finalUrl = await uploadFileToFirebase(file, 'videos');
-                const v = allVideosData.find(x => x.id === window.duetVideoId);
-                const duetTitle = `Duett mit @${v.authorUsername}`;
-                await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: duetTitle, description: `#duett @${v.authorUsername}`, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
-                showToast("Duett veröffentlicht!"); closeDuet();
-            } catch(err) { showCustomAlert("Fehler", "Duett Upload fehlgeschlagen."); status.innerText = ""; }
+    el.addEventListener('mousedown', startDrag);
+    el.addEventListener('touchstart', startDrag, {passive: false});
+    
+    document.addEventListener('mousemove', doDrag);
+    document.addEventListener('touchmove', doDrag, {passive: false});
+    
+    document.addEventListener('mouseup', stopDrag);
+    document.addEventListener('touchend', stopDrag);
+    
+    container.appendChild(el);
+    document.getElementById('add-overlay-text').value = '';
+};
+
+window.resetUploadEditor = function() {
+    document.getElementById('up-file').value = '';
+    const ve = document.getElementById('video-advanced-editor'); if(ve) { ve.style.display = 'none'; ve.innerHTML = ''; }
+    const ie = document.getElementById('image-advanced-editor'); if(ie) { ie.style.display = 'none'; ie.innerHTML = ''; }
+    document.querySelector('.file-upload-design').style.display = 'block';
+    currentUploadFilter = 'none'; currentUploadOverlays = [];
+};
+
+document.getElementById('submit-upload')?.addEventListener('click', async() => {
+    const files = document.getElementById('up-file').files; const titleInput = document.getElementById('up-title'); const descInput = document.getElementById('up-desc');
+    const titleVal = titleInput ? titleInput.value.trim() : ""; const desc = descInput ? descInput.value.trim() : "";
+    if (!files || files.length === 0) return showCustomAlert("Fehlende Daten", "Bitte wähle mindestens eine Datei aus.");
+    if (!titleVal || !desc) return showCustomAlert("Fehlende Daten", "Bitte gib einen Titel UND eine Beschreibung ein.");
+    
+    let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
+    for(let i=0; i<files.length; i++) { if(files[i].size > maxSize) return showCustomAlert("Zu groß", `Dateien dürfen maximal ${limitText} MB groß sein!`); }
+    
+    const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); 
+    btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
+    
+    try {
+        const isVideo = files[0].type.startsWith('video/');
+        let uploadObj = { 
+            authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
+            title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now(),
+            filter: currentUploadFilter, overlays: currentUploadOverlays
         };
-        
-        duetRecorder.start();
-        function drawFrame() {
-            if(!btn.classList.contains('recording')) return;
-            ctx.fillStyle = "black"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(origVid, 0, 0, 360, 1280);
-            ctx.save(); ctx.translate(1080, 0); ctx.scale(-1, 1); ctx.drawImage(camVid, 0, 0, 360, 1280); ctx.restore();
-            requestAnimationFrame(drawFrame);
+
+        if(window.selectedUploadSound) {
+            uploadObj.soundId = window.selectedUploadSound.id;
+            uploadObj.soundName = window.selectedUploadSound.name;
+            uploadObj.soundUrl = window.selectedUploadSound.url;
         }
-        drawFrame();
-    }
+
+        if (isVideo) {
+            const finalUrl = await uploadFileToFirebase(files[0], 'videos');
+            await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, ...uploadObj });
+        } else {
+            let uploadedUrls = [];
+            for(let i=0; i<files.length; i++) { const secure_url = await uploadFileToFirebase(files[i], 'images'); uploadedUrls.push(secure_url); }
+            await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, ...uploadObj });
+        }
+        
+        showToast("Erfolgreich veröffentlicht! 🎉"); document.getElementById('upload-modal').classList.remove('show');
+        resetUploadEditor();
+        if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
+        removeSelectedSound();
+    } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
 });
+
+document.getElementById('open-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
+document.getElementById('close-upload')?.addEventListener('click', () => { document.getElementById('upload-modal').classList.remove('show'); resetUploadEditor(); });
+document.getElementById('close-comments')?.addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
+document.getElementById('close-settings')?.addEventListener('click', () => document.getElementById('settings-modal').classList.remove('show'));
+document.getElementById('close-app-settings')?.addEventListener('click', () => document.getElementById('app-settings-modal').classList.remove('show'));
+
+function initResponsiveLayout() {
+    const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;
+    function createPCContainers() { if (!pcSidebar) { pcSidebar = document.createElement('div'); pcSidebar.id = 'pc-nav-sidebar'; pcSidebar.innerHTML = `<div class="logo-area"><img src="https://i.imgur.com/JDPRzCc.png" class="app-logo" alt="Logo">Phil Shorts</div>`; appContainer.prepend(pcSidebar); } }
+    function restructureVideoForPC(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; let infoPanel = inner.querySelector('.pc-info-panel-container'); if (!infoPanel) { infoPanel = document.createElement('div'); infoPanel.className = 'pc-info-panel-container'; inner.appendChild(infoPanel); const videoFooter = inner.querySelector('.video__footer'); const videoSidebar = inner.querySelector('.video__sidebar'); if (videoFooter) infoPanel.appendChild(videoFooter); if (videoSidebar) infoPanel.appendChild(videoSidebar); } }
+    function rollBackVideoForHandy(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; const infoPanel = inner.querySelector('.pc-info-panel-container'); if (infoPanel) { const videoFooter = infoPanel.querySelector('.video__footer'); const videoSidebar = infoPanel.querySelector('.video__sidebar'); if (videoFooter) inner.appendChild(videoFooter); if (videoSidebar) inner.appendChild(videoSidebar); infoPanel.remove(); } }
+    function checkResponsiveMode() { const isPC = window.innerWidth > 768; if (isPC && currentMode !== 'pc') { currentMode = 'pc'; createPCContainers(); if (originalNav) pcSidebar.appendChild(originalNav); document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC); } else if (!isPC && currentMode !== 'handy') { currentMode = 'handy'; if (originalNav) appContainer.appendChild(originalNav); if (pcSidebar) { pcSidebar.remove(); pcSidebar = null; } document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy); } }
+    checkResponsiveMode(); window.addEventListener('resize', checkResponsiveMode);
+    if (window.innerWidth > 768) { 
+        document.querySelectorAll('.chat-input-wrapper').forEach(el => { el.style.position = 'absolute'; el.style.bottom = '0'; el.style.left = '0'; el.style.width = '100%'; el.style.background = '#0a0a0a'; el.style.borderTop = '1px solid #333'; });
+        const videoObserver2 = new MutationObserver(function(mutations) { if (currentMode === 'pc') mutations.forEach(mutation => mutation.addedNodes.forEach(node => { if (node.classList && node.classList.contains('video')) restructureVideoForPC(node); })); }); const videoContainer = document.getElementById('video-container'); if (videoContainer) videoObserver2.observe(videoContainer, { childList: true }); 
+    }
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
 
 class LiveManager {
     static streamId = null;
@@ -1211,10 +1191,9 @@ class LiveManager {
 
     static async join(streamId, name, pic) {
         if(!currentUser) return showCustomAlert("Fehler", "Bitte einloggen.");
-        if(streamId === currentUser.uid) {
-            if(this.isBroadcaster) { switchView('live-room'); return; }
-            else { deleteDoc(doc(db, "live_streams", currentUser.uid)).catch(e=>{}); return showCustomAlert("Hinweis", "Alter Stream bereinigt. Bitte starte neu."); }
-        }
+        
+        // HIER WURDE DER LÄSTIGE "ALTER STREAM BEREINIGT"-BLOCKER ENTFERNT
+        // Du kannst nun deinen eigenen Stream auf einem zweiten Gerät schauen!
         
         switchView('live-room');
         document.getElementById('live-broadcaster-name').innerText = name; document.getElementById('live-broadcaster-pic').src = pic;
@@ -1244,7 +1223,7 @@ class LiveManager {
         offlineText.style.display = this.connectionAttempts === 0 ? 'flex' : 'none';
         
         if (this.connectionAttempts === 0) {
-            offlineText.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:30px; margin-bottom:10px;"></i><span>Verbinde... STUN wird initialisiert</span>';
+            offlineText.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:30px; margin-bottom:10px;"></i><span>Verbinde...</span>';
         }
 
         if(this.peer) this.peer.destroy();
@@ -1258,15 +1237,24 @@ class LiveManager {
                     console.log("Retry WebRTC Connection...", this.connectionAttempts);
                     this.connectToPeer(streamId);
                 } else {
-                    showCustomAlert("Verbindungsfehler", "Der Stream konnte nicht geladen werden (Blackscreen). Versuche es später erneut.");
+                    showCustomAlert("Verbindungsfehler", "Der Stream konnte nicht geladen werden (Blackscreen).");
                     this.leave();
                 }
             }
         }, 8000);
 
         this.peer.on('open', (id) => {
+            // HIER IST DER FIX FÜR DEN BLACKSCREEN/NUR-AUDIO-FEHLER!
+            // Ein lokaler Canvas-Videotrack + ein lokaler Audiotrack zwingt das PeerJS-System
+            // dazu, eine echte Video+Audio Verbindung zu verhandeln.
+            const canvas = document.createElement("canvas");
+            canvas.width = 1; canvas.height = 1;
+            const dummyVideoTrack = canvas.captureStream().getVideoTracks()[0];
+            
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const dummyStream = audioCtx.createMediaStreamDestination().stream;
+            const dummyAudioTrack = audioCtx.createMediaStreamDestination().stream.getAudioTracks()[0];
+
+            const dummyStream = new MediaStream([dummyVideoTrack, dummyAudioTrack]);
             const call = this.peer.call(streamId, dummyStream);
             
             call.on('stream', (remoteStream) => {
@@ -1427,231 +1415,4 @@ class LiveManager {
     }
 }
 
-// Global binden, damit das HTML es per onclick="window.LiveManager.join(...)" aufrufen kann!
 window.LiveManager = LiveManager;
-
-function formatLiveTime(sec) {
-    const m = Math.floor(sec / 60).toString().padStart(2, '0');
-    const s = (sec % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-}
-
-window.initLiveStreamsList = () => LiveManager.init();
-window.selectLiveSource = (src) => {
-    window.currentLiveSource = src;
-    document.querySelectorAll('.live-source-card').forEach(c => c.classList.remove('active'));
-    document.getElementById('source-' + src).classList.add('active');
-};
-window.toggleLiveCamera = () => {
-    if (LiveManager.localStream) {
-        const videoTrack = LiveManager.localStream.getVideoTracks().find(t => t.kind === 'video');
-        if (videoTrack) {
-            videoTrack.enabled = !videoTrack.enabled;
-            const btn = document.getElementById('live-toggle-cam-btn');
-            if(btn) {
-                if (videoTrack.enabled) { btn.innerHTML = '<i class="fas fa-video"></i> Kamera Aus'; btn.style.background = '#333'; } 
-                else { btn.innerHTML = '<i class="fas fa-video-slash"></i> Kamera Ein'; btn.style.background = '#ff4444'; }
-            }
-        }
-    }
-};
-window.leaveLiveRoom = () => LiveManager.leave();
-
-window.openLiveChatContext = function(msgId, senderUid, senderName) {
-    if(senderUid === LiveManager.streamId || (!LiveManager.isBroadcaster && !LiveManager.amIMod)) return; 
-    document.getElementById('live-chat-context-title').innerText = `@${senderName}`;
-    let contentHtml = `<button class="profile-action-btn edit-btn" onclick="deleteLiveMsg('${msgId}')"><i class="fas fa-trash" style="color:#ff4444;"></i> Nachricht löschen</button>`;
-    contentHtml += `<button class="profile-action-btn edit-btn" onclick="banLiveUser('${senderUid}')"><i class="fas fa-ban" style="color:#ff4444;"></i> User Bannen</button>`;
-    if(LiveManager.isBroadcaster) { contentHtml += `<button class="profile-action-btn edit-btn" onclick="makeLiveMod('${senderUid}')"><i class="fas fa-shield-alt" style="color:#00f2fe;"></i> Zum Mod ernennen</button>`; }
-    document.getElementById('live-chat-context-content').innerHTML = contentHtml;
-    document.getElementById('live-chat-context-modal').classList.add('show');
-};
-
-window.deleteLiveMsg = async function(msgId) {
-    if(!LiveManager.isBroadcaster && !LiveManager.amIMod) return;
-    try { await deleteDoc(doc(db, `live_streams/${LiveManager.streamId}/chat`, msgId)); showToast("Nachricht gelöscht."); document.getElementById('live-chat-context-modal').classList.remove('show'); } catch(e) {}
-};
-
-window.banLiveUser = async function(targetUid) {
-    if(!LiveManager.isBroadcaster && !LiveManager.amIMod) return;
-    if(confirm("Diesen Nutzer wirklich bannen und aus dem Stream werfen?")) {
-        try {
-            if(LiveManager.isBroadcaster) {
-                if(!currentUser.blockedUsers) currentUser.blockedUsers = [];
-                if(!currentUser.blockedUsers.includes(targetUid)) {
-                    currentUser.blockedUsers.push(targetUid);
-                    await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayUnion(targetUid) });
-                    localStorage.setItem('phil_session', JSON.stringify(currentUser));
-                }
-            } else if(LiveManager.amIMod) {
-                await updateDoc(doc(db, "users", LiveManager.streamId), { blockedUsers: arrayUnion(targetUid) });
-            }
-            showToast("Nutzer aus dem Stream gebannt.");
-            document.getElementById('live-chat-context-modal').classList.remove('show');
-        } catch(e) {}
-    }
-};
-
-window.makeLiveMod = async function(targetUid) {
-    if(!LiveManager.isBroadcaster) return;
-    try { await setDoc(doc(db, `live_streams/${currentUser.uid}/mods`, targetUid), { uid: targetUid }); showToast("Nutzer zum Moderator ernannt!"); document.getElementById('live-chat-context-modal').classList.remove('show'); } catch(e) {}
-};
-
-window.switchModTab = function(tab) {
-    document.querySelectorAll('#mod-dashboard-modal .shop-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector(`#mod-dashboard-modal .shop-tab[onclick="switchModTab('${tab}')"]`).classList.add('active');
-    document.getElementById('mod-tab-mods').style.display = 'none'; document.getElementById('mod-tab-bans').style.display = 'none';
-    document.getElementById(`mod-tab-${tab}`).style.display = 'block';
-};
-
-window.loadModDashboard = async function() {
-    if(!LiveManager.isBroadcaster) return;
-    document.getElementById('mod-dashboard-modal').classList.add('show');
-    const modsList = document.getElementById('mod-dashboard-mods-list'); const bansList = document.getElementById('mod-dashboard-banned-list');
-    modsList.innerHTML = ''; bansList.innerHTML = '';
-
-    const snap = await getDocs(collection(db, `live_streams/${currentUser.uid}/mods`));
-    if(snap.empty) modsList.innerHTML = '<p style="text-align:center; color:#555;">Keine Mods vorhanden.</p>';
-    snap.forEach(d => {
-        const modUid = d.id; const u = allKnownUsers.find(x => x.uid === modUid); if(!u) return;
-        modsList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:10px;"><div style="display:flex; align-items:center; gap:10px;"><img src="${u.photoURL}" style="width:30px; height:30px; border-radius:50%;"><span>@${u.username}</span></div><button class="profile-action-btn edit-btn" style="min-height:30px; padding:0 10px; font-size:12px; background:#ff4444;" onclick="removeLiveMod('${modUid}')">Entfernen</button></div>`;
-    });
-
-    if(!currentUser.blockedUsers || currentUser.blockedUsers.length === 0) bansList.innerHTML = '<p style="text-align:center; color:#555;">Keine gebannten User.</p>';
-    else {
-        currentUser.blockedUsers.forEach(uid => {
-            const u = allKnownUsers.find(x => x.uid === uid); if(!u) return;
-            bansList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:10px;"><div style="display:flex; align-items:center; gap:10px;"><img src="${u.photoURL}" style="width:30px; height:30px; border-radius:50%;"><span>@${u.username}</span></div><button class="profile-action-btn edit-btn" style="min-height:30px; padding:0 10px; font-size:12px; background:#39ff14; color:black;" onclick="toggleBlockUser('${uid}')">Entbannen</button></div>`;
-        });
-    }
-};
-
-window.removeLiveMod = async function(uid) {
-    if(!LiveManager.isBroadcaster) return;
-    await deleteDoc(doc(db, `live_streams/${currentUser.uid}/mods`, uid)); showToast("Mod entfernt."); loadModDashboard();
-};
-
-document.getElementById('start-stream-action-btn')?.addEventListener('click', () => LiveManager.start());
-document.getElementById('open-mod-dashboard-btn')?.addEventListener('click', () => loadModDashboard());
-document.getElementById('send-live-chat-btn')?.addEventListener('click', async () => {
-    const input = document.getElementById('live-chat-input'); const text = input.value.trim(); if(!text || !LiveManager.streamId) return;
-    input.value = ''; await addDoc(collection(db, `live_streams/${LiveManager.streamId}/chat`), { uid: currentUser.uid, name: currentUser.displayName, pic: currentUser.photoURL, text: text, timestamp: Date.now() });
-});
-document.getElementById('live-chat-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-live-chat-btn').click(); });
-
-window.selectedUploadSound = null;
-window.openSound = function(id, name, pic, url) {
-    switchView('sound');
-    document.getElementById('sound-name').innerText = name;
-    document.getElementById('sound-author').innerText = name.includes('-') ? "@" + name.split(' - ')[1].trim() : "@Originalton";
-    document.getElementById('sound-pic').src = pic;
-    
-    const grid = document.getElementById('sound-grid'); grid.innerHTML = '';
-    let vids = allVideosData.filter(v => v.soundId === id || v.id === id);
-    document.getElementById('sound-count').innerText = vids.length + " Videos";
-    
-    vids.forEach(v => {
-        const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`;
-        const mediaTag = v.mediaType === 'images' ? `<img src="${previewSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<video src="${previewSrc}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`;
-        grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')">${mediaTag}</div>`;
-    });
-    
-    if(url) {
-        window.currentSoundPreviewPlayer.src = url;
-        window.currentSoundPreviewPlayer.loop = true;
-    }
-
-    const useBtn = document.getElementById('use-sound-btn');
-    useBtn.onclick = () => {
-        if(!currentUser) return showCustomAlert("Fehler", "Bitte einloggen.");
-        window.currentSoundPreviewPlayer.pause();
-        const icon = document.getElementById('sound-play-icon'); if(icon) icon.className = 'fas fa-play';
-        window.selectedUploadSound = { id: id, name: name, url: url };
-        document.getElementById('upload-sound-name').innerText = name;
-        document.getElementById('upload-sound-preview').style.display = 'flex';
-        switchView('feed'); document.getElementById('upload-modal').classList.add('show');
-    };
-}
-
-document.getElementById('sound-play-btn')?.addEventListener('click', () => {
-    const icon = document.getElementById('sound-play-icon');
-    if(!window.currentSoundPreviewPlayer.src) return;
-    if(window.currentSoundPreviewPlayer.paused) {
-        window.currentSoundPreviewPlayer.play().catch(e=>{});
-        icon.className = 'fas fa-pause';
-    } else {
-        window.currentSoundPreviewPlayer.pause();
-        icon.className = 'fas fa-play';
-    }
-});
-
-window.removeSelectedSound = function() { window.selectedUploadSound = null; document.getElementById('upload-sound-preview').style.display = 'none'; }
-
-document.getElementById('up-file')?.addEventListener('change', function(e) {
-    const files = e.target.files; const txt = document.querySelector('#up-file-btn p'); const icon = document.querySelector('#up-file-btn i'); 
-    if (!files || files.length === 0) { txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; return; }
-    if (files.length === 1) { txt.innerText = files[0].name; icon.className = files[0].type.startsWith('video/') ? "fas fa-video" : "fas fa-image"; icon.style.color = "#00f2fe"; } 
-    else { txt.innerText = `${files.length} Dateien ausgewählt`; icon.className = "fas fa-images"; icon.style.color = "#ffd700"; }
-});
-
-document.getElementById('submit-upload')?.addEventListener('click', async() => {
-    const files = document.getElementById('up-file').files; const titleInput = document.getElementById('up-title'); const descInput = document.getElementById('up-desc');
-    const titleVal = titleInput ? titleInput.value.trim() : ""; const desc = descInput ? descInput.value.trim() : "";
-    if (!files || files.length === 0) return showCustomAlert("Fehlende Daten", "Bitte wähle mindestens eine Datei aus.");
-    if (!titleVal || !desc) return showCustomAlert("Fehlende Daten", "Bitte gib einen Titel UND eine Beschreibung ein.");
-    
-    let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
-    for(let i=0; i<files.length; i++) { if(files[i].size > maxSize) return showCustomAlert("Zu groß", `Dateien dürfen maximal ${limitText} MB groß sein!`); }
-    
-    const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); 
-    btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
-    
-    try {
-        const isVideo = files[0].type.startsWith('video/');
-        let uploadObj = { 
-            authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
-            title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() 
-        };
-
-        if(window.selectedUploadSound) {
-            uploadObj.soundId = window.selectedUploadSound.id;
-            uploadObj.soundName = window.selectedUploadSound.name;
-            uploadObj.soundUrl = window.selectedUploadSound.url;
-        }
-
-        if (isVideo) {
-            const finalUrl = await uploadFileToFirebase(files[0], 'videos');
-            await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, ...uploadObj });
-        } else {
-            let uploadedUrls = [];
-            for(let i=0; i<files.length; i++) { const secure_url = await uploadFileToFirebase(files[i], 'images'); uploadedUrls.push(secure_url); }
-            await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, ...uploadObj });
-        }
-        
-        showToast("Erfolgreich veröffentlicht! 🎉"); document.getElementById('upload-modal').classList.remove('show');
-        document.getElementById('up-file').value = ''; if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
-        document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; document.querySelector('#up-file-btn i').style.color = "#aaa"; 
-        removeSelectedSound();
-    } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
-});
-
-document.getElementById('open-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
-document.getElementById('close-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.remove('show'));
-document.getElementById('close-comments')?.addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
-document.getElementById('close-settings')?.addEventListener('click', () => document.getElementById('settings-modal').classList.remove('show'));
-document.getElementById('close-app-settings')?.addEventListener('click', () => document.getElementById('app-settings-modal').classList.remove('show'));
-
-function initResponsiveLayout() {
-    const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;
-    function createPCContainers() { if (!pcSidebar) { pcSidebar = document.createElement('div'); pcSidebar.id = 'pc-nav-sidebar'; pcSidebar.innerHTML = `<div class="logo-area"><img src="https://i.imgur.com/JDPRzCc.png" class="app-logo" alt="Logo">Phil Shorts</div>`; appContainer.prepend(pcSidebar); } }
-    function restructureVideoForPC(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; let infoPanel = inner.querySelector('.pc-info-panel-container'); if (!infoPanel) { infoPanel = document.createElement('div'); infoPanel.className = 'pc-info-panel-container'; inner.appendChild(infoPanel); const videoFooter = inner.querySelector('.video__footer'); const videoSidebar = inner.querySelector('.video__sidebar'); if (videoFooter) infoPanel.appendChild(videoFooter); if (videoSidebar) infoPanel.appendChild(videoSidebar); } }
-    function rollBackVideoForHandy(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; const infoPanel = inner.querySelector('.pc-info-panel-container'); if (infoPanel) { const videoFooter = infoPanel.querySelector('.video__footer'); const videoSidebar = infoPanel.querySelector('.video__sidebar'); if (videoFooter) inner.appendChild(videoFooter); if (videoSidebar) inner.appendChild(videoSidebar); infoPanel.remove(); } }
-    function checkResponsiveMode() { const isPC = window.innerWidth > 768; if (isPC && currentMode !== 'pc') { currentMode = 'pc'; createPCContainers(); if (originalNav) pcSidebar.appendChild(originalNav); document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC); } else if (!isPC && currentMode !== 'handy') { currentMode = 'handy'; if (originalNav) appContainer.appendChild(originalNav); if (pcSidebar) { pcSidebar.remove(); pcSidebar = null; } document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy); } }
-    checkResponsiveMode(); window.addEventListener('resize', checkResponsiveMode);
-    if (window.innerWidth > 768) { 
-        document.querySelectorAll('.chat-input-wrapper').forEach(el => { el.style.position = 'absolute'; el.style.bottom = '0'; el.style.left = '0'; el.style.width = '100%'; el.style.background = '#0a0a0a'; el.style.borderTop = '1px solid #333'; });
-        const videoObserver2 = new MutationObserver(function(mutations) { if (currentMode === 'pc') mutations.forEach(mutation => mutation.addedNodes.forEach(node => { if (node.classList && node.classList.contains('video')) restructureVideoForPC(node); })); }); const videoContainer = document.getElementById('video-container'); if (videoContainer) videoObserver2.observe(videoContainer, { childList: true }); 
-    }
-}
-
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
