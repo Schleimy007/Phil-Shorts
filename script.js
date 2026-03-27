@@ -1213,6 +1213,12 @@ document.getElementById('start-stream-action-btn')?.addEventListener('click', as
         videoEl.srcObject = myLocalStream;
         videoEl.muted = true; 
         if(window.currentLiveSource !== 'screen') videoEl.style.transform = 'scaleX(-1)'; else videoEl.style.transform = 'none';
+        
+        // Hide offline text once playing
+        videoEl.addEventListener('playing', () => {
+            document.getElementById('live-stream-offline-text').style.display = 'none';
+        });
+
         videoEl.play().catch(e=>{});
         
         document.getElementById('live-broadcaster-name').innerText = currentUser.displayName;
@@ -1258,6 +1264,11 @@ window.joinLive = function(streamId, name, pic) {
 
     const videoEl = document.getElementById('live-video-player');
     videoEl.srcObject = null; videoEl.style.transform = 'none';
+    
+    // Show offline/connecting text
+    const offlineText = document.getElementById('live-stream-offline-text');
+    offlineText.style.display = 'flex';
+    offlineText.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:30px; margin-bottom:10px;"></i><span>Verbinde...</span>';
 
     peer = new Peer();
     peer.on('open', async (id) => {
@@ -1268,7 +1279,27 @@ window.joinLive = function(streamId, name, pic) {
         call.on('stream', (remoteStream) => {
             videoEl.srcObject = remoteStream;
             videoEl.muted = false;
-            videoEl.play().catch(e=>{});
+
+            // Track state checking
+            const checkVideoState = () => {
+                if(!videoEl.srcObject) return;
+                const vTrack = videoEl.srcObject.getVideoTracks()[0];
+                if(vTrack && !vTrack.enabled) {
+                    offlineText.style.display = 'flex';
+                    offlineText.innerHTML = '<i class="fas fa-video-slash" style="font-size:30px; margin-bottom:10px;"></i><span>Bildschirm/Kamera ausgeschaltet</span>';
+                } else if(vTrack && vTrack.enabled && !videoEl.paused) {
+                    offlineText.style.display = 'none';
+                }
+                requestAnimationFrame(checkVideoState);
+            };
+            checkVideoState();
+
+            videoEl.play().then(() => {
+                offlineText.style.display = 'none';
+            }).catch(e=>{
+                offlineText.style.display = 'flex';
+                offlineText.innerHTML = '<i class="fas fa-play-circle" style="font-size:40px; cursor:pointer;" onclick="document.getElementById(\'live-video-player\').play(); this.parentElement.style.display=\'none\';"></i><span style="margin-top:10px;">Klicke zum Starten</span>';
+            });
         });
         
         await updateDoc(doc(db, "live_streams", streamId), { viewers: increment(1) });

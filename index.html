@@ -181,9 +181,14 @@
                 </div>
             </div>
             
-            <video id="live-video-player" autoplay playsinline style="width:100%; height:100%; object-fit:contain;"></video>
-            <div id="live-gift-animation-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index: 200; overflow:hidden;"></div>
+            <div id="live-stream-offline-text" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:#aaa; font-size:18px; font-weight:bold; z-index: 10; display:flex; flex-direction:column; align-items:center; text-align:center;">
+                <i class="fas fa-spinner fa-spin" style="font-size:30px; margin-bottom:10px;"></i>
+                <span>Verbinde...</span>
+            </div>
+
+            <video id="live-video-player" autoplay playsinline style="width:100%; height:100%; object-fit:contain; position:relative; z-index: 20; transition: opacity 0.3s;"></video>
             
+            <div id="live-gift-animation-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index: 200; overflow:hidden;"></div>
             <div class="live-chat-container" id="live-chat-box"></div>
             
             <div class="chat-input-wrapper glass-nav-bottom" id="live-input-area" style="z-index: 101;">
