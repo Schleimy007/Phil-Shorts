@@ -17,10 +17,6 @@ let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || {
 
 window.currentSoundPreviewPlayer = new Audio();
 
-// Global Upload Editor State
-let currentUploadFilter = 'none';
-let currentUploadOverlays = [];
-
 if(!document.getElementById('dynamic-live-styles')) {
     const style = document.createElement('style');
     style.id = 'dynamic-live-styles';
@@ -31,9 +27,6 @@ if(!document.getElementById('dynamic-live-styles')) {
         #view-live-room.active #live-chat-box { pointer-events: auto !important; }
         #live-chat-box { pointer-events: none; }
         @media (min-width: 769px) { .chat-input-wrapper { position: absolute !important; bottom: 0 !important; left: 0 !important; width: 100% !important; background: #0a0a0a !important; border-top: 1px solid #333 !important; } }
-        
-        .draggable-text { position: absolute; font-size: 24px; font-weight: bold; cursor: grab; user-select: none; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); z-index: 50; padding: 5px; border: 2px dashed transparent; }
-        .draggable-text.active { border-color: #00f2fe; }
     `;
     document.head.appendChild(style);
 }
@@ -82,6 +75,9 @@ document.getElementById('notif-master')?.addEventListener('change', async(e) => 
 
 let currentFeedMode = 'foryou'; let isInitialLoad = true; let sortedFeed = []; const viewedVideos = new Set();
 window.globalVolume = 1; window.globalMuted = false;
+
+// Fallback für initLiveStreamsList, falls viewId 'live-list' aufgerufen wird
+window.initLiveStreamsList = () => {};
 
 window.switchView = function(viewId) {
     if(viewId !== 'sound' && window.currentSoundPreviewPlayer) { window.currentSoundPreviewPlayer.pause(); const icon = document.getElementById('sound-play-icon'); if(icon) icon.className = 'fas fa-play'; }
@@ -366,22 +362,13 @@ function createVideoElement(video) {
     const soundDisc = `<div class="videoSidebar__button" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')" style="margin-top:15px;"><img src="${authorData.pic}" class="sound-disc"></div>`;
 
     const mutedAttr = window.globalMuted ? 'muted' : ''; let mediaHTML = ''; let muteUIHtml = '';
-    
-    // Apply Filters & Overlays visually
-    const appliedFilter = video.filter && video.filter !== 'none' ? `filter: ${video.filter};` : '';
-    let overlaysHtml = '';
-    if(video.overlays && video.overlays.length > 0) {
-        overlaysHtml = video.overlays.map(o => `<div style="position:absolute; top:${o.top}; left:${o.left}; transform:translate(-50%, -50%); color:${o.color}; font-weight:bold; font-size:24px; text-shadow:2px 2px 4px rgba(0,0,0,0.8); z-index:20; pointer-events:none; white-space:nowrap;">${o.text}</div>`).join('');
-    }
-
     if (video.mediaType === 'images' && video.urls && video.urls.length > 0) {
         let arrowsHTML = ''; if (video.urls.length > 1) { arrowsHTML = `<div class="carousel-arrow left" onclick="window.scrollCarousel('${video.id}', -1, event)"><i class="fas fa-chevron-left"></i></div><div class="carousel-arrow right" onclick="window.scrollCarousel('${video.id}', 1, event)"><i class="fas fa-chevron-right"></i></div>`; }
-        mediaHTML = `<div class="carousel-container" data-vid="${video.id}">${video.urls.map(u => `<div class="carousel-item"><img src="${u}" style="${appliedFilter}"></div>`).join('')}</div>${arrowsHTML}<div class="carousel-dots">${video.urls.map((_, i) => `<div class="dot ${i===0 ? 'active' : ''}"></div>`).join('')}</div>`; muteUIHtml = `<div class="mute-container" style="display:none;"></div>`;
+        mediaHTML = `<div class="carousel-container" data-vid="${video.id}">${video.urls.map(u => `<div class="carousel-item"><img src="${u}"></div>`).join('')}</div>${arrowsHTML}<div class="carousel-dots">${video.urls.map((_, i) => `<div class="dot ${i===0 ? 'active' : ''}"></div>`).join('')}</div>`; muteUIHtml = `<div class="mute-container" style="display:none;"></div>`;
     } else {
-        mediaHTML = `<video class="video__player" data-vid="${video.id}" preload="auto" loop playsinline ${mutedAttr} src="${video.url}" style="${appliedFilter}"></video><div class="play-indicator"><i class="fas fa-play"></i></div><div class="player-progress-bar"><div class="player-progress-filled"></div></div>`;
+        mediaHTML = `<video class="video__player" data-vid="${video.id}" preload="auto" loop playsinline ${mutedAttr} src="${video.url}"></video><div class="play-indicator"><i class="fas fa-play"></i></div><div class="player-progress-bar"><div class="player-progress-filled"></div></div>`;
         muteUIHtml = `<div class="mute-container"><div class="mute-btn"><i class="fas fa-volume-up"></i></div><div class="volume-slider-wrapper"><input type="range" class="volume-slider" min="0" max="1" step="0.05" value="1"></div></div>`;
     }
-    
     let rawPreview = (video.description || "").substring(0, 50); let previewHtml = formatText(rawPreview); if ((video.description && video.description.length > 50)) previewHtml += '... <strong>mehr anzeigen</strong>';
     const inlineStyle = getInlineBorderStyle(authorData.activeBorder, authorData.customBorder); const bClass = getBorderClass(authorData.activeBorder);
 
@@ -389,7 +376,7 @@ function createVideoElement(video) {
 
     div.innerHTML = `
         <div class="video-inner is-paused">
-            <div class="video-wrapper">${mediaHTML}${overlaysHtml}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div>
+            <div class="video-wrapper">${mediaHTML}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div>
             <div class="video__footer">
                 <h3 class="creator-name" onclick="openProfile('${video.authorUid}')"><span class="live-name-${video.authorUid} ${nameClass}">${authorData.displayName}${verifiedBadge}${tier3Badge}</span></h3>
                 <p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p>
@@ -506,8 +493,6 @@ window.sendSpecificGift = async function(giftId, price, emoji, name) {
         try { await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-price) }); await updateDoc(doc(db, "videos", videoId), { gifts: increment(price) }); await updateDoc(doc(db, "users", targetVidData.authorUid), { coins: increment(price) }); addNotification(targetVidData.authorUid, "gift", `hat dir ein ${name} ${emoji} gesendet!`, videoId); } catch (err) {}
     }
 };
-
-document.getElementById('live-gift-btn')?.addEventListener('click', () => { if(window.LiveManager && window.LiveManager.streamId) window.openGiftModal(window.LiveManager.streamId); });
 
 function attachInteractionsToVideo(videoContainerEl) {
     const v = videoContainerEl.querySelector('.video__player'); const c = videoContainerEl.querySelector('.carousel-container'); const container = videoContainerEl.querySelector('.video-inner'); videoObserver.observe(videoContainerEl); 
@@ -885,112 +870,266 @@ document.getElementById('search-input')?.addEventListener('input', (e) => {
     if (matchedUsers.length === 0 && matchedVideos.length === 0) { html = '<div style="text-align: center; margin-top: 50px; color: #555;">Nichts gefunden</div>'; } resultsGrid.innerHTML = html;
 });
 
-// --- ADVANCED PRO EDITOR FOR UPLOADS ---
+document.getElementById('tab-notifications')?.addEventListener('click', function() { this.classList.add('active'); document.getElementById('tab-messages').classList.remove('active'); document.getElementById('tab-support').classList.remove('active'); document.getElementById('inbox-notifications-box').style.display = 'flex'; document.getElementById('inbox-messages-box').style.display = 'none'; document.getElementById('inbox-support-box').style.display = 'none'; });
+document.getElementById('tab-messages')?.addEventListener('click', function() { this.classList.add('active'); document.getElementById('tab-notifications').classList.remove('active'); document.getElementById('tab-support').classList.remove('active'); document.getElementById('inbox-notifications-box').style.display = 'none'; document.getElementById('inbox-messages-box').style.display = 'flex'; document.getElementById('inbox-support-box').style.display = 'none'; });
+document.getElementById('tab-support')?.addEventListener('click', function() { this.classList.add('active'); document.getElementById('tab-notifications').classList.remove('active'); document.getElementById('tab-messages').classList.remove('active'); document.getElementById('inbox-notifications-box').style.display = 'none'; document.getElementById('inbox-messages-box').style.display = 'none'; document.getElementById('inbox-support-box').style.display = 'flex'; });
+
+let inboxUnsubscribe = null; let isInitialNotifLoad = true;
+function initInbox() {
+    const inboxBox = document.getElementById('inbox-notifications-box'); if (!currentUser) return; if (inboxUnsubscribe) inboxUnsubscribe(); isInitialNotifLoad = true;
+    inboxUnsubscribe = onSnapshot(query(collection(db, "users", currentUser.uid, "notifications"), orderBy("timestamp", "desc")), (snapshot) => {
+        let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
+        if (!isInitialNotifLoad) { snapshot.docChanges().forEach((change) => { if (change.type === "added") { const n = change.doc.data(); if(blocked.includes(n.fromUid)) return; const isCurrentlyChatting = document.getElementById('view-dm').classList.contains('active') && window.currentChatPartner && window.currentChatPartner.uid === n.fromUid; if (!isCurrentlyChatting) { const nUser = getUserData(n.fromUid, n.fromName, n.fromUsername, n.fromPic, false); let toastMsg = `🔔 Aktivität von @${nUser.username}`; if (n.type === 'message') toastMsg = `💬 Nachricht von @${nUser.username}`; else if (n.type === 'like') toastMsg = `❤️ @${nUser.username} mag dein Post`; else if (n.type === 'follow') toastMsg = `👤 @${nUser.username} folgt dir`; else if (n.type === 'gift') toastMsg = `🎁 @${nUser.username} hat gespendet!`; else if (n.type === 'comment') toastMsg = `💬 @${nUser.username} hat kommentiert`; showToast(toastMsg); window.sendDesktopNotification("Phil Shorts", toastMsg, n.type); } } }); }
+        isInitialNotifLoad = false; inboxBox.innerHTML = '';
+        let validNotifs = []; snapshot.forEach((doc) => { const n = doc.data(); if(!blocked.includes(n.fromUid)) validNotifs.push(n); });
+        if (validNotifs.length === 0) { inboxBox.innerHTML = '<div class="empty-state" style="height: 100%;"><p>Keine neuen Benachrichtigungen</p></div>'; return; }
+        validNotifs.forEach((n) => {
+            let icon = 'fa-bell'; let color = '#aaa'; if (n.type === 'like') { icon = 'fa-heart'; color = '#ff0050'; } if (n.type === 'follow') { icon = 'fa-user-plus'; color = '#00f2fe'; } if (n.type === 'comment') { icon = 'fa-comment-dots'; color = '#fff'; } if (n.type === 'gift') { icon = 'fa-gift'; color = '#ffd700'; } if (n.type === 'message') { icon = 'fa-envelope'; color = '#00f2fe'; }
+            const nUser = getUserData(n.fromUid, n.fromName, n.fromUsername, n.fromPic, false); let clickAction = `openProfile('${n.fromUid}')`; if (n.type === 'message') clickAction = `openDM('${n.fromUid}', '${nUser.username.replace(/'/g, "\\'")}', '${nUser.pic}')`; else if (n.videoId) clickAction = `jumpToVideo('${n.videoId}')`; const isVerif = getVerifiedBadge(nUser.verified); let nameClass = nUser.philPlusUntil && nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 1 ? "name-phil-plus" : "";
+            inboxBox.innerHTML += `<div class="inbox-msg" onclick="${clickAction}"><img src="${nUser.pic}" class="chat-avatar live-pic-${n.fromUid}" style="flex-shrink:0;"><div style="flex:1; min-width:0;"><span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span class="live-name-${n.fromUid} ${nameClass}">${nUser.displayName}${isVerif}</span></span><div class="chat-bubble" style="background: transparent; padding: 0;">${formatText(n.text)}</div><div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(n.timestamp)}</div></div></div>`;
+        });
+    });
+}
+
+let inboxChatsUnsubscribe = null;
+function initInboxChats() {
+    if (!currentUser) return; const msgBox = document.getElementById('inbox-messages-box'); if (inboxChatsUnsubscribe) inboxChatsUnsubscribe();
+    inboxChatsUnsubscribe = onSnapshot(collection(db, "chats"), (snapshot) => {
+        let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
+        let chats = []; snapshot.forEach(doc => { const chat = doc.data(); if (chat.participants && chat.participants.includes(currentUser.uid)) { const partnerUid = chat.participants.find(uid => uid !== currentUser.uid); if(!blocked.includes(partnerUid)) chats.push({ id: doc.id, ...chat }); } }); 
+        chats.sort((a, b) => b.lastMessageTime - a.lastMessageTime); msgBox.innerHTML = '';
+        if (chats.length === 0) { msgBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Keine Nachrichten</p></div>'; return; }
+        chats.forEach(chat => {
+            const partnerUid = chat.participants.find(uid => uid !== currentUser.uid); const partner = chat.users[partnerUid]; if (!partner) return; const nUser = getUserData(partnerUid, partner.name, partner.name, partner.pic, false); const safeName = nUser.username.replace(/'/g, "\\'"); const isVerif = getVerifiedBadge(nUser.verified); let nameClass = nUser.philPlusUntil && nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 1 ? "name-phil-plus" : "";
+            let previewText = chat.lastMessage; if(previewText && previewText.startsWith('[IMAGE]')) previewText = "📸 Bild gesendet";
+            msgBox.innerHTML += `<div class="inbox-msg" onclick="openDM('${partnerUid}', '${safeName}', '${nUser.pic}')"><img src="${nUser.pic}" class="chat-avatar live-pic-${partnerUid}" style="flex-shrink:0;"><div style="flex:1; min-width:0;"><span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span class="live-name-${partnerUid} ${nameClass}">${nUser.displayName}${isVerif}</span></span><div class="chat-bubble" style="background: transparent; padding: 0; color: #888;">${formatText(previewText) || 'Neuer Chat...'}</div><div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(chat.lastMessageTime)}</div></div></div>`;
+        });
+    });
+}
+
+let supportUnsubscribe = null;
+window.initSupportTickets = function() {
+    if (!currentUser) return; const supportBox = document.getElementById('inbox-support-box'); const isAdmin = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
+    if (supportUnsubscribe) supportUnsubscribe();
+    supportUnsubscribe = onSnapshot(query(collection(db, "reports"), orderBy("timestamp", "desc")), (snapshot) => {
+        supportBox.innerHTML = ''; let foundAny = false;
+        snapshot.forEach(docSnap => {
+            const ticket = docSnap.data(); if (!isAdmin && ticket.uid !== currentUser.uid) return; foundAny = true;
+            const ticketId = docSnap.id; const isVip = ticket.hasPlus ? 'vip' : ''; 
+            let plusText = ticket.tier === 3 ? "PLUS+++" : (ticket.tier === 2 ? "PLUS++" : "PLUS");
+            const vipBadge = ticket.hasPlus ? `<span class="phil-plus-badge" style="font-size:9px; margin-left:5px;">${plusText}</span>` : ''; 
+            const uData = getUserData(ticket.uid, ticket.name, ticket.name, 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback', false);
+            let adminButtons = '';
+            if (isAdmin) {
+                if (ticket.status === 'closed') adminButtons = `<button class="profile-action-btn edit-btn" onclick="deleteTicket(event, '${ticketId}')" style="min-height:26px; font-size:11px; background:transparent; border:1px solid #ff4444; color:#ff4444; padding:0 8px;"><i class="fas fa-trash"></i> Löschen</button>`;
+                else adminButtons = `<button class="profile-action-btn edit-btn" onclick="resolveTicket(event, '${ticketId}')" style="min-height:26px; font-size:11px; background:transparent; border:1px solid #ffd700; color:#ffd700; padding:0 8px;"><i class="fas fa-lock"></i> Schließen</button>`;
+            }
+            supportBox.innerHTML += `<div class="support-ticket ${isVip}" onclick="openTicketChat('${ticketId}', '${uData.username.replace(/'/g, "\\'")}', '${ticket.uid}')" style="cursor:pointer; display:flex; flex-direction:column; gap:8px;"><div style="display:flex; justify-content:space-between; align-items:center;"><strong style="color:white; font-size:14px;">@${uData.username} ${vipBadge}</strong><span style="color:#888; font-size:11px;">${timeAgo(ticket.timestamp)}</span></div><div style="display:flex; justify-content:space-between; align-items:center;"><div style="font-size:12px; color:#aaa;"><i class="fas fa-ticket-alt"></i> Status: <span style="color:${ticket.status === 'closed' ? '#ff4444' : '#39ff14'}; font-weight:bold;">${ticket.status === 'closed' ? 'Geschlossen' : 'Offen'}</span></div>${adminButtons}</div></div>`;
+        });
+        if (!foundAny) supportBox.innerHTML = '<div class="empty-state" style="height:100%;"><i class="fas fa-check-circle" style="color:#00f2fe; font-size:40px; margin-bottom:10px;"></i><p>Keine Support-Tickets gefunden!</p></div>';
+    });
+}
+
+window.resolveTicket = async function(event, ticketId) { event.stopPropagation(); if(confirm("Ticket schließen?")) { await updateDoc(doc(db, "reports", ticketId), { status: 'closed' }); showToast("Geschlossen."); } };
+window.deleteTicket = async function(event, ticketId) { event.stopPropagation(); if(confirm("Ticket löschen?")) { await deleteDoc(doc(db, "reports", ticketId)); showToast("Gelöscht."); } };
+
+let currentTicketSnapshot = null; let currentTicketMetaSnapshot = null; window.currentActiveTicketId = null;
+window.openTicketChat = async function(ticketId, username, ticketOwnerUid) {
+    if (!currentUser) return; window.currentActiveTicketId = ticketId; document.getElementById('ticket-title').innerText = "Ticket: @" + username; switchView('ticket');
+    const ticketBox = document.getElementById('ticket-box'); ticketBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
+    const isAdmin = (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
+    if (currentTicketSnapshot) currentTicketSnapshot(); if (currentTicketMetaSnapshot) currentTicketMetaSnapshot();
+    currentTicketSnapshot = onSnapshot(query(collection(db, `reports/${ticketId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
+        ticketBox.innerHTML = '';
+        if (snapshot.empty) ticketBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Keine Nachrichten</p></div>'; 
+        else {
+            snapshot.forEach(docSnap => {
+                const msg = docSnap.data(); const isMe = msg.senderUid === currentUser.uid ? 'me' : ''; const isSupportSender = msg.senderUid !== ticketOwnerUid;
+                const pic = isSupportSender ? 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin' : (msg.senderUid === currentUser.uid ? currentUser.photoURL : `https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.senderUid}`);
+                let bg = isMe ? '#ff0050' : '#333'; let adminLabel = isSupportSender ? '<div style="font-size:10px; color:#ffd700; margin-bottom:4px;"><i class="fas fa-shield-alt"></i> Support Team</div>' : '';
+                ticketBox.innerHTML += `<div class="chat-msg ${isMe}"><img src="${pic}" class="chat-avatar" style="flex-shrink:0;"><div style="min-width:0; max-width: 100%;"><div class="chat-bubble" style="background:${bg}; border-color:${bg};">${adminLabel}${formatText(msg.text)}</div><div class="chat-time" style="font-size: 10px; color: #666; margin-top: 4px; text-align: ${isMe ? 'right' : 'left'};">${timeAgo(msg.timestamp)}</div></div></div>`;
+            });
+        }
+        ticketBox.scrollTop = ticketBox.scrollHeight;
+    });
+    currentTicketMetaSnapshot = onSnapshot(doc(db, "reports", ticketId), (docSnap) => {
+        const statEl = document.getElementById('ticket-status');
+        if(docSnap.exists()) {
+            const tData = docSnap.data(); 
+            if(tData.status === 'closed') { statEl.innerText = "Geschlossen"; statEl.style.background = "#ff4444"; statEl.style.color = "white"; document.getElementById('ticket-input-area').style.display = 'none'; document.getElementById('admin-close-ticket-btn').style.display = 'none'; } 
+            else { statEl.innerText = "Offen"; statEl.style.background = "#39ff14"; statEl.style.color = "black"; document.getElementById('ticket-input-area').style.display = 'flex'; document.getElementById('admin-close-ticket-btn').style.display = isAdmin ? 'block' : 'none'; }
+        } else { statEl.innerText = "Gelöscht"; statEl.style.background = "#ff4444"; document.getElementById('ticket-input-area').style.display = 'none'; document.getElementById('admin-close-ticket-btn').style.display = 'none'; }
+    });
+};
+
+document.getElementById('send-ticket-btn')?.addEventListener('click', async() => { const input = document.getElementById('ticket-input'); const text = input.value.trim(); if (!text || !window.currentActiveTicketId || !currentUser) return; input.value = ''; await addDoc(collection(db, `reports/${window.currentActiveTicketId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); });
+document.getElementById('ticket-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-ticket-btn').click(); });
+document.getElementById('admin-close-ticket-btn')?.addEventListener('click', async() => { if(!window.currentActiveTicketId) return; if(confirm("Ticket schließen?")) { await updateDoc(doc(db, "reports", window.currentActiveTicketId), { status: 'closed' }); showToast("Ticket geschlossen."); } });
+
+let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
+window.openDM = async function(targetUid, targetName, targetPic) {
+    if (!currentUser) return; window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic }; const uids = [currentUser.uid, targetUid].sort(); window.currentChatId = `${uids[0]}_${uids[1]}`; const nUser = getUserData(targetUid, targetName, targetName, targetPic, false); const isVerif = getVerifiedBadge(nUser.verified);
+    document.getElementById('dm-name-span').innerHTML = '@' + targetName + ' ' + isVerif; switchView('dm');
+    
+    let statusHtml = ''; if(nUser.lastActive) { let diff = Date.now() - nUser.lastActive; statusHtml = diff < 5 * 60000 ? '<span style="color:#39ff14;">🟢 Online</span>' : 'Zuletzt online: ' + timeAgo(nUser.lastActive); }
+    document.getElementById('dm-status-span').innerHTML = statusHtml;
+    document.getElementById('dm-img-btn').style.display = checkPhilPlusStatus(3) ? 'block' : 'none';
+
+    if (currentDMSnapshot) currentDMSnapshot(); const dmBox = document.getElementById('dm-box'); dmBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
+    const chatRef = doc(db, "chats", window.currentChatId); const chatSnap = await getDoc(chatRef);
+    if (!chatSnap.exists()) await setDoc(chatRef, { participants: [currentUser.uid, targetUid], users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [targetUid]: { name: targetName, pic: targetPic } }, lastMessage: "", lastMessageTime: Date.now() });
+    currentDMSnapshot = onSnapshot(query(collection(db, `chats/${window.currentChatId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
+        dmBox.innerHTML = '';
+        if (snapshot.empty) dmBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Schreib die erste Nachricht!</p></div>'; 
+        else { 
+            snapshot.forEach(doc => { 
+                const msg = doc.data(); const isMe = msg.senderUid === currentUser.uid ? 'me' : ''; const pic = isMe ? currentUser.photoURL : targetPic; 
+                let readReceipt = isMe && checkPhilPlusStatus(2) ? `<span style="font-size:10px; color:#00f2fe; margin-left:5px;">✓✓</span>` : '';
+                let extraClass = isMe && checkPhilPlusStatus(2) ? 'gold-bubble' : ''; 
+                let bubbleContent = formatText(msg.text);
+                if(msg.text && msg.text.startsWith('[IMAGE]')) { const imgUrl = msg.text.replace('[IMAGE]', '').trim(); bubbleContent = `<img src="${imgUrl}" style="max-width: 200px; border-radius: 10px;">`; }
+                dmBox.innerHTML += `<div class="chat-msg ${isMe}"><img src="${pic}" class="chat-avatar" style="flex-shrink:0;"><div style="min-width:0; max-width: 100%;"><div class="chat-bubble ${extraClass}">${bubbleContent}</div><div class="chat-time" style="font-size: 10px; color: #666; margin-top: 4px; text-align: ${isMe ? 'right' : 'left'};">${timeAgo(msg.timestamp)}${readReceipt}</div></div></div>`; 
+            }); 
+        }
+        dmBox.scrollTop = dmBox.scrollHeight;
+    });
+};
+
+document.getElementById('send-dm-btn')?.addEventListener('click', async() => { const input = document.getElementById('dm-input'); const text = input.value.trim(); if (!text || !window.currentChatId || !currentUser) return; input.value = ''; await addDoc(collection(db, `chats/${window.currentChatId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); await updateDoc(doc(db, "chats", window.currentChatId), { lastMessage: text, lastMessageTime: Date.now(), users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic } } }); addNotification(window.currentChatPartner.uid, "message", `hat geschrieben: "${text}"`); });
+document.getElementById('dm-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-dm-btn').click(); });
+document.getElementById('dm-img-btn')?.addEventListener('click', () => document.getElementById('dm-file-upload').click());
+document.getElementById('dm-file-upload')?.addEventListener('change', async(e) => {
+    const file = e.target.files[0]; if(!file) return; showToast("Bild wird gesendet...");
+    try {
+        const secure_url = await uploadFileToFirebase(file, 'dms'); const text = "[IMAGE] " + secure_url;
+        await addDoc(collection(db, `chats/${window.currentChatId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now() }); 
+        await updateDoc(doc(db, "chats", window.currentChatId), { lastMessage: text, lastMessageTime: Date.now(), users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic } } }); 
+        addNotification(window.currentChatPartner.uid, "message", `hat ein Bild gesendet.`);
+    } catch(err) {} document.getElementById('dm-file-upload').value = '';
+});
+
+let duetStream = null; let duetRecorder = null; let duetChunks = []; window.duetVideoId = null;
+
+window.openDuet = async function(vidId) {
+    if(!currentUser) return showCustomAlert("Fehler", "Bitte einloggen!");
+    const v = allVideosData.find(x => x.id === vidId); if(!v || v.mediaType !== 'video') return showCustomAlert("Hinweis", "Duetts gehen nur mit echten Videos.");
+    window.duetVideoId = vidId; switchView('duet');
+    const origVid = document.getElementById('duet-orig-video'); origVid.src = v.url; origVid.loop = true;
+    try {
+        duetStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        document.getElementById('duet-cam-video').srcObject = duetStream;
+    } catch(e) { showCustomAlert("Kamera-Fehler", "Kamera konnte nicht gestartet werden."); }
+}
+
+window.closeDuet = function() {
+    switchView('feed');
+    if(duetStream) duetStream.getTracks().forEach(t => t.stop());
+    const origVid = document.getElementById('duet-orig-video'); origVid.pause(); origVid.src = "";
+    document.getElementById('duet-cam-video').srcObject = null;
+}
+
+document.getElementById('duet-record-btn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('duet-record-btn'); const icon = document.getElementById('duet-record-icon'); const status = document.getElementById('duet-status');
+    const origVid = document.getElementById('duet-orig-video'); const camVid = document.getElementById('duet-cam-video');
+    const canvas = document.getElementById('duet-canvas'); const ctx = canvas.getContext('2d');
+    
+    if(btn.classList.contains('recording')) {
+        btn.classList.remove('recording'); icon.className = "fas fa-video"; btn.style.borderRadius = "50%";
+        if(duetRecorder) duetRecorder.stop(); origVid.pause();
+    } else {
+        btn.classList.add('recording'); icon.className = "fas fa-square"; btn.style.borderRadius = "20%";
+        status.innerText = "Nimmt auf..."; origVid.currentTime = 0; origVid.play();
+        
+        canvas.width = 720; canvas.height = 1280;
+        const canvasStream = canvas.captureStream(30);
+        
+        const audioCtx = new AudioContext(); const dest = audioCtx.createMediaStreamDestination();
+        const src1 = audioCtx.createMediaElementSource(origVid); src1.connect(dest);
+        const src2 = audioCtx.createMediaStreamSource(duetStream); src2.connect(dest);
+        dest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
+
+        duetChunks = [];
+        duetRecorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm' });
+        duetRecorder.ondataavailable = e => { if(e.data.size > 0) duetChunks.push(e.data); };
+        duetRecorder.onstop = async () => {
+            status.innerText = "Verarbeite Duett...";
+            const finalBlob = new Blob(duetChunks, { type: 'video/webm' });
+            const file = new File([finalBlob], "duet.webm", { type: 'video/webm' });
+            try {
+                const finalUrl = await uploadFileToFirebase(file, 'videos');
+                const v = allVideosData.find(x => x.id === window.duetVideoId);
+                const duetTitle = `Duett mit @${v.authorUsername}`;
+                await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: duetTitle, description: `#duett @${v.authorUsername}`, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
+                showToast("Duett veröffentlicht!"); closeDuet();
+            } catch(err) { showCustomAlert("Fehler", "Duett Upload fehlgeschlagen."); status.innerText = ""; }
+        };
+        
+        duetRecorder.start();
+        function drawFrame() {
+            if(!btn.classList.contains('recording')) return;
+            ctx.fillStyle = "black"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(origVid, 0, 0, 360, 1280);
+            ctx.save(); ctx.translate(1080, 0); ctx.scale(-1, 1); ctx.drawImage(camVid, 0, 0, 360, 1280); ctx.restore();
+            requestAnimationFrame(drawFrame);
+        }
+        drawFrame();
+    }
+});
+
+window.selectedUploadSound = null;
+window.openSound = function(id, name, pic, url) {
+    switchView('sound');
+    document.getElementById('sound-name').innerText = name;
+    document.getElementById('sound-author').innerText = name.includes('-') ? "@" + name.split(' - ')[1].trim() : "@Originalton";
+    document.getElementById('sound-pic').src = pic;
+    
+    const grid = document.getElementById('sound-grid'); grid.innerHTML = '';
+    let vids = allVideosData.filter(v => v.soundId === id || v.id === id);
+    document.getElementById('sound-count').innerText = vids.length + " Videos";
+    
+    vids.forEach(v => {
+        const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`;
+        const mediaTag = v.mediaType === 'images' ? `<img src="${previewSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<video src="${previewSrc}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`;
+        grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')">${mediaTag}</div>`;
+    });
+    
+    if(url) {
+        window.currentSoundPreviewPlayer.src = url;
+        window.currentSoundPreviewPlayer.loop = true;
+    }
+
+    const useBtn = document.getElementById('use-sound-btn');
+    useBtn.onclick = () => {
+        if(!currentUser) return showCustomAlert("Fehler", "Bitte einloggen.");
+        window.currentSoundPreviewPlayer.pause();
+        const icon = document.getElementById('sound-play-icon'); if(icon) icon.className = 'fas fa-play';
+        window.selectedUploadSound = { id: id, name: name, url: url };
+        document.getElementById('upload-sound-name').innerText = name;
+        document.getElementById('upload-sound-preview').style.display = 'flex';
+        switchView('feed'); document.getElementById('upload-modal').classList.add('show');
+    };
+}
+
+document.getElementById('sound-play-btn')?.addEventListener('click', () => {
+    const icon = document.getElementById('sound-play-icon');
+    if(!window.currentSoundPreviewPlayer.src) return;
+    if(window.currentSoundPreviewPlayer.paused) {
+        window.currentSoundPreviewPlayer.play().catch(e=>{});
+        icon.className = 'fas fa-pause';
+    } else {
+        window.currentSoundPreviewPlayer.pause();
+        icon.className = 'fas fa-play';
+    }
+});
+
+window.removeSelectedSound = function() { window.selectedUploadSound = null; document.getElementById('upload-sound-preview').style.display = 'none'; }
+
 document.getElementById('up-file')?.addEventListener('change', function(e) {
     const files = e.target.files; const txt = document.querySelector('#up-file-btn p'); const icon = document.querySelector('#up-file-btn i'); 
     if (!files || files.length === 0) { txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; return; }
-    
-    document.querySelector('.file-upload-design').style.display = 'none';
-    currentUploadFilter = 'none';
-    currentUploadOverlays = [];
-    
-    const isVideo = files[0].type.startsWith('video/');
-    const advEd = document.getElementById(isVideo ? 'video-advanced-editor' : 'image-advanced-editor');
-    if(advEd) advEd.style.display = 'block';
-
-    const objUrl = URL.createObjectURL(files[0]);
-    const mediaHtml = isVideo ? `<video src="${objUrl}" id="editor-media" style="width:100%; height:100%; object-fit:contain;" controls></video>` : `<img src="${objUrl}" id="editor-media" style="width:100%; height:100%; object-fit:contain;">`;
-    
-    if(advEd) advEd.innerHTML = `
-        <div style="position:relative; width:100%; height:400px; background:#000; border-radius:10px; overflow:hidden; touch-action:none;" id="editor-preview-container">
-            ${mediaHtml}
-            <div id="editor-overlays-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
-        </div>
-        <div style="margin-top:15px; display:flex; gap:10px; overflow-x:auto; padding-bottom:10px;">
-            <button class="pro-filter-btn active" onclick="applyUploadFilter('none', this)">Normal</button>
-            <button class="pro-filter-btn" onclick="applyUploadFilter('grayscale(100%)', this)">Graustufe</button>
-            <button class="pro-filter-btn" onclick="applyUploadFilter('sepia(100%)', this)">Sepia</button>
-            <button class="pro-filter-btn" onclick="applyUploadFilter('invert(100%)', this)">Invertiert</button>
-            <button class="pro-filter-btn" onclick="applyUploadFilter('blur(5px)', this)">Blur</button>
-            <button class="pro-filter-btn" onclick="applyUploadFilter('hue-rotate(90deg)', this)">Neon</button>
-        </div>
-        <div style="margin-top:10px; display:flex; gap:10px;">
-            <input type="text" id="add-overlay-text" class="comment-input" placeholder="Text Overlay..." style="flex:1;">
-            <input type="color" id="add-overlay-color" value="#ffffff" style="width:40px; height:40px; border-radius:10px; border:none; padding:0; cursor:pointer;">
-            <button class="profile-action-btn" onclick="addTextOverlay()" style="min-height:40px; padding:0 15px;">Add Text</button>
-        </div>
-        <button class="profile-action-btn edit-btn" onclick="resetUploadEditor()" style="width:100%; margin-top:15px; min-height:40px;">Abbrechen / Neu auswählen</button>
-    `;
+    if (files.length === 1) { txt.innerText = files[0].name; icon.className = files[0].type.startsWith('video/') ? "fas fa-video" : "fas fa-image"; icon.style.color = "#00f2fe"; } 
+    else { txt.innerText = `${files.length} Dateien ausgewählt`; icon.className = "fas fa-images"; icon.style.color = "#ffd700"; }
 });
-
-window.applyUploadFilter = function(filter, btn) {
-    currentUploadFilter = filter;
-    document.getElementById('editor-media').style.filter = filter;
-    document.querySelectorAll('.pro-filter-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-};
-
-window.addTextOverlay = function() {
-    const text = document.getElementById('add-overlay-text').value.trim();
-    const color = document.getElementById('add-overlay-color').value;
-    if(!text) return;
-    
-    const overlayId = Date.now();
-    const overlayObj = { id: overlayId, text: text, color: color, top: '50%', left: '50%' };
-    currentUploadOverlays.push(overlayObj);
-    
-    const container = document.getElementById('editor-overlays-container');
-    const el = document.createElement('div');
-    el.className = 'draggable-text active';
-    el.id = `overlay-${overlayId}`;
-    el.style.top = '50%'; el.style.left = '50%'; el.style.transform = 'translate(-50%, -50%)';
-    el.style.color = color;
-    el.innerText = text;
-    
-    let isDragging = false;
-    
-    const startDrag = (e) => { isDragging = true; el.classList.add('active'); e.preventDefault(); };
-    const stopDrag = () => { isDragging = false; el.classList.remove('active'); };
-    const doDrag = (e) => {
-        if(!isDragging) return;
-        e.preventDefault();
-        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        const previewRect = document.getElementById('editor-preview-container').getBoundingClientRect();
-        
-        let x = clientX - previewRect.left; 
-        let y = clientY - previewRect.top;
-        
-        let px = (x / previewRect.width) * 100; 
-        let py = (y / previewRect.height) * 100;
-        
-        el.style.left = px + '%'; 
-        el.style.top = py + '%';
-        
-        const ov = currentUploadOverlays.find(o => o.id === overlayId);
-        if(ov) { ov.left = px + '%'; ov.top = py + '%'; }
-    };
-
-    el.addEventListener('mousedown', startDrag);
-    el.addEventListener('touchstart', startDrag, {passive: false});
-    
-    document.addEventListener('mousemove', doDrag);
-    document.addEventListener('touchmove', doDrag, {passive: false});
-    
-    document.addEventListener('mouseup', stopDrag);
-    document.addEventListener('touchend', stopDrag);
-    
-    container.appendChild(el);
-    document.getElementById('add-overlay-text').value = '';
-};
-
-window.resetUploadEditor = function() {
-    document.getElementById('up-file').value = '';
-    const ve = document.getElementById('video-advanced-editor'); if(ve) { ve.style.display = 'none'; ve.innerHTML = ''; }
-    const ie = document.getElementById('image-advanced-editor'); if(ie) { ie.style.display = 'none'; ie.innerHTML = ''; }
-    document.querySelector('.file-upload-design').style.display = 'block';
-    currentUploadFilter = 'none'; currentUploadOverlays = [];
-};
 
 document.getElementById('submit-upload')?.addEventListener('click', async() => {
     const files = document.getElementById('up-file').files; const titleInput = document.getElementById('up-title'); const descInput = document.getElementById('up-desc');
@@ -1008,8 +1147,7 @@ document.getElementById('submit-upload')?.addEventListener('click', async() => {
         const isVideo = files[0].type.startsWith('video/');
         let uploadObj = { 
             authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
-            title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now(),
-            filter: currentUploadFilter, overlays: currentUploadOverlays
+            title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() 
         };
 
         if(window.selectedUploadSound) {
@@ -1028,14 +1166,14 @@ document.getElementById('submit-upload')?.addEventListener('click', async() => {
         }
         
         showToast("Erfolgreich veröffentlicht! 🎉"); document.getElementById('upload-modal').classList.remove('show');
-        resetUploadEditor();
-        if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
+        document.getElementById('up-file').value = ''; if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
+        document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; document.querySelector('#up-file-btn i').style.color = "#aaa"; 
         removeSelectedSound();
     } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
 });
 
 document.getElementById('open-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
-document.getElementById('close-upload')?.addEventListener('click', () => { document.getElementById('upload-modal').classList.remove('show'); resetUploadEditor(); });
+document.getElementById('close-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.remove('show'));
 document.getElementById('close-comments')?.addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
 document.getElementById('close-settings')?.addEventListener('click', () => document.getElementById('settings-modal').classList.remove('show'));
 document.getElementById('close-app-settings')?.addEventListener('click', () => document.getElementById('app-settings-modal').classList.remove('show'));
@@ -1054,365 +1192,3 @@ function initResponsiveLayout() {
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
-
-class LiveManager {
-    static streamId = null;
-    static isBroadcaster = false;
-    static peer = null;
-    static localStream = null;
-    static timer = null;
-    static seconds = 0;
-    static heartbeatTimer = null;
-    static unsubs = [];
-    static amIMod = false;
-    static activeMods = [];
-    static activeCalls = [];
-    static disconnectGraceTimer = null;
-    static connectionRetryTimer = null;
-    static connectionAttempts = 0;
-
-    static init() {
-        const startLiveBtn = document.getElementById('start-my-live-btn');
-        if (startLiveBtn) {
-            startLiveBtn.style.display = checkPhilPlusStatus(2) ? 'block' : 'none';
-            startLiveBtn.onclick = () => {
-                if(!checkPhilPlusStatus(2)) return showCustomAlert("Premium", "Live-Streaming erfordert Plus++!");
-                switchView('live-dashboard');
-                document.getElementById('live-dash-name').innerText = currentUser.displayName;
-                document.getElementById('live-dash-pic').src = currentUser.photoURL;
-                window.currentLiveSource = 'cam';
-                document.querySelectorAll('.live-source-card').forEach(c => c.classList.remove('active'));
-                document.getElementById('source-cam').classList.add('active');
-            };
-        }
-
-        this.unsubs.push(onSnapshot(collection(db, "live_streams"), (snapshot) => {
-            const grid = document.getElementById('live-streams-grid');
-            grid.innerHTML = '';
-            let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
-            let hasStreams = false;
-            const now = Date.now();
-            
-            snapshot.forEach(docSnap => {
-                const stream = docSnap.data();
-                if (blocked.includes(stream.broadcasterUid)) return;
-                
-                if (stream.lastHeartbeat && (now - stream.lastHeartbeat > 15000)) {
-                    return; 
-                }
-
-                hasStreams = true;
-                const titleHtml = stream.title ? `<span style="display:block; font-size:12px; color:#ddd; margin-top:2px;">${stream.title}</span>` : '';
-                grid.innerHTML += `<div class="live-stream-card" onclick="window.LiveManager.join('${docSnap.id}', '${stream.broadcasterName.replace(/'/g, "\\'")}', '${stream.broadcasterPic}')"><img src="${stream.broadcasterPic}" style="width:60px; height:60px; border-radius:50%; border:2px solid #ff0050;"><div style="flex:1;"><strong style="font-size:16px; color:white; display:block;">${stream.broadcasterName}</strong><span style="color:#aaa; font-size:13px;">🔴 LIVE</span>${titleHtml}</div><div style="background:#222; padding:5px 10px; border-radius:10px; font-size:12px; font-weight:bold;"><i class="fas fa-eye"></i> ${stream.viewers || 0}</div></div>`;
-            });
-            if(!hasStreams) grid.innerHTML = '<div class="empty-state"><p>Gerade ist niemand live.</p></div>';
-        }));
-
-        window.addEventListener('beforeunload', () => {
-            if (LiveManager.isBroadcaster && LiveManager.streamId) {
-                updateDoc(doc(db, "live_streams", LiveManager.streamId), { lastHeartbeat: 0 }).catch(()=>{});
-            }
-        });
-    }
-
-    static async start() {
-        const title = document.getElementById('live-stream-title').value.trim() || `${currentUser.displayName}'s Live Stream`;
-        const btn = document.getElementById('start-stream-action-btn');
-        btn.disabled = true; btn.innerText = "Verbinde...";
-        this.activeCalls = [];
-        
-        try {
-            if(window.currentLiveSource === 'screen') {
-                const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-                let micStream; try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch(e) {}
-                let tracks = [...screenStream.getVideoTracks()];
-                if(screenStream.getAudioTracks().length > 0) tracks.push(...screenStream.getAudioTracks());
-                if(micStream) tracks.push(...micStream.getAudioTracks());
-                this.localStream = new MediaStream(tracks);
-                this.localStream.getVideoTracks()[0].addEventListener('ended', () => { this.leave(); showToast("Screen-Sharing beendet."); });
-            } else if (window.currentLiveSource === 'audio') {
-                this.localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-            } else {
-                this.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            }
-            
-            switchView('live-room');
-            const videoEl = document.getElementById('live-video-player');
-            videoEl.srcObject = this.localStream;
-            videoEl.muted = true; 
-            videoEl.style.transform = window.currentLiveSource !== 'screen' ? 'scaleX(-1)' : 'none';
-            
-            videoEl.addEventListener('playing', () => { document.getElementById('live-stream-offline-text').style.display = 'none'; });
-            videoEl.play().catch(e=>{});
-            
-            document.getElementById('live-broadcaster-name').innerText = currentUser.displayName;
-            document.getElementById('live-broadcaster-pic').src = currentUser.photoURL;
-            
-            this.isBroadcaster = true; this.streamId = currentUser.uid; this.amIMod = false;
-            document.getElementById('live-streamer-hud').style.display = 'flex';
-            document.getElementById('live-input-area').style.display = 'none';
-            document.getElementById('live-close-btn').style.display = 'none';
-            
-            this.seconds = 0; document.getElementById('live-hud-time').innerText = "00:00"; document.getElementById('live-hud-coins').innerText = "0";
-            this.timer = setInterval(() => { this.seconds++; document.getElementById('live-hud-time').innerText = formatLiveTime(this.seconds); }, 1000);
-
-            if(this.peer) this.peer.destroy();
-            this.peer = new Peer(currentUser.uid, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] } });
-            
-            this.peer.on('open', async (id) => {
-                const chatRef = collection(db, `live_streams/${currentUser.uid}/chat`);
-                const oldChats = await getDocs(chatRef);
-                oldChats.forEach(d => deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, d.id)));
-
-                await setDoc(doc(db, "live_streams", currentUser.uid), { broadcasterUid: currentUser.uid, broadcasterName: currentUser.displayName, broadcasterPic: currentUser.photoURL, title: title, viewers: 0, lastHeartbeat: Date.now(), timestamp: Date.now() });
-                
-                this.heartbeatTimer = setInterval(() => {
-                    updateDoc(doc(db, "live_streams", currentUser.uid), { lastHeartbeat: Date.now() }).catch(()=>{});
-                }, 5000);
-
-                this.setupChat(); 
-                showToast("Du bist jetzt LIVE!");
-                btn.disabled = false; btn.innerHTML = `<i class="fas fa-broadcast-tower"></i> Jetzt LIVE gehen`;
-            });
-
-            this.peer.on('call', (call) => { 
-                call.answer(this.localStream); 
-                this.activeCalls.push(call);
-                call.on('close', () => {
-                    this.activeCalls = this.activeCalls.filter(c => c !== call);
-                });
-            });
-
-        } catch(e) { 
-            showCustomAlert("Fehler", "Zugriff verweigert oder abgebrochen."); 
-            btn.disabled = false; btn.innerHTML = `<i class="fas fa-broadcast-tower"></i> Jetzt LIVE gehen`;
-        }
-    }
-
-    static async join(streamId, name, pic) {
-        if(!currentUser) return showCustomAlert("Fehler", "Bitte einloggen.");
-        
-        // HIER WURDE DER LÄSTIGE "ALTER STREAM BEREINIGT"-BLOCKER ENTFERNT
-        // Du kannst nun deinen eigenen Stream auf einem zweiten Gerät schauen!
-        
-        switchView('live-room');
-        document.getElementById('live-broadcaster-name').innerText = name; document.getElementById('live-broadcaster-pic').src = pic;
-        this.isBroadcaster = false; this.streamId = streamId; this.amIMod = false;
-        
-        document.getElementById('live-streamer-hud').style.display = 'none';
-        document.getElementById('live-input-area').style.display = 'flex';
-        document.getElementById('live-close-btn').style.display = 'block';
-
-        this.connectionAttempts = 0;
-        this.connectToPeer(streamId);
-        
-        await updateDoc(doc(db, "live_streams", streamId), { viewers: increment(1) }).catch(()=>{});
-        this.setupChat();
-    }
-
-    static connectToPeer(streamId) {
-        const videoEl = document.getElementById('live-video-player');
-        videoEl.srcObject = null; videoEl.style.transform = 'none';
-        
-        const offlineText = document.getElementById('live-stream-offline-text');
-        const unmuteOverlay = document.getElementById('live-unmute-overlay');
-        const reconnectOverlay = document.getElementById('live-reconnect-overlay');
-        
-        unmuteOverlay.style.display = 'none';
-        reconnectOverlay.style.display = this.connectionAttempts > 0 ? 'flex' : 'none';
-        offlineText.style.display = this.connectionAttempts === 0 ? 'flex' : 'none';
-        
-        if (this.connectionAttempts === 0) {
-            offlineText.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:30px; margin-bottom:10px;"></i><span>Verbinde...</span>';
-        }
-
-        if(this.peer) this.peer.destroy();
-        this.peer = new Peer({ config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] } });
-        
-        clearTimeout(this.connectionRetryTimer);
-        this.connectionRetryTimer = setTimeout(() => {
-            if (!videoEl.srcObject || videoEl.paused) {
-                this.connectionAttempts++;
-                if (this.connectionAttempts <= 3) {
-                    console.log("Retry WebRTC Connection...", this.connectionAttempts);
-                    this.connectToPeer(streamId);
-                } else {
-                    showCustomAlert("Verbindungsfehler", "Der Stream konnte nicht geladen werden (Blackscreen).");
-                    this.leave();
-                }
-            }
-        }, 8000);
-
-        this.peer.on('open', (id) => {
-            // HIER IST DER FIX FÜR DEN BLACKSCREEN/NUR-AUDIO-FEHLER!
-            // Ein lokaler Canvas-Videotrack + ein lokaler Audiotrack zwingt das PeerJS-System
-            // dazu, eine echte Video+Audio Verbindung zu verhandeln.
-            const canvas = document.createElement("canvas");
-            canvas.width = 1; canvas.height = 1;
-            const dummyVideoTrack = canvas.captureStream().getVideoTracks()[0];
-            
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const dummyAudioTrack = audioCtx.createMediaStreamDestination().stream.getAudioTracks()[0];
-
-            const dummyStream = new MediaStream([dummyVideoTrack, dummyAudioTrack]);
-            const call = this.peer.call(streamId, dummyStream);
-            
-            call.on('stream', (remoteStream) => {
-                clearTimeout(this.connectionRetryTimer); 
-                reconnectOverlay.style.display = 'none';
-                
-                videoEl.srcObject = remoteStream;
-                videoEl.muted = false;
-
-                const checkVideoState = () => {
-                    if(!videoEl.srcObject || !this.streamId) return;
-                    const vTrack = videoEl.srcObject.getVideoTracks()[0];
-                    if(vTrack && !vTrack.enabled) {
-                        offlineText.style.display = 'flex';
-                        offlineText.innerHTML = '<i class="fas fa-video-slash" style="font-size:30px; margin-bottom:10px;"></i><span>Bildschirm/Kamera ausgeschaltet</span>';
-                    } else if(vTrack && vTrack.enabled && !videoEl.paused) {
-                        offlineText.style.display = 'none';
-                    }
-                    requestAnimationFrame(checkVideoState);
-                };
-                checkVideoState();
-
-                const playPromise = videoEl.play();
-                if (playPromise !== undefined) {
-                    playPromise.catch(error => {
-                        videoEl.muted = true;
-                        videoEl.play().then(() => {
-                            unmuteOverlay.style.display = 'flex';
-                            unmuteOverlay.onclick = () => {
-                                videoEl.muted = false;
-                                unmuteOverlay.style.display = 'none';
-                            };
-                        });
-                    });
-                }
-            });
-        });
-    }
-
-    static async leave() {
-        switchView('feed');
-        clearTimeout(this.connectionRetryTimer);
-        clearTimeout(this.disconnectGraceTimer);
-        
-        this.activeCalls.forEach(call => call.close());
-        this.activeCalls = [];
-
-        if(this.peer) { this.peer.destroy(); this.peer = null; }
-        if(this.localStream) { this.localStream.getTracks().forEach(t => t.stop()); this.localStream = null; }
-        document.getElementById('live-video-player').srcObject = null;
-        document.getElementById('live-unmute-overlay').style.display = 'none';
-        document.getElementById('live-reconnect-overlay').style.display = 'none';
-        
-        clearInterval(this.timer);
-        clearInterval(this.heartbeatTimer);
-        this.unsubs.forEach(u => u()); this.unsubs = [];
-        document.getElementById('live-gift-animation-container').innerHTML = '';
-
-        if(this.isBroadcaster) {
-            await deleteDoc(doc(db, "live_streams", currentUser.uid));
-        } else if (this.streamId) {
-            await updateDoc(doc(db, "live_streams", this.streamId), { viewers: increment(-1) }).catch(e=>{});
-        }
-        this.isBroadcaster = false; this.streamId = null; this.amIMod = false;
-    }
-
-    static setupChat() {
-        const box = document.getElementById('live-chat-box');
-        box.innerHTML = '';
-        
-        this.unsubs.push(onSnapshot(collection(db, `live_streams/${this.streamId}/mods`), (snap) => {
-            this.activeMods = [];
-            snap.forEach(d => this.activeMods.push(d.data().uid));
-            if(!this.isBroadcaster && this.activeMods.includes(currentUser.uid)) {
-                this.amIMod = true;
-                document.getElementById('live-streamer-hud').style.display = 'flex';
-                document.getElementById('live-toggle-cam-btn').style.display = 'none';
-                document.getElementById('open-mod-dashboard-btn').style.display = 'none'; 
-                document.getElementById('live-hud-coins').style.display = 'none';
-                document.getElementById('live-hud-time').style.display = 'none';
-                showToast("Du bist Mod in diesem Stream! 🛡️");
-            }
-        }));
-        
-        this.unsubs.push(onSnapshot(query(collection(db, `live_streams/${this.streamId}/chat`), orderBy("timestamp", "asc")), (snapshot) => {
-            snapshot.docChanges().forEach(change => {
-                if (change.type === "added") {
-                    const msg = change.doc.data();
-                    const msgId = change.doc.id;
-                    
-                    let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
-                    if(blocked.includes(msg.uid) && msg.uid !== this.streamId) return;
-
-                    const msgDiv = document.createElement('div');
-                    msgDiv.className = 'live-chat-msg';
-                    msgDiv.id = `live-msg-${msgId}`;
-                    
-                    const isBroadcasterNode = msg.uid === this.streamId;
-                    const isModNode = this.activeMods.includes(msg.uid);
-
-                    if (isBroadcasterNode) msgDiv.classList.add('broadcaster');
-
-                    let badgeHtml = isBroadcasterNode ? '<span class="broadcaster-badge">Creator</span>' : (isModNode ? '<span class="broadcaster-badge" style="background:#00f2fe; color:black;">MOD</span>' : '');
-                    let nameHtml = `<span style="color:#aaa; font-weight:bold; cursor:pointer;" class="${isBroadcasterNode ? 'broadcaster-name' : ''}" onclick="openLiveChatContext('${msgId}', '${msg.uid}', '${msg.name.replace(/'/g,"\\'")}')">${msg.name}${badgeHtml}:</span>`;
-                    
-                    msgDiv.innerHTML = `<img src="${msg.pic}">${nameHtml} <span style="flex:1; word-break:break-word;">${formatText(msg.text)}</span>`;
-                    box.appendChild(msgDiv);
-                }
-                if (change.type === "removed") {
-                    const msgDiv = document.getElementById(`live-msg-${change.doc.id}`);
-                    if (msgDiv) msgDiv.remove();
-                }
-            });
-            box.scrollTop = box.scrollHeight;
-        }));
-        
-        this.unsubs.push(onSnapshot(doc(db, "live_streams", this.streamId), (docSnap) => {
-            if(docSnap.exists()) {
-                clearTimeout(this.disconnectGraceTimer);
-                document.getElementById('live-viewer-count').innerText = docSnap.data().viewers || 0;
-            } else if(!this.isBroadcaster) {
-                this.disconnectGraceTimer = setTimeout(() => {
-                    showCustomAlert("Beendet", "Live-Stream wurde beendet."); 
-                    this.leave(); 
-                }, 5000);
-            }
-        }));
-
-        let initialGiftsLoad = true; let sessionCoins = 0;
-        this.unsubs.push(onSnapshot(query(collection(db, `live_streams/${this.streamId}/gifts`), orderBy("timestamp", "asc")), (snapshot) => {
-            if(initialGiftsLoad) {
-                snapshot.forEach(docSnap => { sessionCoins += docSnap.data().price; });
-                if(this.isBroadcaster) document.getElementById('live-hud-coins').innerText = sessionCoins;
-                initialGiftsLoad = false; return;
-            }
-            snapshot.docChanges().forEach((change) => {
-                if (change.type === "added") {
-                    const g = change.doc.data();
-                    if(this.isBroadcaster) { sessionCoins += g.price; document.getElementById('live-hud-coins').innerText = sessionCoins; }
-                    
-                    const container = document.getElementById('live-gift-animation-container');
-                    const giftEl = document.createElement('div');
-                    giftEl.className = 'live-gift-item';
-                    giftEl.style.position = 'absolute'; giftEl.style.bottom = '20%'; giftEl.style.left = '50%'; giftEl.style.transform = 'translateX(-50%)'; giftEl.style.zIndex = '200'; giftEl.style.textAlign = 'center'; giftEl.style.animation = 'liveFlyUpGift 3s ease-out forwards';
-                    giftEl.innerHTML = `<span style="font-size:14px; color:#ffd700; background:rgba(0,0,0,0.6); padding:4px 12px; border-radius:20px; display:block; margin-bottom:10px; border:1px solid #ffd700; white-space:nowrap;">${g.name} sendet ${g.giftName}</span><span style="font-size:120px; filter:drop-shadow(0 0 10px rgba(255,215,0,0.5));">${g.emoji}</span>`;
-                    container.appendChild(giftEl);
-                    
-                    const msgDiv = document.createElement('div');
-                    msgDiv.className = 'live-chat-msg';
-                    msgDiv.style.background = 'rgba(255, 215, 0, 0.2)'; msgDiv.style.borderLeft = '3px solid #ffd700';
-                    msgDiv.innerHTML = `<span style="color:#ffd700; font-weight:bold;">🎁 ${g.name} sendet ${g.giftName} ${g.emoji}</span>`;
-                    box.appendChild(msgDiv); box.scrollTop = box.scrollHeight;
-
-                    setTimeout(() => giftEl.remove(), 3500);
-                }
-            });
-        }));
-    }
-}
-
-window.LiveManager = LiveManager;
