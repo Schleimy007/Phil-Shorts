@@ -187,9 +187,14 @@
                 <span>Verbinde...</span>
             </div>
 
-            <div id="live-unmute-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:25; justify-content:center; align-items:center; flex-direction:column; cursor:pointer;">
+            <div id="live-unmute-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:25; justify-content:center; align-items:center; flex-direction:column; cursor:pointer; backdrop-filter: blur(5px);">
                 <i class="fas fa-volume-up" style="font-size:50px; color:white; margin-bottom:15px; animation: pulse 2s infinite;"></i>
-                <span style="color:white; font-weight:bold; font-size:18px;">Tippen, um Ton zu aktivieren</span>
+                <span style="color:white; font-weight:bold; font-size:18px;">Tippen, um dem Stream beizutreten</span>
+            </div>
+
+            <div id="live-reconnect-overlay" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:#fff; font-size:16px; font-weight:bold; z-index: 30; flex-direction:column; align-items:center; text-align:center; background: rgba(0,0,0,0.7); padding: 20px; border-radius: 15px;">
+                <i class="fas fa-satellite-dish fa-spin" style="font-size:30px; margin-bottom:10px; color:#ff0050;"></i>
+                <span>Verbindung wird wiederhergestellt...</span>
             </div>
 
             <video id="live-video-player" autoplay playsinline webkit-playsinline style="width:100%; height:100%; object-fit:contain; position:relative; z-index: 20; transition: opacity 0.3s;"></video>

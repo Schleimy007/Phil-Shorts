@@ -1087,6 +1087,10 @@ class LiveManager {
     static unsubs = [];
     static amIMod = false;
     static activeMods = [];
+    static activeCalls = [];
+    static disconnectGraceTimer = null;
+    static connectionRetryTimer = null;
+    static connectionAttempts = 0;
 
     static init() {
         const startLiveBtn = document.getElementById('start-my-live-btn');
@@ -1115,7 +1119,7 @@ class LiveManager {
                 const stream = docSnap.data();
                 if (blocked.includes(stream.broadcasterUid)) return;
                 
-                // Heartbeat Check (15 Sekunden Timeout - entfernt tote Streams sofort)
+                // Heartbeat Check (15 Sekunden Timeout - entfernt tote Streams sofort aus der UI)
                 if (stream.lastHeartbeat && (now - stream.lastHeartbeat > 15000)) {
                     return; 
                 }
@@ -1127,10 +1131,8 @@ class LiveManager {
             if(!hasStreams) grid.innerHTML = '<div class="empty-state"><p>Gerade ist niemand live.</p></div>';
         }));
 
-        // Close Tab Cleanup
         window.addEventListener('beforeunload', () => {
             if (LiveManager.isBroadcaster && LiveManager.streamId) {
-                // Versuche, den Stream beim Schließen des Fensters direkt tot zu stellen
                 updateDoc(doc(db, "live_streams", LiveManager.streamId), { lastHeartbeat: 0 }).catch(()=>{});
             }
         });
@@ -1140,6 +1142,7 @@ class LiveManager {
         const title = document.getElementById('live-stream-title').value.trim() || `${currentUser.displayName}'s Live Stream`;
         const btn = document.getElementById('start-stream-action-btn');
         btn.disabled = true; btn.innerText = "Verbinde...";
+        this.activeCalls = [];
         
         try {
             if(window.currentLiveSource === 'screen') {
@@ -1180,15 +1183,12 @@ class LiveManager {
             this.peer = new Peer(currentUser.uid, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] } });
             
             this.peer.on('open', async (id) => {
-                // Alte Chats bereinigen
                 const chatRef = collection(db, `live_streams/${currentUser.uid}/chat`);
                 const oldChats = await getDocs(chatRef);
                 oldChats.forEach(d => deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, d.id)));
 
-                // Neues Live Doc mit Heartbeat erstellen
                 await setDoc(doc(db, "live_streams", currentUser.uid), { broadcasterUid: currentUser.uid, broadcasterName: currentUser.displayName, broadcasterPic: currentUser.photoURL, title: title, viewers: 0, lastHeartbeat: Date.now(), timestamp: Date.now() });
                 
-                // Heartbeat Loop (alle 5 Sekunden senden, dass wir noch da sind)
                 this.heartbeatTimer = setInterval(() => {
                     updateDoc(doc(db, "live_streams", currentUser.uid), { lastHeartbeat: Date.now() }).catch(()=>{});
                 }, 5000);
@@ -1197,7 +1197,15 @@ class LiveManager {
                 showToast("Du bist jetzt LIVE!");
                 btn.disabled = false; btn.innerHTML = `<i class="fas fa-broadcast-tower"></i> Jetzt LIVE gehen`;
             });
-            this.peer.on('call', (call) => { call.answer(this.localStream); });
+
+            this.peer.on('call', (call) => { 
+                call.answer(this.localStream); 
+                this.activeCalls.push(call);
+                call.on('close', () => {
+                    this.activeCalls = this.activeCalls.filter(c => c !== call);
+                });
+            });
+
         } catch(e) { 
             showCustomAlert("Fehler", "Zugriff verweigert oder abgebrochen."); 
             btn.disabled = false; btn.innerHTML = `<i class="fas fa-broadcast-tower"></i> Jetzt LIVE gehen`;
@@ -1219,24 +1227,56 @@ class LiveManager {
         document.getElementById('live-input-area').style.display = 'flex';
         document.getElementById('live-close-btn').style.display = 'block';
 
+        this.connectionAttempts = 0;
+        this.connectToPeer(streamId);
+        
+        await updateDoc(doc(db, "live_streams", streamId), { viewers: increment(1) }).catch(()=>{});
+        this.setupChat();
+    }
+
+    static connectToPeer(streamId) {
         const videoEl = document.getElementById('live-video-player');
         videoEl.srcObject = null; videoEl.style.transform = 'none';
         
         const offlineText = document.getElementById('live-stream-offline-text');
         const unmuteOverlay = document.getElementById('live-unmute-overlay');
+        const reconnectOverlay = document.getElementById('live-reconnect-overlay');
+        
         unmuteOverlay.style.display = 'none';
-        offlineText.style.display = 'flex';
-        offlineText.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:30px; margin-bottom:10px;"></i><span>Verbinde... STUN wird initialisiert</span>';
+        reconnectOverlay.style.display = this.connectionAttempts > 0 ? 'flex' : 'none';
+        offlineText.style.display = this.connectionAttempts === 0 ? 'flex' : 'none';
+        
+        if (this.connectionAttempts === 0) {
+            offlineText.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:30px; margin-bottom:10px;"></i><span>Verbinde... STUN wird initialisiert</span>';
+        }
 
         if(this.peer) this.peer.destroy();
         this.peer = new Peer({ config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] } });
         
-        this.peer.on('open', async (id) => {
+        // 8-Sekunden Retry Mechanismus (Blackscreen Bug Fix)
+        clearTimeout(this.connectionRetryTimer);
+        this.connectionRetryTimer = setTimeout(() => {
+            if (!videoEl.srcObject || videoEl.paused) {
+                this.connectionAttempts++;
+                if (this.connectionAttempts <= 3) {
+                    console.log("Retry WebRTC Connection...", this.connectionAttempts);
+                    this.connectToPeer(streamId);
+                } else {
+                    showCustomAlert("Verbindungsfehler", "Der Stream konnte nicht geladen werden (Blackscreen). Versuche es später erneut.");
+                    this.leave();
+                }
+            }
+        }, 8000);
+
+        this.peer.on('open', (id) => {
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             const dummyStream = audioCtx.createMediaStreamDestination().stream;
             const call = this.peer.call(streamId, dummyStream);
             
             call.on('stream', (remoteStream) => {
+                clearTimeout(this.connectionRetryTimer); // Hat geklappt!
+                reconnectOverlay.style.display = 'none';
+                
                 videoEl.srcObject = remoteStream;
                 videoEl.muted = false;
 
@@ -1253,11 +1293,9 @@ class LiveManager {
                 };
                 checkVideoState();
 
-                // Autoplay Policy Fix handling
                 const playPromise = videoEl.play();
                 if (playPromise !== undefined) {
                     playPromise.catch(error => {
-                        // Der Browser blockiert Autoplay (wegen Audio). Wir muten es, starten es und zeigen das Tap Overlay
                         videoEl.muted = true;
                         videoEl.play().then(() => {
                             unmuteOverlay.style.display = 'flex';
@@ -1269,18 +1307,22 @@ class LiveManager {
                     });
                 }
             });
-            
-            await updateDoc(doc(db, "live_streams", streamId), { viewers: increment(1) });
-            this.setupChat();
         });
     }
 
     static async leave() {
         switchView('feed');
+        clearTimeout(this.connectionRetryTimer);
+        clearTimeout(this.disconnectGraceTimer);
+        
+        this.activeCalls.forEach(call => call.close());
+        this.activeCalls = [];
+
         if(this.peer) { this.peer.destroy(); this.peer = null; }
         if(this.localStream) { this.localStream.getTracks().forEach(t => t.stop()); this.localStream = null; }
         document.getElementById('live-video-player').srcObject = null;
         document.getElementById('live-unmute-overlay').style.display = 'none';
+        document.getElementById('live-reconnect-overlay').style.display = 'none';
         
         clearInterval(this.timer);
         clearInterval(this.heartbeatTimer);
@@ -1346,8 +1388,16 @@ class LiveManager {
         }));
         
         this.unsubs.push(onSnapshot(doc(db, "live_streams", this.streamId), (docSnap) => {
-            if(docSnap.exists()) document.getElementById('live-viewer-count').innerText = docSnap.data().viewers || 0;
-            else if(!this.isBroadcaster) { showCustomAlert("Beendet", "Live-Stream wurde beendet."); this.leave(); }
+            if(docSnap.exists()) {
+                clearTimeout(this.disconnectGraceTimer);
+                document.getElementById('live-viewer-count').innerText = docSnap.data().viewers || 0;
+            } else if(!this.isBroadcaster) {
+                // Grace Period: 5 Sekunden warten bevor man rausfliegt ("Stream beendet" Bug)
+                this.disconnectGraceTimer = setTimeout(() => {
+                    showCustomAlert("Beendet", "Live-Stream wurde beendet."); 
+                    this.leave(); 
+                }, 5000);
+            }
         }));
 
         let initialGiftsLoad = true; let sessionCoins = 0;
@@ -1388,7 +1438,6 @@ function formatLiveTime(sec) {
     return `${m}:${s}`;
 }
 
-// Globale Wrapper für HTML OnClick-Events 
 window.initLiveStreamsList = () => LiveManager.init();
 window.selectLiveSource = (src) => {
     window.currentLiveSource = src;
@@ -1491,8 +1540,6 @@ document.getElementById('send-live-chat-btn')?.addEventListener('click', async (
     input.value = ''; await addDoc(collection(db, `live_streams/${LiveManager.streamId}/chat`), { uid: currentUser.uid, name: currentUser.displayName, pic: currentUser.photoURL, text: text, timestamp: Date.now() });
 });
 document.getElementById('live-chat-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-live-chat-btn').click(); });
-// --- ENDE LIVE STREAMING SYSTEM ---
-
 
 window.selectedUploadSound = null;
 window.openSound = function(id, name, pic, url) {
@@ -1541,7 +1588,6 @@ document.getElementById('sound-play-btn')?.addEventListener('click', () => {
 });
 
 window.removeSelectedSound = function() { window.selectedUploadSound = null; document.getElementById('upload-sound-preview').style.display = 'none'; }
-
 
 document.getElementById('up-file')?.addEventListener('change', function(e) {
     const files = e.target.files; const txt = document.querySelector('#up-file-btn p'); const icon = document.querySelector('#up-file-btn i'); 
