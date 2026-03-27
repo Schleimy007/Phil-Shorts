@@ -2651,7 +2651,6 @@ input:checked+.slider:before {
     background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
 }
 
-/* CHAT FIX (SCROLLBAR ENTFERNT + OVERLAY BUG GEFIXT) */
 .live-chat-container {
     position: absolute;
     bottom: 80px;
@@ -2667,12 +2666,6 @@ input:checked+.slider:before {
     mask-image: linear-gradient(to top, black 80%, transparent 100%);
     -webkit-mask-image: linear-gradient(to top, black 80%, transparent 100%);
     pointer-events: none;
-    -ms-overflow-style: none; /* IE and Edge */
-    scrollbar-width: none;    /* Firefox */
-}
-
-.live-chat-container::-webkit-scrollbar {
-    display: none !important; /* Chrome, Safari, Opera */
 }
 
 .live-chat-msg {
@@ -2712,6 +2705,13 @@ input:checked+.slider:before {
     font-weight: bold;
     text-transform: uppercase;
     box-shadow: 0 0 5px #ff0050;
+}
+
+#live-chat-box { 
+    pointer-events: none; 
+}
+#view-live-room.active #live-chat-box { 
+    pointer-events: auto !important; 
 }
 
 .live-chat-msg img {
