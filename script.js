@@ -1075,7 +1075,6 @@ document.getElementById('duet-record-btn')?.addEventListener('click', async () =
     }
 });
 
-// --- NEUES LIVE STREAMING SYSTEM (LiveManager Klasse) ---
 class LiveManager {
     static streamId = null;
     static isBroadcaster = false;
@@ -1107,7 +1106,6 @@ class LiveManager {
             };
         }
 
-        // Cleanup old dead streams on client side
         this.unsubs.push(onSnapshot(collection(db, "live_streams"), (snapshot) => {
             const grid = document.getElementById('live-streams-grid');
             grid.innerHTML = '';
@@ -1119,14 +1117,13 @@ class LiveManager {
                 const stream = docSnap.data();
                 if (blocked.includes(stream.broadcasterUid)) return;
                 
-                // Heartbeat Check (15 Sekunden Timeout - entfernt tote Streams sofort aus der UI)
                 if (stream.lastHeartbeat && (now - stream.lastHeartbeat > 15000)) {
                     return; 
                 }
 
                 hasStreams = true;
                 const titleHtml = stream.title ? `<span style="display:block; font-size:12px; color:#ddd; margin-top:2px;">${stream.title}</span>` : '';
-                grid.innerHTML += `<div class="live-stream-card" onclick="LiveManager.join('${docSnap.id}', '${stream.broadcasterName.replace(/'/g, "\\'")}', '${stream.broadcasterPic}')"><img src="${stream.broadcasterPic}" style="width:60px; height:60px; border-radius:50%; border:2px solid #ff0050;"><div style="flex:1;"><strong style="font-size:16px; color:white; display:block;">${stream.broadcasterName}</strong><span style="color:#aaa; font-size:13px;">🔴 LIVE</span>${titleHtml}</div><div style="background:#222; padding:5px 10px; border-radius:10px; font-size:12px; font-weight:bold;"><i class="fas fa-eye"></i> ${stream.viewers || 0}</div></div>`;
+                grid.innerHTML += `<div class="live-stream-card" onclick="window.LiveManager.join('${docSnap.id}', '${stream.broadcasterName.replace(/'/g, "\\'")}', '${stream.broadcasterPic}')"><img src="${stream.broadcasterPic}" style="width:60px; height:60px; border-radius:50%; border:2px solid #ff0050;"><div style="flex:1;"><strong style="font-size:16px; color:white; display:block;">${stream.broadcasterName}</strong><span style="color:#aaa; font-size:13px;">🔴 LIVE</span>${titleHtml}</div><div style="background:#222; padding:5px 10px; border-radius:10px; font-size:12px; font-weight:bold;"><i class="fas fa-eye"></i> ${stream.viewers || 0}</div></div>`;
             });
             if(!hasStreams) grid.innerHTML = '<div class="empty-state"><p>Gerade ist niemand live.</p></div>';
         }));
@@ -1253,7 +1250,6 @@ class LiveManager {
         if(this.peer) this.peer.destroy();
         this.peer = new Peer({ config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] } });
         
-        // 8-Sekunden Retry Mechanismus (Blackscreen Bug Fix)
         clearTimeout(this.connectionRetryTimer);
         this.connectionRetryTimer = setTimeout(() => {
             if (!videoEl.srcObject || videoEl.paused) {
@@ -1274,7 +1270,7 @@ class LiveManager {
             const call = this.peer.call(streamId, dummyStream);
             
             call.on('stream', (remoteStream) => {
-                clearTimeout(this.connectionRetryTimer); // Hat geklappt!
+                clearTimeout(this.connectionRetryTimer); 
                 reconnectOverlay.style.display = 'none';
                 
                 videoEl.srcObject = remoteStream;
@@ -1392,7 +1388,6 @@ class LiveManager {
                 clearTimeout(this.disconnectGraceTimer);
                 document.getElementById('live-viewer-count').innerText = docSnap.data().viewers || 0;
             } else if(!this.isBroadcaster) {
-                // Grace Period: 5 Sekunden warten bevor man rausfliegt ("Stream beendet" Bug)
                 this.disconnectGraceTimer = setTimeout(() => {
                     showCustomAlert("Beendet", "Live-Stream wurde beendet."); 
                     this.leave(); 
@@ -1431,6 +1426,9 @@ class LiveManager {
         }));
     }
 }
+
+// Global binden, damit das HTML es per onclick="window.LiveManager.join(...)" aufrufen kann!
+window.LiveManager = LiveManager;
 
 function formatLiveTime(sec) {
     const m = Math.floor(sec / 60).toString().padStart(2, '0');
