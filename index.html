@@ -42,6 +42,7 @@
 
     <div class="app">
         <div id="toast" class="toast">Nachricht hier</div>
+        <div id="achievement-popup" class="achievement-popup"><i class="fas fa-trophy"></i> <span id="achievement-text"></span></div>
 
         <div id="login-screen" class="full-screen-overlay">
             <div class="login-box">
@@ -95,9 +96,14 @@
             <div class="top-bar glass-nav" style="position:absolute; top:0; z-index:100; width:100%; background:transparent; border:none;">
                 <i class="fas fa-times back-btn" onclick="closeDuet()" style="color:white; text-shadow:0 2px 4px black; font-size: 28px;"></i>
             </div>
-            <div class="duet-container" style="display:flex; height:100%; width:100%; align-items:center; padding-bottom: 120px;">
+            <div class="duet-container" style="display:flex; height:100%; width:100%; align-items:center; padding-bottom: 120px; position:relative;">
                 <video id="duet-orig-video" playsinline style="width:50%; height:80%; object-fit:cover; border-right:2px solid #333;"></video>
                 <video id="duet-cam-video" playsinline autoplay muted style="width:50%; height:80%; object-fit:cover; transform:scaleX(-1);"></video>
+                
+                <div id="comment-reply-overlay" style="display:none; position:absolute; top:20%; left:50%; transform:translateX(-50%); background:rgba(255,255,255,0.9); padding:10px 15px; border-radius:10px; color:black; max-width:80%; z-index: 200; box-shadow:0 4px 10px rgba(0,0,0,0.5);">
+                    <div style="font-size:11px; font-weight:bold; color:#ff0050; margin-bottom:5px;">Antwort auf Kommentar</div>
+                    <div id="comment-reply-text" style="font-size:14px;"></div>
+                </div>
             </div>
             <canvas id="duet-canvas" style="display:none;"></canvas>
             
@@ -135,7 +141,11 @@
                 
                 <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333;">
                     <label style="color:#888; font-size:12px; margin-bottom:5px; display:block;">Titel deines Streams</label>
-                    <input type="text" id="live-stream-title" class="comment-input" placeholder="Wir chillen und zocken..." style="width:100%; border-radius:10px; border:none; background:rgba(0,0,0,0.5);">
+                    <input type="text" id="live-stream-title" class="comment-input" placeholder="Wir chillen und zocken..." style="width:100%; border-radius:10px; border:none; background:rgba(0,0,0,0.5); margin-bottom: 15px;">
+                    
+                    <label style="color:#888; font-size:12px; margin-bottom:5px; display:block;">Live-Ziel (Coins) [Optional]</label>
+                    <input type="number" id="live-stream-goal-target" class="comment-input" placeholder="Z.B. 1000" style="width:100%; border-radius:10px; border:none; background:rgba(0,0,0,0.5); margin-bottom: 10px;">
+                    <input type="text" id="live-stream-goal-desc" class="comment-input" placeholder="Belohnung (Z.B. Chili essen)" style="width:100%; border-radius:10px; border:none; background:rgba(0,0,0,0.5);">
                 </div>
                 
                 <div>
@@ -169,14 +179,27 @@
             </div>
 
             <div class="live-room-header">
-                <div style="display:flex; align-items:center; gap:10px; background: rgba(0,0,0,0.5); padding: 5px 15px 5px 5px; border-radius: 30px; backdrop-filter: blur(5px);">
-                    <img id="live-broadcaster-pic" src="" style="width:35px; height:35px; border-radius:50%; object-fit:cover;">
-                    <div>
-                        <strong id="live-broadcaster-name" style="font-size:14px; display:block;">Broadcaster</strong>
-                        <span class="live-badge">LIVE</span>
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <div style="display:flex; align-items:center; gap:10px; background: rgba(0,0,0,0.5); padding: 5px 15px 5px 5px; border-radius: 30px; backdrop-filter: blur(5px); width: max-content;">
+                        <img id="live-broadcaster-pic" src="" style="width:35px; height:35px; border-radius:50%; object-fit:cover;">
+                        <div>
+                            <strong id="live-broadcaster-name" style="font-size:14px; display:block;">Broadcaster</strong>
+                            <span class="live-badge">LIVE</span>
+                        </div>
+                    </div>
+                    
+                    <div id="live-goal-container" style="display:none; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 12px; border: 1px solid #ffd700; width: 200px; backdrop-filter: blur(5px); z-index: 100;">
+                        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px; font-weight:bold;">
+                            <span id="live-goal-desc" style="color:#fff;">Ziel</span>
+                            <span style="color:#ffd700;"><span id="live-goal-current">0</span>/<span id="live-goal-target">0</span> <i class="fas fa-coins"></i></span>
+                        </div>
+                        <div style="width:100%; height:6px; background:#333; border-radius:3px; overflow:hidden;">
+                            <div id="live-goal-progress" style="height:100%; width:0%; background:linear-gradient(90deg, #ff0050, #ffd700); transition: width 0.3s;"></div>
+                        </div>
                     </div>
                 </div>
-                <div style="display: flex; gap: 15px; align-items: center;">
+                
+                <div style="display: flex; gap: 15px; align-items: flex-start;">
                     <div style="background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: bold;"><i class="fas fa-eye"></i> <span id="live-viewer-count">0</span></div>
                     <i class="fas fa-times" id="live-close-btn" onclick="leaveLiveRoom()" style="font-size:24px; cursor:pointer; text-shadow: 0 2px 4px black;"></i>
                 </div>
@@ -195,6 +218,22 @@
             <div id="live-reconnect-overlay" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:#fff; font-size:16px; font-weight:bold; z-index: 30; flex-direction:column; align-items:center; text-align:center; background: rgba(0,0,0,0.7); padding: 20px; border-radius: 15px;">
                 <i class="fas fa-satellite-dish fa-spin" style="font-size:30px; margin-bottom:10px; color:#ff0050;"></i>
                 <span>Verbindung wird wiederhergestellt...</span>
+            </div>
+
+            <div id="live-battle-container" style="display:none; position:absolute; top:120px; left:0; width:100%; height:40%; z-index: 15;">
+                <div style="display:flex; width:100%; height:100%;">
+                    <div style="flex:1; border-right:2px solid #ff0050; position:relative;">
+                        <div class="battle-score left" id="battle-score-left">0</div>
+                    </div>
+                    <div style="flex:1; position:relative;">
+                        <video id="live-battle-player" autoplay playsinline webkit-playsinline style="width:100%; height:100%; object-fit:cover; position:relative; z-index: 20;"></video>
+                        <div class="battle-score right" id="battle-score-right">0</div>
+                        <div id="battle-timer" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); color:#fff; font-weight:bold; padding:5px 15px; border-radius:15px; border:2px solid #ff0050; z-index:25;">60s</div>
+                    </div>
+                </div>
+                <div id="battle-progress-bar" style="width:100%; height:10px; background:#00f2fe; display:flex;">
+                    <div id="battle-progress-left" style="height:100%; width:50%; background:#ff0050; transition:width 0.3s;"></div>
+                </div>
             </div>
 
             <video id="live-video-player" autoplay playsinline webkit-playsinline style="width:100%; height:100%; object-fit:contain; position:relative; z-index: 20; transition: opacity 0.3s;"></video>
@@ -325,6 +364,8 @@
                     <div class="stat-box"><strong id="stat-following">0</strong><span>Folge ich</span></div>
                     <div class="stat-box"><strong id="stat-followers">0</strong><span>Follower</span></div>
                     <div class="stat-box"><strong id="stat-likes">0</strong><span>Likes</span></div>
+                    <div class="stat-box" title="Level und Erfahrungspunkte"><strong id="stat-xp">0</strong><span>XP (Lvl <span id="stat-level">1</span>)</span></div>
+                    <div class="stat-box" title="Tägliche Aktivität"><strong id="stat-streak">0</strong><span>🔥 Streak</span></div>
                 </div>
 
                 <div style="display: flex; gap: 10px; align-items: center; justify-content: center; width: 100%; flex-wrap: wrap;">
@@ -729,6 +770,11 @@
                         <p style="word-break: break-all; padding: 0 10px;">Video oder Bilder auswählen</p>
                         <p style="font-size: 11px; color: #666; margin-top: 5px;">(Plus++: bis 3 Min. | Plus: 100MB)</p>
                     </div>
+                </div>
+
+                <div class="setting-toggle-row" style="margin-top: 15px; background: rgba(255,255,255,0.05); padding: 10px 15px; border-radius: 15px;">
+                    <span style="font-weight: bold; font-size: 14px;">Als Teil einer Serie posten</span>
+                    <label class="switch"><input type="checkbox" id="up-series-toggle"><span class="slider round"></span></label>
                 </div>
 
                 <div id="video-advanced-editor" style="display:none;"></div>
