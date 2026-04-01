@@ -39,6 +39,20 @@ function triggerHaptic(type = 'light') {
     else if(type === 'success') navigator.vibrate([30, 50, 30, 50, 50]);
 }
 
+window.createParticles = function(x, y, parent) {
+    for(let i=0; i<12; i++) {
+        const p = document.createElement('div'); p.className = 'particle';
+        parent.appendChild(p);
+        const angle = Math.random() * Math.PI * 2;
+        const distance = 40 + Math.random() * 60;
+        p.style.setProperty('--tx', Math.cos(angle) * distance + 'px');
+        p.style.setProperty('--ty', Math.sin(angle) * distance + 'px');
+        p.style.left = x + 'px'; p.style.top = y + 'px';
+        p.style.animation = 'shootParticle 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards';
+        setTimeout(() => p.remove(), 600);
+    }
+};
+
 function showAchievement(text) {
     triggerHaptic('success');
     const popup = document.getElementById('achievement-popup');
@@ -147,8 +161,6 @@ document.getElementById('notif-master')?.addEventListener('change', async(e) => 
     }
     notifSettings.master = e.target.checked; localStorage.setItem('phil_notif_settings', JSON.stringify(notifSettings)); updateNotifUI();
 });
-
-['comments', 'likes', 'dms', 'follows'].forEach(id => { document.getElementById(`notif-${id}`)?.addEventListener('change', (e) => { notifSettings[id] = e.target.checked; localStorage.setItem('phil_notif_settings', JSON.stringify(notifSettings)); }); });
 
 let currentFeedMode = 'foryou'; let isInitialLoad = true; let sortedFeed = []; const viewedVideos = new Set();
 window.globalVolume = 1; window.globalMuted = false;
@@ -332,7 +344,6 @@ function applyAlgorithm(videos, mode) {
             let engagementScore = (likes * 5) + (comments * 10) + (gifts * 20); let baseViralPower = Math.log(engagementScore + 1) * 30;
             let authorData = allKnownUsers.find(u => u.uid === v.authorUid); if (authorData && authorData.philPlusUntil && authorData.philPlusUntil > Date.now() && authorData.philPlusTier >= 2) baseViralPower += 50;
             let affinityScore = 0; if (currentUser) { if (currentUser.following && currentUser.following.includes(v.authorUid)) affinityScore += 30; if (v.likedBy && v.likedBy.includes(currentUser.uid)) affinityScore -= 40; if (v.authorUid === currentUser.uid) affinityScore -= 100; }
-            // NEU: Series Boost (Retention)
             let seriesBoost = v.seriesId ? 50 : 0;
             return {...v, algoScore: baseViralPower + affinityScore + seriesBoost + (Math.random() * 120) };
         });
@@ -347,13 +358,17 @@ function createAdElement() {
 }
 
 function initLiveDatabase() {
-    document.getElementById('video-container').innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i><p>Lade Algorithmus...</p></div>';
+    const initLoader = document.getElementById('initial-loader'); if(initLoader) initLoader.style.display = 'flex';
+    const skelLoader = document.getElementById('skeleton-loader'); if(skelLoader) skelLoader.style.display = 'block';
+
     onSnapshot(collection(db, "videos"), (snapshot) => {
         allVideosData = []; let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
         snapshot.forEach(doc => { const v = { id: doc.id, ...doc.data() }; if(!blocked.includes(v.authorUid)) allVideosData.push(v); });
         allVideosData.reverse();
         if (isInitialLoad) {
             renderFeed(true); isInitialLoad = false;
+            if(initLoader) initLoader.style.display = 'none';
+            if(skelLoader) skelLoader.style.display = 'none';
             const urlParams = new URLSearchParams(window.location.search); const sharedVideoId = urlParams.get('video');
             if (sharedVideoId) { window.history.replaceState({}, document.title, window.location.pathname); setTimeout(() => jumpToVideo(sharedVideoId), 800); }
         } else {
@@ -386,8 +401,13 @@ function initLiveDatabase() {
 function renderFeed(reset = false) {
     const container = document.getElementById('video-container');
     if (reset) {
-        container.innerHTML = ''; sortedFeed = applyAlgorithm(allVideosData, currentFeedMode);
-        if (sortedFeed.length === 0) { const emptyTxt = currentFeedMode === 'following' ? 'Folge Creatorn' : 'Feed ist leer'; const emptyIco = currentFeedMode === 'following' ? 'fa-user-plus' : 'fa-video-slash'; container.innerHTML = `<div class="empty-state"><i class="fas ${emptyIco}"></i><h3>${emptyTxt}</h3></div>`; return; }
+        // Bereinige alle Videos, aber behalte Skeleton und Initial Loader (falls vorhanden)
+        const oldVids = container.querySelectorAll('.video'); oldVids.forEach(v => v.remove());
+        const oldLoaders = container.querySelectorAll('.feed-end-loader'); oldLoaders.forEach(l => l.remove());
+        const emptyState = container.querySelector('.empty-state'); if(emptyState) emptyState.remove();
+
+        sortedFeed = applyAlgorithm(allVideosData, currentFeedMode);
+        if (sortedFeed.length === 0) { const emptyTxt = currentFeedMode === 'following' ? 'Folge Creatorn' : 'Feed ist leer'; const emptyIco = currentFeedMode === 'following' ? 'fa-user-plus' : 'fa-video-slash'; container.innerHTML += `<div class="empty-state"><i class="fas ${emptyIco}"></i><h3>${emptyTxt}</h3></div>`; return; }
         let count = 0; sortedFeed.forEach(video => { container.appendChild(createVideoElement(video)); count++; if (!checkPhilPlusStatus(2) && count % 5 === 0) container.appendChild(createAdElement()); });
         appendLoader(container, true);
     }
@@ -428,7 +448,7 @@ window.openMoreOptions = function(vidId) {
 document.getElementById('close-more-options')?.addEventListener('click', () => document.getElementById('more-options-modal').classList.remove('show'));
 
 function createVideoElement(video) {
-    const div = document.createElement('div'); div.className = "video"; div.dataset.id = video.id;
+    const div = document.createElement('div'); div.className = "video"; div.dataset.id = video.id; div.dataset.authorUid = video.authorUid;
     const commentCount = video.comments ? video.comments.length : 0; const isMe = currentUser && video.authorUid === currentUser.uid; const isFollowing = currentUser && currentUser.following && currentUser.following.includes(video.authorUid); const hasSaved = currentUser && currentUser.savedVideos && currentUser.savedVideos.includes(video.id) ? 'saved' : '';
     const plusButton = (!isMe) ? `<i class="fas fa-circle-plus follow-btn" data-target="${video.authorUid}" onclick="toggleFollow('${video.authorUid}', this, event)" style="${isFollowing ? 'display: none;' : ''}"></i>` : '';
     const authorData = getUserData(video.authorUid, video.authorName, video.authorUsername || video.authorName, video.authorPic, video.authorVerified);
@@ -436,14 +456,14 @@ function createVideoElement(video) {
     const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : ''; const realLikes = video.likedBy ? video.likedBy.length : 0;
     const soundDataId = video.soundId || video.id; const soundDataName = video.soundName || `Originalton - ${authorData.displayName}`;
     const soundDataUrl = video.soundUrl || video.url;
-    const soundDisc = `<div class="videoSidebar__button" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')" style="margin-top:15px;"><img src="${authorData.pic}" class="sound-disc"></div>`;
+    const soundDisc = `<div class="videoSidebar__button sound-disc-wrap" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')" style="margin-top:15px;"><img src="${authorData.pic}" class="sound-disc"><div class="sound-wave"></div><div class="sound-wave"></div></div>`;
 
     const mutedAttr = window.globalMuted ? 'muted' : ''; let mediaHTML = ''; let muteUIHtml = '';
     if (video.mediaType === 'images' && video.urls && video.urls.length > 0) {
         let arrowsHTML = ''; if (video.urls.length > 1) { arrowsHTML = `<div class="carousel-arrow left" onclick="window.scrollCarousel('${video.id}', -1, event)"><i class="fas fa-chevron-left"></i></div><div class="carousel-arrow right" onclick="window.scrollCarousel('${video.id}', 1, event)"><i class="fas fa-chevron-right"></i></div>`; }
         mediaHTML = `<div class="carousel-container" data-vid="${video.id}">${video.urls.map(u => `<div class="carousel-item"><img src="${u}"></div>`).join('')}</div>${arrowsHTML}<div class="carousel-dots">${video.urls.map((_, i) => `<div class="dot ${i===0 ? 'active' : ''}"></div>`).join('')}</div>`; muteUIHtml = `<div class="mute-container" style="display:none;"></div>`;
     } else {
-        mediaHTML = `<video class="video__player" data-vid="${video.id}" preload="auto" loop playsinline ${mutedAttr} src="${video.url}"></video><div class="play-indicator"><i class="fas fa-play"></i></div><div class="player-progress-bar"><div class="player-progress-filled"></div></div>`;
+        mediaHTML = `<video class="video__player" data-vid="${video.id}" preload="auto" loop playsinline ${mutedAttr} src="${video.url}"></video><div class="play-indicator"><i class="fas fa-play"></i></div><div class="player-progress-bar"><div class="player-progress-filled"></div></div><div class="fast-forward-overlay">2x ▶▶</div><div class="seek-ripple left"><div class="seek-arrows"><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i></div><div class="seek-text">5s</div></div><div class="seek-ripple right"><div class="seek-arrows"><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i></div><div class="seek-text">5s</div></div>`;
         muteUIHtml = `<div class="mute-container"><div class="mute-btn"><i class="fas fa-volume-up"></i></div><div class="volume-slider-wrapper"><input type="range" class="volume-slider" min="0" max="1" step="0.05" value="1"></div></div>`;
     }
     let rawPreview = (video.description || "").substring(0, 50); let previewHtml = formatText(rawPreview); if ((video.description && video.description.length > 50)) previewHtml += '... <strong>mehr anzeigen</strong>';
@@ -451,7 +471,6 @@ function createVideoElement(video) {
 
     const soundUI = `<div style="font-size:12px; margin-top:8px; display:flex; align-items:center; gap:5px; pointer-events:auto; cursor:pointer;" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')"><i class="fas fa-music"></i> <marquee scrollamount="3" style="width:120px;">${soundDataName}</marquee></div>`;
 
-    // NEU: Series Button Check
     let seriesBtnHTML = '';
     if(video.seriesId) {
         const nextPart = allVideosData.find(v => v.seriesId === video.seriesId && v.timestamp > video.timestamp);
@@ -536,11 +555,29 @@ const videoObserver = new IntersectionObserver(entries => {
         const el = e.target; const vidId = el.dataset.id;
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
             if(el.classList.contains('dummy-ad-video')) return; 
-            // NEU: Gamification XP & View Update
             if (vidId && !viewedVideos.has(vidId)) { viewedVideos.add(vidId); awardXP(2); updateDoc(doc(db, "videos", vidId), { views: increment(1) }).catch(() => {}); }
             const videoPlayer = el.querySelector('.video__player');
-            if (videoPlayer) { document.querySelectorAll('.video__player').forEach(otherVid => { if (otherVid !== videoPlayer && !otherVid.paused) { otherVid.pause(); otherVid.currentTime = 0; } }); videoPlayer.muted = window.globalMuted; const playPromise = videoPlayer.play(); if (playPromise !== undefined) { playPromise.catch(error => { videoPlayer.pause(); const container = videoPlayer.closest('.video-inner'); if(container) container.classList.add('is-paused'); }); } }
-        } else { const videoPlayer = el.querySelector('.video__player'); if (videoPlayer) { videoPlayer.pause(); videoPlayer.currentTime = 0; } }
+            if (videoPlayer) { 
+                document.querySelectorAll('.video__player').forEach(otherVid => { if (otherVid !== videoPlayer && !otherVid.paused) { otherVid.pause(); otherVid.currentTime = 0; } }); 
+                videoPlayer.muted = window.globalMuted; 
+                const playPromise = videoPlayer.play(); 
+                if (playPromise !== undefined) { 
+                    playPromise.then(() => {
+                        const soundWrap = el.querySelector('.sound-disc-wrap');
+                        if(soundWrap) soundWrap.classList.add('is-playing');
+                    }).catch(error => { 
+                        videoPlayer.pause(); const container = videoPlayer.closest('.video-inner'); if(container) container.classList.add('is-paused'); 
+                    }); 
+                } 
+            }
+        } else { 
+            const videoPlayer = el.querySelector('.video__player'); 
+            if (videoPlayer) { 
+                videoPlayer.pause(); videoPlayer.currentTime = 0; 
+                const soundWrap = el.querySelector('.sound-disc-wrap');
+                if(soundWrap) soundWrap.classList.remove('is-playing');
+            } 
+        }
     });
 }, { threshold: 0.6 });
 
@@ -563,7 +600,7 @@ window.sendSpecificGift = async function(giftId, price, emoji, name) {
     
     document.getElementById('gift-modal').classList.remove('show'); 
     currentUser.coins -= price; 
-    triggerHaptic('heavy'); // NEU: Haptic Feedback
+    triggerHaptic('heavy'); 
 
     const myCoinsEl = document.getElementById('my-coins'); if (myCoinsEl) myCoinsEl.innerText = currentUser.coins;
     
@@ -572,7 +609,6 @@ window.sendSpecificGift = async function(giftId, price, emoji, name) {
         try {
             await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-price) }); 
             await updateDoc(doc(db, "users", streamId), { coins: increment(price) }); 
-            // NEU: Update Live Goal
             await updateDoc(doc(db, "live_streams", streamId), { goalCurrent: increment(price) }).catch(()=>{});
             await addDoc(collection(db, `live_streams/${streamId}/gifts`), { uid: currentUser.uid, name: currentUser.displayName, emoji: emoji, giftName: name, price: price, timestamp: Date.now() });
         } catch (err) {}
@@ -591,11 +627,60 @@ document.getElementById('live-gift-btn')?.addEventListener('click', () => { if(w
 function attachInteractionsToVideo(videoContainerEl) {
     const v = videoContainerEl.querySelector('.video__player'); const c = videoContainerEl.querySelector('.carousel-container'); const container = videoContainerEl.querySelector('.video-inner'); videoObserver.observe(videoContainerEl); 
     let lastTap = 0;
-    const handleDoubleTap = (e) => { const tapLength = new Date().getTime() - lastTap; if (tapLength < 300 && tapLength > 0) { const likeBtn = container.querySelector('.like-btn'); if (!likeBtn.classList.contains('liked')) { likeBtn.click(); } const anim = container.querySelector('.like-animation'); anim.style.animation = 'none'; setTimeout(() => anim.style.animation = 'doubleTapHeart 0.8s ease-out forwards', 10); e.preventDefault(); lastTap = 0; return true; } lastTap = new Date().getTime(); return false; };
+    
+    const handleDoubleTap = (e) => { 
+        const tapLength = new Date().getTime() - lastTap; 
+        if (tapLength < 300 && tapLength > 0) { 
+            const rect = v ? v.getBoundingClientRect() : c.getBoundingClientRect();
+            const x = e.clientX || (e.changedTouches ? e.changedTouches[0].clientX : 0);
+            const y = e.clientY || (e.changedTouches ? e.changedTouches[0].clientY : 0);
+            const relX = x - rect.left;
+            
+            if (v && relX > rect.width * 0.7) {
+                // Double tap right - Seek +5s
+                v.currentTime = Math.min(v.duration, v.currentTime + 5);
+                const ripple = container.querySelector('.seek-ripple.right');
+                if(ripple) { ripple.classList.remove('active'); void ripple.offsetWidth; ripple.classList.add('active'); }
+                triggerHaptic('light');
+            } else if (v && relX < rect.width * 0.3) {
+                // Double tap left - Seek -5s
+                v.currentTime = Math.max(0, v.currentTime - 5);
+                const ripple = container.querySelector('.seek-ripple.left');
+                if(ripple) { ripple.classList.remove('active'); void ripple.offsetWidth; ripple.classList.add('active'); }
+                triggerHaptic('light');
+            } else {
+                // Double tap middle - Like
+                const likeBtn = container.querySelector('.like-btn'); 
+                if (!likeBtn.classList.contains('liked')) { likeBtn.click(); } 
+                const anim = container.querySelector('.like-animation'); 
+                anim.style.animation = 'none'; setTimeout(() => anim.style.animation = 'doubleTapHeart 0.8s ease-out forwards', 10); 
+                createParticles(x, y, document.body);
+            }
+            e.preventDefault(); lastTap = 0; return true; 
+        } 
+        lastTap = new Date().getTime(); return false; 
+    };
+
     if (v) {
-        v.addEventListener('play', () => container.classList.remove('is-paused')); v.addEventListener('pause', () => container.classList.add('is-paused'));
+        v.addEventListener('play', () => {
+            container.classList.remove('is-paused');
+            const soundWrap = container.querySelector('.sound-disc-wrap');
+            if(soundWrap) soundWrap.classList.add('is-playing');
+        }); 
+        v.addEventListener('pause', () => {
+            container.classList.add('is-paused');
+            const soundWrap = container.querySelector('.sound-disc-wrap');
+            if(soundWrap) soundWrap.classList.remove('is-playing');
+        });
         v.addEventListener('click', (e) => { if (handleDoubleTap(e)) return; if (v.paused) { document.querySelectorAll('.video__player').forEach(vid => { if (vid !== v && !vid.paused) vid.pause(); }); window.globalMuted = false; v.muted = window.globalMuted; window.updateGlobalVolumeUI(); v.play().catch(err=>{}); } else { v.pause(); } });
         v.addEventListener('timeupdate', () => { const prog = container.querySelector('.player-progress-filled'); if(prog) prog.style.width = (v.currentTime / v.duration * 100) + '%'; });
+        
+        let holdTimer;
+        const startHold = () => { holdTimer = setTimeout(() => { v.playbackRate = 2.0; const overlay = container.querySelector('.fast-forward-overlay'); if(overlay) overlay.classList.add('active'); triggerHaptic('heavy'); }, 500); };
+        const endHold = () => { clearTimeout(holdTimer); v.playbackRate = 1.0; const overlay = container.querySelector('.fast-forward-overlay'); if(overlay) overlay.classList.remove('active'); };
+        v.addEventListener('mousedown', startHold); v.addEventListener('touchstart', startHold);
+        v.addEventListener('mouseup', endHold); v.addEventListener('mouseleave', endHold); v.addEventListener('touchend', endHold);
+
         const muteContainer = container.querySelector('.mute-container'); const muteBtn = container.querySelector('.mute-btn'); const volumeSlider = container.querySelector('.volume-slider'); window.updateGlobalVolumeUI();
         if (muteBtn) { muteBtn.addEventListener('click', (e) => { e.stopPropagation(); window.globalMuted = !window.globalMuted; if (!window.globalMuted && window.globalVolume == 0) window.globalVolume = 1; window.updateGlobalVolumeUI(); }); }
         if (volumeSlider) { volumeSlider.addEventListener('input', (e) => { e.stopPropagation(); window.globalMuted = false; window.globalVolume = e.target.value; window.updateGlobalVolumeUI(); }); volumeSlider.addEventListener('mousedown', (e) => { e.stopPropagation(); muteContainer.classList.add('active-slider'); }); volumeSlider.addEventListener('touchstart', (e) => { e.stopPropagation(); muteContainer.classList.add('active-slider'); }, { passive: false }); }
@@ -603,9 +688,32 @@ function attachInteractionsToVideo(videoContainerEl) {
         container.classList.remove('is-paused'); c.addEventListener('click', (e) => handleDoubleTap(e));
         c.addEventListener('scroll', () => { const idx = Math.round(c.scrollLeft / c.clientWidth); const dots = videoContainerEl.querySelectorAll('.dot'); dots.forEach((d, i) => { if (i === idx) d.active = true; else d.classList.remove('active'); }); });
     }
+
+    let touchStartX = 0;
+    container.addEventListener('touchstart', e => touchStartX = e.changedTouches[0].screenX, {passive: true});
+    container.addEventListener('touchend', e => {
+        if (touchStartX - e.changedTouches[0].screenX > 100) {
+            const viewProfile = document.getElementById('view-profile');
+            viewProfile.classList.add('profile-slide-in');
+            openProfile(videoContainerEl.dataset.authorUid);
+            setTimeout(() => viewProfile.classList.add('active-slide'), 10);
+        }
+    }, {passive: true});
+
     document.addEventListener('mouseup', () => document.querySelectorAll('.mute-container').forEach(mc => mc.classList.remove('active-slider'))); document.addEventListener('touchend', () => document.querySelectorAll('.mute-container').forEach(mc => mc.classList.remove('active-slider')));
     const mc = container.querySelector('.mute-container'); if (mc) mc.addEventListener('click', (e) => e.stopPropagation());
-    container.querySelector('.like-btn')?.addEventListener('click', async(e) => { triggerHaptic('heavy'); const btn = e.currentTarget; const id = btn.dataset.id; const isLiked = btn.classList.contains('liked'); const targetVidData = allVideosData.find(vd => vd.id === id); document.querySelectorAll(`.like-btn[data-id="${id}"]`).forEach(el => { const countEl = el.querySelector('.like-count'); let currentLikes = Number(countEl.innerText) || 0; if (isLiked) { el.classList.remove('liked'); countEl.innerText = Math.max(0, currentLikes - 1); } else { el.classList.add('liked'); countEl.innerText = currentLikes + 1; } }); if (isLiked) await updateDoc(doc(db, "videos", id), { likedBy: arrayRemove(currentUser.uid) }); else { btn.classList.add('micro-pop'); setTimeout(()=>btn.classList.remove('micro-pop'),300); awardXP(1); await updateDoc(doc(db, "videos", id), { likedBy: arrayUnion(currentUser.uid) }); if (targetVidData) addNotification(targetVidData.authorUid, "like", "hat dein Post geliket.", id); } });
+    container.querySelector('.like-btn')?.addEventListener('click', async(e) => { 
+        triggerHaptic('heavy'); const btn = e.currentTarget; const id = btn.dataset.id; const isLiked = btn.classList.contains('liked'); const targetVidData = allVideosData.find(vd => vd.id === id); 
+        document.querySelectorAll(`.like-btn[data-id="${id}"]`).forEach(el => { const countEl = el.querySelector('.like-count'); let currentLikes = Number(countEl.innerText) || 0; if (isLiked) { el.classList.remove('liked'); countEl.innerText = Math.max(0, currentLikes - 1); } else { el.classList.add('liked'); countEl.innerText = currentLikes + 1; } }); 
+        if (isLiked) {
+            await updateDoc(doc(db, "videos", id), { likedBy: arrayRemove(currentUser.uid) }); 
+        } else { 
+            const rect = btn.getBoundingClientRect();
+            createParticles(rect.left + rect.width/2, rect.top + rect.height/2, document.body);
+            btn.classList.add('micro-pop'); setTimeout(()=>btn.classList.remove('micro-pop'),300); awardXP(1); 
+            await updateDoc(doc(db, "videos", id), { likedBy: arrayUnion(currentUser.uid) }); if (targetVidData) addNotification(targetVidData.authorUid, "like", "hat dein Post geliket.", id); 
+        } 
+    });
     container.querySelector('.comment-btn')?.addEventListener('click', (e) => { window.currentCommentVideoId = e.currentTarget.dataset.id; renderComments(window.currentCommentVideoId); document.getElementById('comment-modal').classList.add('show'); });
     container.querySelector('.share-btn')?.addEventListener('click', async(e) => { const vidId = e.currentTarget.dataset.id; const shareUrl = `${window.location.origin}${window.location.pathname}?video=${vidId}`; if (navigator.share) { try { await navigator.share({ title: 'Phil Shorts', text: 'Schau dir dieses an!', url: shareUrl }); } catch (err) {} } else { navigator.clipboard.writeText(shareUrl); showToast("Link kopiert!"); } });
 }
@@ -639,7 +747,6 @@ window.likeReply = async function(videoId, cId, rId) { if (!currentUser) return;
 window.deleteComment = async function(videoId, cId) { if (confirm("Möchtest du diesen Kommentar löschen?")) { try { const videoRef = doc(db, "videos", videoId); const videoIndex = allVideosData.findIndex(v => v.id === videoId); if (videoIndex > -1) { let comments = allVideosData[videoIndex].comments || []; const cIndex = comments.findIndex((c, idx) => c.cId === cId || idx.toString() === cId); if (cIndex > -1) { comments.splice(cIndex, 1); allVideosData[videoIndex].comments = comments; renderComments(videoId); document.querySelectorAll(`.comment-btn[data-id="${videoId}"] .comment-count-txt`).forEach(el => el.innerText = comments.length); await updateDoc(videoRef, { comments: comments }); showToast("Kommentar gelöscht!"); } } } catch (e) {} } };
 window.deleteReply = async function(videoId, cId, rId) { if (confirm("Möchtest du diese Antwort löschen?")) { try { const videoRef = doc(db, "videos", videoId); const videoIndex = allVideosData.findIndex(v => v.id === videoId); if (videoIndex > -1) { let comments = allVideosData[videoIndex].comments || []; const cIndex = comments.findIndex((c, idx) => c.cId === cId || idx.toString() === cId); if (cIndex > -1 && comments[cIndex].replies) { const rIndex = comments[cIndex].replies.findIndex(r => r.rId === rId); if (rIndex > -1) { comments[cIndex].replies.splice(rIndex, 1); renderComments(videoId); await updateDoc(videoRef, { comments: comments }); showToast("Antwort gelöscht!"); } } } } catch (e) {} } };
 
-// --- NEU: KOMMENTAR ZU VIDEO ---
 window.startCommentReplyVideo = function(videoId, commentId) {
     document.getElementById('comment-modal').classList.remove('show');
     const v = allVideosData.find(x => x.id === videoId);
@@ -648,14 +755,14 @@ window.startCommentReplyVideo = function(videoId, commentId) {
     
     document.getElementById('comment-reply-overlay').style.display = 'block';
     document.getElementById('comment-reply-text').innerText = c.text;
-    window.duetVideoId = videoId; // Wir nutzen das bestehende Duet-System für diese Logik
+    window.duetVideoId = videoId;
     switchView('duet');
     
     navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
         duetStream = stream;
         document.getElementById('duet-cam-video').srcObject = stream;
-        document.getElementById('duet-orig-video').style.display = 'none'; // Verstecke das Original
-        document.getElementById('duet-cam-video').style.width = '100%'; // Kamera groß
+        document.getElementById('duet-orig-video').style.display = 'none';
+        document.getElementById('duet-cam-video').style.width = '100%';
     }).catch(e => showCustomAlert("Kamera Fehler", "Kamera konnte nicht gestartet werden."));
 }
 
@@ -675,8 +782,10 @@ function renderComments(id) {
             let pinBadgeHtml = c.pinned ? `<div style="font-size:11px; color:#aaa; margin-bottom:5px;"><i class="fas fa-thumbtack" style="color:#ffd700;"></i> Vom Ersteller angeheftet</div>` : '';
             let pinActionHtml = (isCreator && checkPhilPlusStatus(3)) ? `<span onclick="pinComment('${id}', '${commentId}')"><i class="fas fa-thumbtack"></i> ${c.pinned ? 'Lösen' : 'Anheften'}</span>` : '';
             let translateBtnHtml = checkPhilPlusStatus(3) ? `<i class="fas fa-language translate-btn" onclick="translateComment(this, '${commentId}')" title="Übersetzen (Plus+++)" style="color:#00f2fe; margin-left:10px; cursor:pointer;"></i>` : '';
-            // NEU: Video-Antwort Button
             let replyVideoHtml = `<i class="fas fa-video reply-video-btn" onclick="startCommentReplyVideo('${id}', '${commentId}')" title="Mit Video antworten"></i>`;
+
+            const superClass = c.superComment ? 'super-comment' : '';
+            const superBadge = c.superComment ? '<div class="super-comment-badge"><i class="fas fa-star"></i> Super Comment</div>' : '';
 
             let repliesHtml = '';
             if (c.replies && c.replies.length > 0) {
@@ -691,7 +800,7 @@ function renderComments(id) {
                 }
             }
             const replyBoxHtml = `<div class="reply-box" id="reply-box-${commentId}" style="display:none;"><input type="text" placeholder="Antworten..." id="reply-input-${commentId}" class="comment-input" style="font-size:16px; padding:8px 15px;"><button onclick="submitReply('${id}', '${commentId}')" class="chat-send-btn" style="width:32px; height:32px; font-size:12px; flex-shrink: 0;"><i class="fas fa-paper-plane"></i></button></div>`;
-            return `<div class="comment-wrapper">${pinBadgeHtml}<div class="comment" style="display:flex; align-items:flex-start; width:100%;"><img src="${cUser.pic}" class="live-pic-${c.uid}" alt="User" onclick="openProfile('${c.uid}')" style="cursor:pointer;"><div style="flex:1; min-width: 0;"><strong onclick="openProfile('${c.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;"><span class="live-name-${c.uid} ${cClass}">${cUser.displayName}${badge}</span> <span class="live-username-${c.uid}" style="color:#888; font-weight:normal; font-size:12px;">@${cUser.username}</span> <span class="comment-time">${timeString}</span></strong><p id="comment-text-${commentId}" style="word-break: break-word;">${formatText(c.text)}${translateBtnHtml}</p>${renderedGif}<div class="comment-actions"><span onclick="toggleReplyBox('${commentId}')">Antworten</span><span class="${hasLiked}" onclick="likeComment('${id}', '${commentId}')"><i class="fas fa-heart"></i> ${likeCount}</span>${cCreatorHeartHtml}${pinActionHtml}${replyVideoHtml}</div></div>${deleteBtn}</div>${repliesHtml}${replyBoxHtml}</div>`;
+            return `<div class="comment-wrapper">${pinBadgeHtml}<div class="comment ${superClass}" style="display:flex; align-items:flex-start; width:100%; padding: 10px; border-radius: 12px;"><img src="${cUser.pic}" class="live-pic-${c.uid}" alt="User" onclick="openProfile('${c.uid}')" style="cursor:pointer;"><div style="flex:1; min-width: 0;">${superBadge}<strong onclick="openProfile('${c.uid}')" style="cursor:pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;"><span class="live-name-${c.uid} ${cClass}">${cUser.displayName}${badge}</span> <span class="live-username-${c.uid}" style="color:#888; font-weight:normal; font-size:12px;">@${cUser.username}</span> <span class="comment-time">${timeString}</span></strong><p id="comment-text-${commentId}" style="word-break: break-word;">${formatText(c.text)}${translateBtnHtml}</p>${renderedGif}<div class="comment-actions"><span onclick="toggleReplyBox('${commentId}')">Antworten</span><span class="${hasLiked}" onclick="likeComment('${id}', '${commentId}')"><i class="fas fa-heart"></i> ${likeCount}</span>${cCreatorHeartHtml}${pinActionHtml}${replyVideoHtml}</div></div>${deleteBtn}</div>${repliesHtml}${replyBoxHtml}</div>`;
         }).join('');
     } else { list.innerHTML = '<div class="no-comments">Sei der Erste, der kommentiert!</div>'; }
 }
@@ -722,13 +831,35 @@ function renderGiphyResults(gifs) {
 
 window.selectGifForComment = function(url) { currentPendingGifUrl = url; document.getElementById('pending-gif-img').src = url; document.getElementById('pending-gif-preview').style.display = 'block'; document.getElementById('giphy-modal').classList.remove('show'); }
 
+window.isSuperComment = false;
+document.getElementById('btn-super-comment')?.addEventListener('click', () => {
+    if (!currentUser) return showCustomAlert("Fehler", "Bitte logge dich ein.");
+    if (currentUser.coins < 50) return showCustomAlert("Zu wenig Coins", "Ein Super Comment kostet 50 Coins.");
+    window.isSuperComment = !window.isSuperComment;
+    const btn = document.getElementById('btn-super-comment');
+    if(window.isSuperComment) { btn.style.transform = 'scale(1.1)'; btn.style.boxShadow = '0 0 10px #ffd700'; }
+    else { btn.style.transform = 'scale(1)'; btn.style.boxShadow = 'none'; }
+});
+
 document.getElementById('submit-comment')?.addEventListener('click', async() => {
     const input = document.getElementById('new-comment-input'); const text = input.value.trim();
     if ((!text && !currentPendingGifUrl) || !window.currentCommentVideoId || !currentUser) return;
-    awardXP(5); // Gamification
+    
+    if(window.isSuperComment) {
+        currentUser.coins -= 50;
+        await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-50) });
+        document.getElementById('my-coins').innerText = currentUser.coins;
+    }
+
+    awardXP(5);
     const commentId = Date.now().toString();
-    const comment = { cId: commentId, uid: currentUser.uid, name: currentUser.displayName, username: currentUser.username, pic: currentUser.photoURL, verified: currentUser.verified || false, text: text, gifUrl: currentPendingGifUrl || null, likes: [], replies: [], creatorHeart: false, pinned: false };
+    const comment = { cId: commentId, uid: currentUser.uid, name: currentUser.displayName, username: currentUser.username, pic: currentUser.photoURL, verified: currentUser.verified || false, text: text, gifUrl: currentPendingGifUrl || null, likes: [], replies: [], creatorHeart: false, pinned: false, superComment: window.isSuperComment };
     const videoIndex = allVideosData.findIndex(v => v.id === window.currentCommentVideoId);
+    
+    window.isSuperComment = false;
+    const superBtn = document.getElementById('btn-super-comment');
+    if(superBtn) { superBtn.style.transform = 'scale(1)'; superBtn.style.boxShadow = 'none'; }
+
     if (videoIndex > -1) { if (!allVideosData[videoIndex].comments) allVideosData[videoIndex].comments = []; allVideosData[videoIndex].comments.push(comment); renderComments(window.currentCommentVideoId); document.querySelectorAll(`.comment-btn[data-id="${window.currentCommentVideoId}"] .comment-count-txt`).forEach(el => el.innerText = allVideosData[videoIndex].comments.length); }
     input.value = ''; currentPendingGifUrl = null; document.getElementById('pending-gif-preview').style.display = 'none';
     await updateDoc(doc(db, "videos", window.currentCommentVideoId), { comments: arrayUnion(comment) });
@@ -1133,7 +1264,7 @@ window.openDuet = async function(vidId) {
     const v = allVideosData.find(x => x.id === vidId); if(!v || v.mediaType !== 'video') return showCustomAlert("Hinweis", "Duetts gehen nur mit echten Videos.");
     window.duetVideoId = vidId; switchView('duet');
     const origVid = document.getElementById('duet-orig-video'); origVid.src = v.url; origVid.loop = true; origVid.style.display = 'block'; document.getElementById('duet-cam-video').style.width = '50%';
-    document.getElementById('comment-reply-overlay').style.display = 'none'; // Verstecke das Overlay falls aktiv
+    document.getElementById('comment-reply-overlay').style.display = 'none'; 
     try {
         duetStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         document.getElementById('duet-cam-video').srcObject = duetStream;
@@ -1179,12 +1310,11 @@ document.getElementById('duet-record-btn')?.addEventListener('click', async () =
                 const finalUrl = await uploadFileToFirebase(file, 'videos');
                 const v = allVideosData.find(x => x.id === window.duetVideoId);
                 
-                // Prüfen ob es eine Video-Antwort oder ein normales Duett war
                 const isCommentReply = document.getElementById('comment-reply-overlay').style.display === 'block';
                 let videoTitle = isCommentReply ? `Antwort auf einen Kommentar` : `Duett mit @${v.authorUsername}`;
                 let videoDesc = isCommentReply ? `Antwort auf den Kommentar` : `#duett @${v.authorUsername}`;
                 
-                awardXP(20); // Gamification Upload XP
+                awardXP(20); 
                 
                 await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, title: videoTitle, description: videoDesc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() });
                 showToast("Video veröffentlicht!"); closeDuet();
@@ -1196,7 +1326,6 @@ document.getElementById('duet-record-btn')?.addEventListener('click', async () =
             if(!btn.classList.contains('recording')) return;
             ctx.fillStyle = "black"; ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            // Wenn Duett, dann Split Screen, wenn Kommentar-Antwort, dann Fullscreen Cam
             const isCommentReply = document.getElementById('comment-reply-overlay').style.display === 'block';
             
             if(isCommentReply) {
@@ -1280,7 +1409,6 @@ class LiveManager {
         btn.disabled = true; btn.innerText = "Verbinde...";
         this.activeCalls = [];
         
-        // NEU: Live Goals einlesen
         const goalTargetVal = parseInt(document.getElementById('live-stream-goal-target').value);
         const goalDescVal = document.getElementById('live-stream-goal-desc').value;
         this.goalTarget = isNaN(goalTargetVal) ? 0 : goalTargetVal;
@@ -1331,7 +1459,6 @@ class LiveManager {
 
                 let streamData = { broadcasterUid: currentUser.uid, broadcasterName: currentUser.displayName, broadcasterPic: currentUser.photoURL, title: title, viewers: 0, lastHeartbeat: Date.now(), timestamp: Date.now() };
                 
-                // NEU: Goal Data abspeichern
                 if(this.goalTarget > 0) {
                     streamData.goalTarget = this.goalTarget;
                     streamData.goalCurrent = 0;
@@ -1473,7 +1600,7 @@ class LiveManager {
         document.getElementById('live-video-player').srcObject = null;
         document.getElementById('live-unmute-overlay').style.display = 'none';
         document.getElementById('live-reconnect-overlay').style.display = 'none';
-        document.getElementById('live-goal-container').style.display = 'none'; // Goal verstecken
+        document.getElementById('live-goal-container').style.display = 'none';
         
         clearInterval(this.timer);
         clearInterval(this.heartbeatTimer);
@@ -1544,7 +1671,6 @@ class LiveManager {
                 const data = docSnap.data();
                 document.getElementById('live-viewer-count').innerText = data.viewers || 0;
                 
-                // NEU: Live Goals auslesen und UI aktualisieren
                 if(data.goalTarget) {
                     document.getElementById('live-goal-container').style.display = 'block';
                     document.getElementById('live-goal-desc').innerText = data.goalDesc;
@@ -1598,7 +1724,6 @@ class LiveManager {
     }
 }
 
-// Global binden, damit das HTML es per onclick="window.LiveManager.join(...)" aufrufen kann!
 window.LiveManager = LiveManager;
 
 function formatLiveTime(sec) {
@@ -1777,7 +1902,6 @@ document.getElementById('submit-upload')?.addEventListener('click', async() => {
     const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); 
     btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
     
-    // NEU: Series Toggle
     const isSeries = document.getElementById('up-series-toggle') ? document.getElementById('up-series-toggle').checked : false;
     
     try {
@@ -1797,7 +1921,7 @@ document.getElementById('submit-upload')?.addEventListener('click', async() => {
             uploadObj.seriesId = "series_" + currentUser.uid + "_" + Date.now();
         }
 
-        awardXP(20); // NEU: Gamification Upload XP
+        awardXP(20);
 
         if (isVideo) {
             const finalUrl = await uploadFileToFirebase(files[0], 'videos');
