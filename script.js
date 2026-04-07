@@ -643,6 +643,7 @@ function initLiveDatabase() {
                     document.querySelectorAll(`.like-btn[data-id="${vData.id}"]`).forEach(btn => { if (currentUser && vData.likedBy && vData.likedBy.includes(currentUser.uid)) btn.classList.add('liked');
                         else btn.classList.remove('liked'); });
                     document.querySelectorAll(`.comment-btn[data-id="${vData.id}"] .comment-count-txt`).forEach(el => el.innerText = vData.comments ? vData.comments.length : 0);
+                    document.querySelectorAll(`.gift-btn[data-id="${vData.id}"] .gift-count`).forEach(el => el.innerText = vData.gifts || 0);
                     document.querySelectorAll(`.video[data-id="${vData.id}"] .video__footer .video-desc-preview`).forEach(el => { let rawPreview = (vData.description || "").substring(0, 50); let previewHtml = formatText(rawPreview); if (vData.description && vData.description.length > 50) previewHtml += '... <strong>mehr anzeigen</strong>';
                         el.innerHTML = previewHtml; });
                     document.querySelectorAll(`.video[data-id="${vData.id}"] .video__footer .video-title`).forEach(el => el.innerText = vData.title || 'Ohne Titel');
@@ -728,6 +729,7 @@ function createVideoElement(video) {
     div.dataset.id = video.id;
     div.dataset.authorUid = video.authorUid;
     const commentCount = video.comments ? video.comments.length : 0;
+    const giftCount = video.gifts || 0;
     const isMe = currentUser && video.authorUid === currentUser.uid;
     const isFollowing = currentUser && currentUser.following && currentUser.following.includes(video.authorUid);
     const hasSaved = currentUser && currentUser.savedVideos && currentUser.savedVideos.includes(video.id) ? 'saved' : '';
@@ -781,6 +783,7 @@ function createVideoElement(video) {
                 <div class="sidebar__profile" onclick="openProfile('${video.authorUid}')"><img src="${authorData.pic}" class="live-pic-${video.authorUid} ${bClass}" style="${inlineStyle}" alt="Profil">${plusButton}</div>
                 <div class="videoSidebar__button like-btn ${hasLiked}" data-id="${video.id}"><i class="fas fa-heart"></i><p class="like-count">${realLikes}</p></div>
                 <div class="videoSidebar__button comment-btn" data-id="${video.id}"><i class="fas fa-comment-dots"></i><p class="comment-count-txt">${commentCount}</p></div>
+                <div class="videoSidebar__button gift-btn" data-id="${video.id}"><i class="fas fa-gift"></i><p class="gift-count">${giftCount}</p></div>
                 <div class="videoSidebar__button bookmark-btn ${hasSaved}" data-id="${video.id}" onclick="toggleSaveVideo('${video.id}', this)"><i class="fas fa-bookmark"></i><p>Speichern</p></div>
                 <div class="videoSidebar__button share-btn" data-id="${video.id}"><i class="fas fa-share"></i><p>Teilen</p></div>
                 <div class="videoSidebar__button" onclick="openMoreOptions('${video.id}')"><i class="fas fa-ellipsis-h" style="font-size:24px;"></i><p>Mehr</p></div>
@@ -1007,6 +1010,7 @@ function attachInteractionsToVideo(videoContainerEl) {
         } 
     });
     container.querySelector('.comment-btn')?.addEventListener('click', (e) => { window.currentCommentVideoId = e.currentTarget.dataset.id; renderComments(window.currentCommentVideoId); document.getElementById('comment-modal').classList.add('show'); });
+    container.querySelector('.gift-btn')?.addEventListener('click', (e) => { window.openGiftModal(e.currentTarget.dataset.id); });
     container.querySelector('.share-btn')?.addEventListener('click', async(e) => { const vidId = e.currentTarget.dataset.id; const shareUrl = `${window.location.origin}${window.location.pathname}?video=${vidId}`; if (navigator.share) { try { await navigator.share({ title: 'Phil Shorts', text: 'Schau dir dieses an!', url: shareUrl }); } catch (err) {} } else { navigator.clipboard.writeText(shareUrl); showToast("Link kopiert!"); } });
 }
 
