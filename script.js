@@ -2,15 +2,26 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebas
 import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-const firebaseConfig = { apiKey: "AIzaSyAF-QW_MtVBkImqh1gXwhKrc2pLLCAe3Ek", authDomain: "phil-shorts.firebaseapp.com", projectId: "phil-shorts", storageBucket: "phil-shorts.firebasestorage.app", messagingSenderId: "785802511451", appId: "1:785802511451:web:c7aabd40a4a8ea89616b7e", measurementId: "G-ZCTKSM7EGJ" };
-const GIPHY_API_KEY = "Vj2uCqfOmAT1sXEKQgQvneGy60VIxgCk";
-
+// === KONFIGURATION ===
+const firebaseConfig = { 
+    apiKey: "AIzaSyAF-QW_MtVBkImqh1gXwhKrc2pLLCAe3Ek", 
+    authDomain: "phil-shorts.firebaseapp.com", 
+    projectId: "phil-shorts", 
+    storageBucket: "phil-shorts.firebasestorage.app", 
+    messagingSenderId: "785802511451", 
+    appId: "1:785802511451:web:c7aabd40a4a8ea89616b7e", 
+    measurementId: "G-ZCTKSM7EGJ" 
+};
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
 const supabaseUrl = 'https://smxxafxqtehgegyziplm.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNteHhhZnhxdGVoZ2VneXppcGxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NDAxNTQsImV4cCI6MjA5MDExNjE1NH0.sZ1Oasg08RLluHjFavz6cR-dntcgAQboAUdMsfVqYBY';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const GIPHY_API_KEY = "Vj2uCqfOmAT1sXEKQgQvneGy60VIxgCk";
+
+// === GLOBALE VARIABLEN ===
 let allVideosData = [];
 let allKnownUsers = [];
 let currentUser = JSON.parse(localStorage.getItem('phil_session'));
@@ -19,6 +30,8 @@ let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || {
 
 window.currentSoundPreviewPlayer = new Audio();
 window.editingProfileUid = null;
+window.globalMuted = false;
+window.globalVolume = 1;
 let cropperInstance = null;
 
 if (!document.getElementById('dynamic-live-styles')) {
@@ -35,7 +48,7 @@ if (!document.getElementById('dynamic-live-styles')) {
     document.head.appendChild(style);
 }
 
-// --- NEU: MICRO-INTERACTIONS & GAMIFICATION ---
+// === MICRO-INTERACTIONS & GAMIFICATION ===
 function triggerHaptic(type = 'light') {
     if (!navigator.vibrate) return;
     if (type === 'light') navigator.vibrate(20);
@@ -128,15 +141,13 @@ async function checkDailyStreak() {
         await updateDoc(doc(db, "users", currentUser.uid), { streak: currentUser.streak, lastStreakUpdate: today, coins: currentUser.coins });
     }
 }
-// ----------------------------------------------
 
 async function uploadFileToFirebase(file, folderName) {
     return new Promise(async(resolve, reject) => {
         try {
             const statusEl = document.getElementById('upload-status') || document.getElementById('story-upload-status') || document.getElementById('duet-status');
             if (statusEl) statusEl.innerText = `Lade hoch zu Datenbank...`;
-            let fileExt = 'webm';
-            if (file.name) fileExt = file.name.split('.').pop();
+            let fileExt = file.name ? file.name.split('.').pop() : 'png';
             const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
             const filePath = `${folderName}/${fileName}`;
             const { data, error } = await supabase.storage.from('phil-shorts-media').upload(filePath, file, { cacheControl: '3600', upsert: false });
@@ -194,8 +205,6 @@ let currentFeedMode = 'foryou';
 let isInitialLoad = true;
 let sortedFeed = [];
 const viewedVideos = new Set();
-window.globalVolume = 1;
-window.globalMuted = false;
 
 window.switchView = function(viewId) {
     if (viewId !== 'sound' && window.currentSoundPreviewPlayer) { window.currentSoundPreviewPlayer.pause(); const icon = document.getElementById('sound-play-icon'); if (icon) icon.className = 'fas fa-play'; }
@@ -916,19 +925,16 @@ function attachInteractionsToVideo(videoContainerEl) {
             const relX = x - rect.left;
             
             if (v && relX > rect.width * 0.7) {
-                // Double tap right - Seek +5s
                 v.currentTime = Math.min(v.duration, v.currentTime + 5);
                 const ripple = container.querySelector('.seek-ripple.right');
                 if(ripple) { ripple.classList.remove('active'); void ripple.offsetWidth; ripple.classList.add('active'); }
                 triggerHaptic('light');
             } else if (v && relX < rect.width * 0.3) {
-                // Double tap left - Seek -5s
                 v.currentTime = Math.max(0, v.currentTime - 5);
                 const ripple = container.querySelector('.seek-ripple.left');
                 if(ripple) { ripple.classList.remove('active'); void ripple.offsetWidth; ripple.classList.add('active'); }
                 triggerHaptic('light');
             } else {
-                // Double tap middle - Like
                 const likeBtn = container.querySelector('.like-btn'); 
                 if (!likeBtn.classList.contains('liked')) { likeBtn.click(); } 
                 const anim = container.querySelector('.like-animation'); 
@@ -1321,6 +1327,13 @@ window.viewUserStory = function(index = 0) {
     window.currentStoryIndex = index; const story = profileUserStories[index]; const uid = document.getElementById('profile-action-btn').dataset.uid; const authorData = getUserData(uid, "User", "user", "", false);
     document.getElementById('sv-pic').src = authorData.pic || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'; document.getElementById('sv-name').innerText = authorData.displayName; document.getElementById('sv-time').innerText = timeAgo(story.timestamp); document.getElementById('sv-counter').innerText = `${index + 1}/${profileUserStories.length}`; document.getElementById('sv-img').src = story.url; document.getElementById('story-viewer').classList.add('show');
     const linkBtn = document.getElementById('sv-link-btn'); if(story.link) { linkBtn.href = story.link; linkBtn.style.display = 'inline-flex'; } else linkBtn.style.display = 'none';
+    
+    // Mülleimer Anzeigen/Verstecken
+    const deleteBtn = document.getElementById('sv-delete-btn');
+    const isAdmin = currentUser && (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
+    const isMine = currentUser && currentUser.uid === uid;
+    if(isMine || isAdmin) { deleteBtn.style.display = 'block'; } else { deleteBtn.style.display = 'none'; }
+
     const container = document.getElementById('sv-progress-container'); container.innerHTML = '';
     for(let i=0; i < profileUserStories.length; i++){ let width = (i < index) ? '100%' : '0%'; container.innerHTML += `<div style="flex:1; height:100%; background:rgba(255,255,255,0.3); border-radius:2px; overflow:hidden;"><div id="sv-prog-${i}" style="height:100%; width:${width}; background:white; transition:${i === index ? 'width 5s linear' : 'none'};"></div></div>`; }
     setTimeout(() => { const currentProg = document.getElementById(`sv-prog-${index}`); if(currentProg) currentProg.style.width = '100%'; }, 50);
@@ -1329,6 +1342,29 @@ window.viewUserStory = function(index = 0) {
 window.nextStory = function() { viewUserStory(window.currentStoryIndex + 1); }
 window.prevStory = function() { viewUserStory(window.currentStoryIndex - 1); }
 window.closeStoryViewer = function() { clearTimeout(storyViewerTimer); document.getElementById('story-viewer').classList.remove('show'); }
+
+window.deleteStory = async function() {
+    if(profileUserStories.length === 0) return;
+    const story = profileUserStories[window.currentStoryIndex];
+    const uid = document.getElementById('profile-action-btn').dataset.uid;
+    const isAdmin = currentUser && (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
+    const isMine = currentUser && currentUser.uid === uid;
+    if(!isMine && !isAdmin) return;
+    if(confirm("Möchtest du diese Story wirklich löschen?")) {
+        try {
+            const targetUserRef = doc(db, "users", uid);
+            const targetUserSnap = await getDoc(targetUserRef);
+            if(targetUserSnap.exists()) {
+                let stories = targetUserSnap.data().stories || [];
+                stories = stories.filter(s => s.id !== story.id);
+                await updateDoc(targetUserRef, { stories: stories });
+                showToast("Story erfolgreich gelöscht!");
+                closeStoryViewer();
+                openProfile(uid); // Aktualisiert Profilansicht
+            }
+        } catch(e) { showCustomAlert("Fehler", "Story konnte nicht gelöscht werden."); }
+    }
+};
 
 window.sendSupport = async function() { const msg = document.getElementById('support-msg').value.trim(); if(!msg || !currentUser) return; const ticketRef = await addDoc(collection(db, "reports"), { uid: currentUser.uid, name: currentUser.displayName, hasPlus: checkPhilPlusStatus(1), tier: currentUser.philPlusTier || 0, status: 'open', timestamp: Date.now() }); await addDoc(collection(db, `reports/${ticketRef.id}/messages`), { senderUid: currentUser.uid, text: msg, timestamp: Date.now() }); showToast("Ticket erstellt!"); document.getElementById('support-msg').value = ''; document.getElementById('app-settings-modal').classList.remove('show'); switchView('inbox'); document.getElementById('tab-support').click(); }
 window.toggleVerify = async function(targetUid, currentStatus) { try { await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus }); showToast(!currentStatus ? "Blauer Haken vergeben! 🔵" : "Haken entfernt."); } catch (e) {} };
@@ -1453,17 +1489,28 @@ function initInboxChats() {
         let chats = []; snapshot.forEach(doc => { const chat = doc.data(); if (chat.participants && chat.participants.includes(currentUser.uid)) { const partnerUid = chat.participants.find(uid => uid !== currentUser.uid); if(!blocked.includes(partnerUid)) chats.push({ id: doc.id, ...chat }); } }); 
         chats.sort((a, b) => b.lastMessageTime - a.lastMessageTime); msgBox.innerHTML = '';
         if (chats.length === 0) { msgBox.innerHTML = '<div class="empty-state" style="height:100%;"><p>Keine Nachrichten</p></div>'; return; }
+        
         chats.forEach(chat => {
-            const partnerUid = chat.participants.find(uid => uid !== currentUser.uid); const partner = chat.users[partnerUid]; if (!partner) return; const nUser = getUserData(partnerUid, partner.name, partner.name, partner.pic, false); const safeName = nUser.username.replace(/'/g, "\\'"); const isVerif = getVerifiedBadge(nUser.verified); let nameClass = nUser.philPlusUntil && nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 1 ? "name-phil-plus" : "";
+            const partnerUid = chat.participants.find(uid => uid !== currentUser.uid); 
+            const partner = chat.users[partnerUid]; if (!partner) return; 
+            const nUser = getUserData(partnerUid, partner.name, partner.name, partner.pic, false); 
+            const safeName = nUser.username.replace(/'/g, "\\'"); 
+            const isVerif = getVerifiedBadge(nUser.verified); 
+            let nameClass = nUser.philPlusUntil && nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 1 ? "name-phil-plus" : "";
+            
             let previewText = chat.lastMessage; if(previewText && previewText.startsWith('[IMAGE]')) previewText = "📸 Bild gesendet";
             let isUnread = chat.lastMessageSender === partnerUid && chat.lastMessageRead === false;
             let fontWeight = isUnread ? "bold" : "normal";
             let colorMsg = isUnread ? "white" : "#888";
             let unreadDot = isUnread ? '<div style="width:10px; height:10px; background:#ff0050; border-radius:50%; margin-left:auto;"></div>' : '';
+            
+            // Check Plus++ for Read Receipts
+            let showReadReceipts = checkPhilPlusStatus(2) || (nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 2);
             let tickHtml = '';
-            if (chat.lastMessageSender === currentUser.uid) {
+            if (chat.lastMessageSender === currentUser.uid && showReadReceipts) {
                 tickHtml = chat.lastMessageRead ? '<span style="color:#00f2fe; margin-right:4px;">✓✓</span>' : '<span style="color:#888; margin-right:4px;">✓</span>';
             }
+            
             msgBox.innerHTML += `<div class="inbox-msg" onclick="openDM('${partnerUid}', '${safeName}', '${nUser.pic}')"><img src="${nUser.pic}" class="chat-avatar live-pic-${partnerUid}" style="flex-shrink:0;"><div style="flex:1; min-width:0;"><span class="chat-username" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><span class="live-name-${partnerUid} ${nameClass}">${nUser.displayName}${isVerif}</span></span><div class="chat-bubble" style="background: transparent; padding: 0; color: ${colorMsg}; font-weight: ${fontWeight};">${tickHtml}${formatText(previewText) || 'Neuer Chat...'}</div><div class="chat-time" style="font-size: 11px; color: #666; margin-top: 4px;">${timeAgo(chat.lastMessageTime)}</div></div>${unreadDot}</div>`;
         });
     });
@@ -1530,15 +1577,35 @@ document.getElementById('admin-close-ticket-btn')?.addEventListener('click', asy
 
 let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
 window.openDM = async function(targetUid, targetName, targetPic) {
-    if (!currentUser) return; window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic }; const uids = [currentUser.uid, targetUid].sort(); window.currentChatId = `${uids[0]}_${uids[1]}`; const nUser = getUserData(targetUid, targetName, targetName, targetPic, false); const isVerif = getVerifiedBadge(nUser.verified);
-    document.getElementById('dm-name-span').innerHTML = '@' + targetName + ' ' + isVerif; switchView('dm');
+    if (!currentUser) return; 
+    window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic }; 
+    const uids = [currentUser.uid, targetUid].sort(); 
+    window.currentChatId = `${uids[0]}_${uids[1]}`; 
+    const nUser = getUserData(targetUid, targetName, targetName, targetPic, false); 
+    const isVerif = getVerifiedBadge(nUser.verified);
+    
+    document.getElementById('dm-name-span').innerHTML = '@' + targetName + ' ' + isVerif; 
+    switchView('dm');
     
     let statusHtml = ''; if(nUser.lastActive) { let diff = Date.now() - nUser.lastActive; statusHtml = diff < 5 * 60000 ? '<span style="color:#39ff14;">🟢 Online</span>' : 'Zuletzt online: ' + timeAgo(nUser.lastActive); }
     document.getElementById('dm-status-span').innerHTML = statusHtml;
 
-    if (currentDMSnapshot) currentDMSnapshot(); const dmBox = document.getElementById('dm-box'); dmBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
-    const chatRef = doc(db, "chats", window.currentChatId); const chatSnap = await getDoc(chatRef);
+    if (currentDMSnapshot) currentDMSnapshot(); 
+    const dmBox = document.getElementById('dm-box'); 
+    dmBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
+    
+    const chatRef = doc(db, "chats", window.currentChatId); 
+    const chatSnap = await getDoc(chatRef);
     if (!chatSnap.exists()) await setDoc(chatRef, { participants: [currentUser.uid, targetUid], users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [targetUid]: { name: targetName, pic: targetPic } }, lastMessage: "", lastMessageTime: Date.now(), lastMessageRead: false });
+    
+    // Check Plus++ Status for Shared Read Receipts
+    let showReadReceipts = checkPhilPlusStatus(2);
+    if (!showReadReceipts) {
+        const tDoc = await getDoc(doc(db, "users", targetUid));
+        if (tDoc.exists() && tDoc.data().philPlusUntil > Date.now() && tDoc.data().philPlusTier >= 2) {
+            showReadReceipts = true;
+        }
+    }
     
     currentDMSnapshot = onSnapshot(query(collection(db, `chats/${window.currentChatId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
         dmBox.innerHTML = '';
@@ -1548,7 +1615,12 @@ window.openDM = async function(targetUid, targetName, targetPic) {
             snapshot.forEach(docSnap => { 
                 const msg = docSnap.data(); const isMe = msg.senderUid === currentUser.uid ? 'me' : ''; const pic = isMe ? currentUser.photoURL : targetPic; 
                 if (!isMe && !msg.read) unreadIds.push(docSnap.id);
-                let readReceipt = isMe ? (msg.read ? `<span style="font-size:10px; color:#00f2fe; margin-left:5px; font-weight:bold; letter-spacing:-2px;">✓✓</span>` : `<span style="font-size:10px; color:#888; margin-left:5px; font-weight:bold;">✓</span>`) : '';
+                
+                let readReceipt = '';
+                if (isMe && showReadReceipts) {
+                    readReceipt = msg.read ? `<span style="font-size:10px; color:#00f2fe; margin-left:5px; font-weight:bold; letter-spacing:-2px;">✓✓</span>` : `<span style="font-size:10px; color:#888; margin-left:5px; font-weight:bold;">✓</span>`;
+                }
+
                 let extraClass = isMe && checkPhilPlusStatus(2) ? 'gold-bubble' : ''; 
                 let bubbleContent = formatText(msg.text);
                 dmBox.innerHTML += `<div class="chat-msg ${isMe}"><img src="${pic}" class="chat-avatar" style="flex-shrink:0;"><div style="min-width:0; max-width: 100%;"><div class="chat-bubble ${extraClass}">${bubbleContent}</div><div class="chat-time" style="font-size: 10px; color: #666; margin-top: 4px; text-align: ${isMe ? 'right' : 'left'};">${timeAgo(msg.timestamp)}${readReceipt}</div></div></div>`; 
