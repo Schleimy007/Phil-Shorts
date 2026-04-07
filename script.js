@@ -260,7 +260,6 @@ window.formatText = function(text) {
     return safeText;
 };
 
-// XSS Schutz & Fake-Haken Filter
 function escapeHTML(str) {
     if (!str) return '';
     return str.replace(/[&<>'"]/g, 
@@ -271,7 +270,7 @@ function escapeHTML(str) {
             "'": '&#39;',
             '"': '&quot;'
         }[tag])
-    ).replace(/✅|✔️|☑️/g, ''); // Fake Haken blockieren
+    ).replace(/✅|✔️|☑️/g, '');
 }
 
 window.openHashtag = function(tag, event) {
@@ -1265,6 +1264,13 @@ window.openProfile = async function(targetUid) {
     if (currentUser && targetUid !== currentUser.uid && !checkPhilPlusStatus(3)) updateDoc(doc(db, "users", targetUid), { profileViews: increment(1) }).catch(e => {}); 
 };
 
+// DEVTOOL EXPLOIT FIX: Preise sind hier im Backend/JS verankert und können nicht über DOM-Manipulation gecheatet werden
+const SUBSCRIPTION_PRICES = {
+    1: { 5: 5000, 14: 12000, 30: 25000 },
+    2: { 5: 15000, 14: 35000, 30: 70000 },
+    3: { 5: 40000, 14: 90000, 30: 180000 }
+};
+
 const shopItems = [ { id: 'b1', name: 'Ohne', type: 'border', cost: 0, cssClass: 'none' }, { id: 'b2', name: 'Neon Blau', type: 'border', cost: 500, cssClass: 'neon-blue' }, { id: 'b3', name: 'Gold', type: 'border', cost: 1000, cssClass: 'gold' }, { id: 'b4', name: '3663 Pro', type: 'border', cost: 2500, cssClass: '3663' }, { id: 'b5', name: 'Diamant', type: 'border', cost: 5000, cssClass: 'diamond' }, { id: 'b6', name: 'RGB Chroma (Plus++)', type: 'border', cost: 0, cssClass: 'chroma', requiresPlusLevel: 2 }, { id: 'b7', name: 'Rot', type: 'border', cost: 100, cssClass: 'solid-red' }, { id: 'b8', name: 'Blau', type: 'border', cost: 100, cssClass: 'solid-blue' }, { id: 'b9', name: 'Grün', type: 'border', cost: 100, cssClass: 'solid-green' }, { id: 'b10', name: 'Gelb', type: 'border', cost: 100, cssClass: 'solid-yellow' }, { id: 'b11', name: 'Lila', type: 'border', cost: 100, cssClass: 'solid-purple' }, { id: 'b12', name: 'Orange', type: 'border', cost: 100, cssClass: 'solid-orange' }, { id: 'b13', name: 'Pink', type: 'border', cost: 100, cssClass: 'solid-pink' }, { id: 'b14', name: 'Weiß', type: 'border', cost: 100, cssClass: 'solid-white' }, { id: 'b15', name: 'Neon Rot', type: 'border', cost: 800, cssClass: 'neon-red' }, { id: 'b16', name: 'Neon Grün', type: 'border', cost: 800, cssClass: 'neon-green' }, { id: 'b17', name: 'Neon Lila', type: 'border', cost: 800, cssClass: 'neon-purple' }, { id: 'b18', name: 'Neon Pink', type: 'border', cost: 800, cssClass: 'neon-pink' }, { id: 'b19', name: 'Neon Orange', type: 'border', cost: 800, cssClass: 'neon-orange' }, { id: 'b20', name: 'Dashed Rot', type: 'border', cost: 300, cssClass: 'dashed-red' }, { id: 'b21', name: 'Dashed Blau', type: 'border', cost: 300, cssClass: 'dashed-blue' }, { id: 'b22', name: 'Dotted Grün', type: 'border', cost: 300, cssClass: 'dotted-green' }, { id: 'b23', name: 'Double Lila', type: 'border', cost: 400, cssClass: 'double-purple' }, { id: 'b24', name: 'Double Gold', type: 'border', cost: 1500, cssClass: 'double-gold' }, { id: 'b25', name: 'Fire Gradient', type: 'border', cost: 2000, cssClass: 'grad-fire' }, { id: 'b26', name: 'Ice Gradient', type: 'border', cost: 2000, cssClass: 'grad-ice' }, { id: 'b27', name: 'Toxic Gradient', type: 'border', cost: 2000, cssClass: 'grad-toxic' }, { id: 'b28', name: 'Sunset Gradient', type: 'border', cost: 2000, cssClass: 'grad-sunset' }, { id: 'b29', name: 'Cyberpunk', type: 'border', cost: 3000, cssClass: 'cyberpunk' }, { id: 'b30', name: 'Vaporwave', type: 'border', cost: 3000, cssClass: 'vaporwave' }, { id: 'b31', name: 'Cosmic', type: 'border', cost: 3500, cssClass: 'cosmic' }, { id: 'b32', name: 'Rainbow', type: 'border', cost: 4000, cssClass: 'rainbow' }, { id: 'b_custom', name: 'Custom (Plus+++)', type: 'border', cost: 0, cssClass: 'custom', requiresPlusLevel: 3 } ];
 
 document.getElementById('profile-shop-btn')?.addEventListener('click', () => { if(!currentUser) return; document.getElementById('shop-modal-coins').innerText = currentUser.coins; renderShopBorders(); document.getElementById('shop-modal').classList.add('show'); });
@@ -1294,19 +1300,46 @@ document.getElementById('cb-color1')?.addEventListener('input', updateCustomBord
 window.saveCustomBorder = async function() { if(!currentUser || !checkPhilPlusStatus(3)) return; const c1 = document.getElementById('cb-color1').value; const c2 = document.getElementById('cb-color2').value; const grad = document.getElementById('cb-grad-toggle').checked; try { currentUser.activeBorder = 'custom'; currentUser.customBorder = { c1, c2, grad }; await updateDoc(doc(db, "users", currentUser.uid), { activeBorder: 'custom', customBorder: { c1, c2, grad } }); document.getElementById('custom-border-modal').classList.remove('show'); renderShopBorders(); showToast("Ausgerüstet!"); } catch(e) {} }
 
 window.pendingSub = null;
-window.buyPhilPlus = async function(days, cost, tier) { 
+window.buyPhilPlus = async function(days, tier) { 
     if(!currentUser) return; 
+    
+    // DEVTOOL FIX: Der Preis wird aus der sicheren Konstante gezogen!
+    const secureCost = SUBSCRIPTION_PRICES[tier]?.[days];
+    if(!secureCost) return showCustomAlert("Fehler", "Ungültiges Abo ausgewählt.");
+
     if(checkPhilPlusStatus(1)) {
-        window.pendingSub = { days, cost, tier };
+        window.pendingSub = { days, cost: secureCost, tier };
         let msg = currentUser.philPlusTier === tier ? `Du hast bereits Stufe ${tier}. Möchtest du dein Abo um ${days} Tage verlängern, oder das Abo abbestellen?` : `Du besitzt aktuell Stufe ${currentUser.philPlusTier}. Möchtest du dein neues Abo (Stufe ${tier}) kaufen und das aktuelle überschreiben, oder dein Abo komplett löschen?`;
         document.getElementById('sub-conflict-msg').innerText = msg; document.getElementById('shop-modal').classList.remove('show'); document.getElementById('sub-conflict-modal').classList.add('show'); return;
     }
-    if(currentUser.coins < cost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins."); 
-    if(confirm(`Möchtest du Phil Shorts+ (Stufe ${tier}) für ${days} Tage kaufen? Kosten: ${cost} Coins.`)) executeSubPurchase(days, cost, tier);
+    if(currentUser.coins < secureCost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins."); 
+    if(confirm(`Möchtest du Phil Shorts+ (Stufe ${tier}) für ${days} Tage kaufen? Kosten: ${secureCost} Coins.`)) executeSubPurchase(days, secureCost, tier);
 }
-window.confirmSubPurchase = function() { if(!window.pendingSub) return; const { days, cost, tier } = window.pendingSub; if(currentUser.coins < cost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins."); document.getElementById('sub-conflict-modal').classList.remove('show'); executeSubPurchase(days, cost, tier); }
+
+window.confirmSubPurchase = function() { 
+    if(!window.pendingSub) return; 
+    const { days, cost, tier } = window.pendingSub; 
+    if(currentUser.coins < cost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins."); 
+    document.getElementById('sub-conflict-modal').classList.remove('show'); 
+    executeSubPurchase(days, cost, tier); 
+}
 window.cancelSubscription = async function() { if(!currentUser) return; if(confirm("Möchtest du dein Phil Shorts+ Abo WIRKLICH endgültig löschen?")) { try { currentUser.philPlusUntil = 0; currentUser.philPlusTier = 0; await updateDoc(doc(db, "users", currentUser.uid), { philPlusUntil: 0, philPlusTier: 0 }); document.getElementById('sub-conflict-modal').classList.remove('show'); showToast("Abo gelöscht."); initLiveUser(); } catch(e) {} } }
-async function executeSubPurchase(days, cost, tier) { try { currentUser.coins -= cost; let currentUntil = currentUser.philPlusUntil && currentUser.philPlusUntil > Date.now() ? currentUser.philPlusUntil : Date.now(); let newUntil = currentUntil + (days * 86400000); currentUser.philPlusUntil = newUntil; currentUser.philPlusTier = tier; await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-cost), philPlusUntil: newUntil, philPlusTier: tier }); document.getElementById('shop-modal-coins').innerText = currentUser.coins; document.getElementById('my-coins').innerText = currentUser.coins; showToast(`Phil Shorts+ aktiviert! 🎉`); document.getElementById('shop-modal').classList.remove('show'); initLiveUser(); } catch(e) {} }
+
+async function executeSubPurchase(days, cost, tier) { 
+    try { 
+        currentUser.coins -= cost; 
+        let currentUntil = currentUser.philPlusUntil && currentUser.philPlusUntil > Date.now() ? currentUser.philPlusUntil : Date.now(); 
+        let newUntil = currentUntil + (days * 86400000); 
+        currentUser.philPlusUntil = newUntil; 
+        currentUser.philPlusTier = tier; 
+        await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-cost), philPlusUntil: newUntil, philPlusTier: tier }); 
+        document.getElementById('shop-modal-coins').innerText = currentUser.coins; 
+        document.getElementById('my-coins').innerText = currentUser.coins; 
+        showToast(`Phil Shorts+ aktiviert! 🎉`); 
+        document.getElementById('shop-modal').classList.remove('show'); 
+        initLiveUser(); 
+    } catch(e) {} 
+}
 
 window.openStoryUpload = function() { if(!currentUser) return; document.getElementById('shop-modal').classList.remove('show'); document.getElementById('story-upload-modal').classList.add('show'); }
 document.getElementById('close-story-upload')?.addEventListener('click', () => document.getElementById('story-upload-modal').classList.remove('show'));
@@ -1328,6 +1361,7 @@ window.viewUserStory = function(index = 0) {
     document.getElementById('sv-pic').src = authorData.pic || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'; document.getElementById('sv-name').innerText = authorData.displayName; document.getElementById('sv-time').innerText = timeAgo(story.timestamp); document.getElementById('sv-counter').innerText = `${index + 1}/${profileUserStories.length}`; document.getElementById('sv-img').src = story.url; document.getElementById('story-viewer').classList.add('show');
     const linkBtn = document.getElementById('sv-link-btn'); if(story.link) { linkBtn.href = story.link; linkBtn.style.display = 'inline-flex'; } else linkBtn.style.display = 'none';
     
+    // Mülleimer Anzeigen/Verstecken
     const deleteBtn = document.getElementById('sv-delete-btn');
     const isAdmin = currentUser && (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
     const isMine = currentUser && currentUser.uid === uid;
@@ -1359,7 +1393,7 @@ window.deleteStory = async function() {
                 await updateDoc(targetUserRef, { stories: stories });
                 showToast("Story erfolgreich gelöscht!");
                 closeStoryViewer();
-                openProfile(uid);
+                openProfile(uid); // Aktualisiert Profilansicht
             }
         } catch(e) { showCustomAlert("Fehler", "Story konnte nicht gelöscht werden."); }
     }
@@ -1503,7 +1537,9 @@ function initInboxChats() {
             let colorMsg = isUnread ? "white" : "#888";
             let unreadDot = isUnread ? '<div style="width:10px; height:10px; background:#ff0050; border-radius:50%; margin-left:auto;"></div>' : '';
             
-            let showReadReceipts = checkPhilPlusStatus(2) || (nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 2);
+            // Check Plus++ for Read Receipts (optimized via allKnownUsers)
+            let partnerData = allKnownUsers.find(u => u.uid === partnerUid);
+            let showReadReceipts = checkPhilPlusStatus(2) || (partnerData && partnerData.philPlusUntil > Date.now() && partnerData.philPlusTier >= 2);
             let tickHtml = '';
             if (chat.lastMessageSender === currentUser.uid && showReadReceipts) {
                 tickHtml = chat.lastMessageRead ? '<span style="color:#00f2fe; margin-right:4px;">✓✓</span>' : '<span style="color:#888; margin-right:4px;">✓</span>';
@@ -1585,13 +1621,9 @@ window.openDM = async function(targetUid, targetName, targetPic) {
     const chatRef = doc(db, "chats", window.currentChatId); const chatSnap = await getDoc(chatRef);
     if (!chatSnap.exists()) await setDoc(chatRef, { participants: [currentUser.uid, targetUid], users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [targetUid]: { name: targetName, pic: targetPic } }, lastMessage: "", lastMessageTime: Date.now(), lastMessageRead: false });
     
-    let showReadReceipts = checkPhilPlusStatus(2);
-    if (!showReadReceipts) {
-        const tDoc = await getDoc(doc(db, "users", targetUid));
-        if (tDoc.exists() && tDoc.data().philPlusUntil > Date.now() && tDoc.data().philPlusTier >= 2) {
-            showReadReceipts = true;
-        }
-    }
+    // Check Plus++ for Read Receipts (optimized via allKnownUsers)
+    let partnerData = allKnownUsers.find(u => u.uid === targetUid);
+    let showReadReceipts = checkPhilPlusStatus(2) || (partnerData && partnerData.philPlusUntil > Date.now() && partnerData.philPlusTier >= 2);
     
     currentDMSnapshot = onSnapshot(query(collection(db, `chats/${window.currentChatId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
         dmBox.innerHTML = '';
