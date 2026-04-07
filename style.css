@@ -1615,7 +1615,7 @@ body.theme-neon-pink .glass-nav-bottom {
     display: flex;
     flex-direction: column;
     gap: 15px;
-    padding-bottom: 80px;
+    padding-bottom: 120px !important;
 }
 
 .inbox-msg {
@@ -3391,4 +3391,10 @@ input:checked+.slider:before {
 
 .view.profile-slide-in.active-slide {
     transform: translateX(0);
+}
+
+/* CROPPER JS CICLE CSS FIX */
+.cropper-view-box,
+.cropper-face {
+    border-radius: 50%;
 }
