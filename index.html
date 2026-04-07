@@ -684,6 +684,19 @@
             </div>
         </div>
 
+        <div id="crop-modal" class="modal" style="height: 80%; z-index: 5000;">
+            <div class="modal-header">
+                <h4>Bild zuschneiden</h4>
+                <i class="fas fa-times close-modal" id="close-crop-modal"></i>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000;">
+                <div style="width: 100%; max-height: 60vh; background: #111; display:flex; justify-content:center;">
+                    <img id="crop-image-target" src="" style="max-width: 100%; display:none;">
+                </div>
+                <button id="crop-save-btn" class="profile-action-btn" style="width: 100%; margin-top: 20px;">Zuschneiden & Hochladen</button>
+            </div>
+        </div>
+
         <div id="story-upload-modal" class="modal" style="height: 60%;">
             <div class="modal-header">
                 <h4>Story erstellen (1000 Coins)</h4>
@@ -706,16 +719,20 @@
         </div>
 
         <div id="story-viewer" class="full-screen-overlay" style="background: rgba(0,0,0,0.95); z-index: 4000; flex-direction: column;">
-            <div style="width: 100%; padding: 20px; display: flex; justify-content: space-between; align-items: center; position: absolute; top: 0; z-index: 4006;">
+            <div class="story-progress-container" id="sv-progress-container"></div>
+            <div style="width: 100%; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; position: absolute; top: calc(20px + env(safe-area-inset-top)); z-index: 4006;">
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <img id="sv-pic" src="" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover;">
-                    <span id="sv-name" style="font-weight: bold; color: white;"></span>
-                    <span id="sv-time" style="color: #aaa; font-size: 12px;"></span>
-                    <span id="sv-counter" style="color: #888; font-size: 12px; font-weight: bold; margin-left: 5px;"></span>
+                    <span id="sv-name" style="font-weight: bold; color: white; text-shadow: 0 1px 3px black;"></span>
+                    <span id="sv-time" style="color: #ddd; font-size: 12px; text-shadow: 0 1px 3px black;"></span>
+                    <span id="sv-counter" style="color: #aaa; font-size: 12px; font-weight: bold; margin-left: 5px; text-shadow: 0 1px 3px black;"></span>
                 </div>
-                <i class="fas fa-times" style="color: white; font-size: 24px; cursor: pointer;" onclick="closeStoryViewer()"></i>
+                <div style="display: flex; align-items: center; gap: 20px;">
+                    <i class="fas fa-trash" id="sv-delete-btn" style="color: #ff4444; font-size: 20px; cursor: pointer; display: none; filter: drop-shadow(0 2px 4px black);" onclick="deleteStory()"></i>
+                    <i class="fas fa-times" style="color: white; font-size: 26px; cursor: pointer; filter: drop-shadow(0 2px 4px black);" onclick="closeStoryViewer()"></i>
+                </div>
             </div>
-            <div class="story-progress-container" id="sv-progress-container"></div>
+            
             <div style="position: absolute; top: 0; left: 0; width: 30%; height: 100%; z-index: 4002;" onclick="prevStory()"></div>
             <div style="position: absolute; top: 0; right: 0; width: 70%; height: 100%; z-index: 4002;" onclick="nextStory()"></div>
             <img id="sv-img" src="" style="width: 100%; height: 80%; object-fit: contain; margin-top: 60px; position: relative; z-index: 4001;">
@@ -846,19 +863,6 @@
                 </div>
 
                 <button id="save-settings-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; min-height: 56px; font-size:16px;">Profil Speichern</button>
-            </div>
-        </div>
-
-        <div id="crop-modal" class="modal" style="height: 80%; z-index: 5000;">
-            <div class="modal-header">
-                <h4>Bild zuschneiden</h4>
-                <i class="fas fa-times close-modal" id="close-crop-modal"></i>
-            </div>
-            <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; justify-content: center; background: #000;">
-                <div style="width: 100%; max-height: 60vh; background: #111; display:flex; justify-content:center;">
-                    <img id="crop-image-target" src="" style="max-width: 100%; display:none;">
-                </div>
-                <button id="crop-save-btn" class="profile-action-btn" style="width: 100%; margin-top: 20px;">Zuschneiden & Hochladen</button>
             </div>
         </div>
 

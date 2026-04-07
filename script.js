@@ -1328,7 +1328,6 @@ window.viewUserStory = function(index = 0) {
     document.getElementById('sv-pic').src = authorData.pic || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'; document.getElementById('sv-name').innerText = authorData.displayName; document.getElementById('sv-time').innerText = timeAgo(story.timestamp); document.getElementById('sv-counter').innerText = `${index + 1}/${profileUserStories.length}`; document.getElementById('sv-img').src = story.url; document.getElementById('story-viewer').classList.add('show');
     const linkBtn = document.getElementById('sv-link-btn'); if(story.link) { linkBtn.href = story.link; linkBtn.style.display = 'inline-flex'; } else linkBtn.style.display = 'none';
     
-    // Mülleimer Anzeigen/Verstecken
     const deleteBtn = document.getElementById('sv-delete-btn');
     const isAdmin = currentUser && (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
     const isMine = currentUser && currentUser.uid === uid;
@@ -1360,7 +1359,7 @@ window.deleteStory = async function() {
                 await updateDoc(targetUserRef, { stories: stories });
                 showToast("Story erfolgreich gelöscht!");
                 closeStoryViewer();
-                openProfile(uid); // Aktualisiert Profilansicht
+                openProfile(uid);
             }
         } catch(e) { showCustomAlert("Fehler", "Story konnte nicht gelöscht werden."); }
     }
@@ -1504,7 +1503,6 @@ function initInboxChats() {
             let colorMsg = isUnread ? "white" : "#888";
             let unreadDot = isUnread ? '<div style="width:10px; height:10px; background:#ff0050; border-radius:50%; margin-left:auto;"></div>' : '';
             
-            // Check Plus++ for Read Receipts
             let showReadReceipts = checkPhilPlusStatus(2) || (nUser.philPlusUntil > Date.now() && nUser.philPlusTier >= 2);
             let tickHtml = '';
             if (chat.lastMessageSender === currentUser.uid && showReadReceipts) {
@@ -1577,28 +1575,16 @@ document.getElementById('admin-close-ticket-btn')?.addEventListener('click', asy
 
 let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
 window.openDM = async function(targetUid, targetName, targetPic) {
-    if (!currentUser) return; 
-    window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic }; 
-    const uids = [currentUser.uid, targetUid].sort(); 
-    window.currentChatId = `${uids[0]}_${uids[1]}`; 
-    const nUser = getUserData(targetUid, targetName, targetName, targetPic, false); 
-    const isVerif = getVerifiedBadge(nUser.verified);
-    
-    document.getElementById('dm-name-span').innerHTML = '@' + targetName + ' ' + isVerif; 
-    switchView('dm');
+    if (!currentUser) return; window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic }; const uids = [currentUser.uid, targetUid].sort(); window.currentChatId = `${uids[0]}_${uids[1]}`; const nUser = getUserData(targetUid, targetName, targetName, targetPic, false); const isVerif = getVerifiedBadge(nUser.verified);
+    document.getElementById('dm-name-span').innerHTML = '@' + targetName + ' ' + isVerif; switchView('dm');
     
     let statusHtml = ''; if(nUser.lastActive) { let diff = Date.now() - nUser.lastActive; statusHtml = diff < 5 * 60000 ? '<span style="color:#39ff14;">🟢 Online</span>' : 'Zuletzt online: ' + timeAgo(nUser.lastActive); }
     document.getElementById('dm-status-span').innerHTML = statusHtml;
 
-    if (currentDMSnapshot) currentDMSnapshot(); 
-    const dmBox = document.getElementById('dm-box'); 
-    dmBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
-    
-    const chatRef = doc(db, "chats", window.currentChatId); 
-    const chatSnap = await getDoc(chatRef);
+    if (currentDMSnapshot) currentDMSnapshot(); const dmBox = document.getElementById('dm-box'); dmBox.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
+    const chatRef = doc(db, "chats", window.currentChatId); const chatSnap = await getDoc(chatRef);
     if (!chatSnap.exists()) await setDoc(chatRef, { participants: [currentUser.uid, targetUid], users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [targetUid]: { name: targetName, pic: targetPic } }, lastMessage: "", lastMessageTime: Date.now(), lastMessageRead: false });
     
-    // Check Plus++ Status for Shared Read Receipts
     let showReadReceipts = checkPhilPlusStatus(2);
     if (!showReadReceipts) {
         const tDoc = await getDoc(doc(db, "users", targetUid));
