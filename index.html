@@ -833,12 +833,8 @@
                 <h4>Profil bearbeiten</h4><i class="fas fa-times close-modal" id="close-settings"></i>
             </div>
             <div class="modal-body upload-body">
-                <label style="color:#888; font-size:12px; margin-left:5px;">Profilbild (URL oder Upload)</label>
-                <div style="display:flex; gap:10px; margin-bottom:10px;">
-                    <input type="text" id="edit-pic-input" class="comment-input" placeholder="https://..." style="border-radius:15px; width: 100%; flex: 1;">
-                    <input type="file" id="edit-pic-file" accept="image/*" style="display:none;">
-                    <button id="edit-pic-upload-btn" class="profile-action-btn edit-btn" style="min-width: 50px; padding: 0;"><i class="fas fa-upload"></i></button>
-                </div>
+                <label style="color:#888; font-size:12px; margin-left:5px;">Profilbild URL (Auch GIFs!)</label>
+                <input type="text" id="edit-pic-input" class="comment-input" placeholder="https://..." style="border-radius:15px; margin-bottom:10px; width: 100%;">
                 <label style="color:#888; font-size:12px; margin-left:5px;">Anzeigename</label>
                 <input type="text" id="edit-displayname-input" class="comment-input" placeholder="Dein Name" maxlength="30" style="border-radius:15px; margin-bottom:10px; width: 100%;">
                 <label style="color:#888; font-size:12px; margin-left:5px;">Benutzername</label>
@@ -932,6 +928,20 @@
                 </div>
 
                 <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050; min-height: 56px; font-size: 17px;">Abmelden</button>
+            </div>
+        </div>
+
+        <div id="admin-plus-modal" class="modal" style="height: 50%; z-index: 6000;">
+            <div class="modal-header">
+                <h4>👑 Phil Shorts+ Verwalten</h4>
+                <i class="fas fa-times close-modal" onclick="document.getElementById('admin-plus-modal').classList.remove('show')"></i>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;">
+                <p style="color:#aaa; font-size:13px; text-align:center;">Wähle eine Aktion für diesen Nutzer:</p>
+                <button class="profile-action-btn" style="background:#ffd700; color:black;" onclick="adminGrantPlus(1)">Plus (Stufe 1) geben</button>
+                <button class="profile-action-btn" style="background:#00f2fe; color:black;" onclick="adminGrantPlus(2)">Plus++ (Stufe 2) geben</button>
+                <button class="profile-action-btn" style="background:#ff0050; color:white;" onclick="adminGrantPlus(3)">Plus+++ (Stufe 3) geben</button>
+                <button class="profile-action-btn" style="background:transparent; border:1px solid #ff4444; color:#ff4444; margin-top: 10px;" onclick="adminGrantPlus(0)">Abo komplett löschen</button>
             </div>
         </div>
 

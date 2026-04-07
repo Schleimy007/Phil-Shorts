@@ -21,6 +21,74 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const GIPHY_API_KEY = "Vj2uCqfOmAT1sXEKQgQvneGy60VIxgCk";
 
+// === GLOBALE KONSTANTEN (NACH OBEN VERSCHOBEN FÜR EDITOR-FIX) ===
+
+// DevTool Exploit Fix: Preise sind fest programmiert
+const SUBSCRIPTION_PRICES = {
+    1: { 5: 5000, 14: 12000, 30: 25000 },
+    2: { 5: 15000, 14: 35000, 30: 70000 },
+    3: { 5: 40000, 14: 90000, 30: 180000 }
+};
+
+const shopItems = [ 
+    { id: 'b1', name: 'Ohne', type: 'border', cost: 0, cssClass: 'none' }, 
+    { id: 'b2', name: 'Neon Blau', type: 'border', cost: 500, cssClass: 'neon-blue' }, 
+    { id: 'b3', name: 'Gold', type: 'border', cost: 1000, cssClass: 'gold' }, 
+    { id: 'b4', name: '3663 Pro', type: 'border', cost: 2500, cssClass: '3663' }, 
+    { id: 'b5', name: 'Diamant', type: 'border', cost: 5000, cssClass: 'diamond' }, 
+    { id: 'b6', name: 'RGB Chroma (Plus++)', type: 'border', cost: 0, cssClass: 'chroma', requiresPlusLevel: 2 }, 
+    { id: 'b7', name: 'Rot', type: 'border', cost: 100, cssClass: 'solid-red' }, 
+    { id: 'b8', name: 'Blau', type: 'border', cost: 100, cssClass: 'solid-blue' }, 
+    { id: 'b9', name: 'Grün', type: 'border', cost: 100, cssClass: 'solid-green' }, 
+    { id: 'b10', name: 'Gelb', type: 'border', cost: 100, cssClass: 'solid-yellow' }, 
+    { id: 'b11', name: 'Lila', type: 'border', cost: 100, cssClass: 'solid-purple' }, 
+    { id: 'b12', name: 'Orange', type: 'border', cost: 100, cssClass: 'solid-orange' }, 
+    { id: 'b13', name: 'Pink', type: 'border', cost: 100, cssClass: 'solid-pink' }, 
+    { id: 'b14', name: 'Weiß', type: 'border', cost: 100, cssClass: 'solid-white' }, 
+    { id: 'b15', name: 'Neon Rot', type: 'border', cost: 800, cssClass: 'neon-red' }, 
+    { id: 'b16', name: 'Neon Grün', type: 'border', cost: 800, cssClass: 'neon-green' }, 
+    { id: 'b17', name: 'Neon Lila', type: 'border', cost: 800, cssClass: 'neon-purple' }, 
+    { id: 'b18', name: 'Neon Pink', type: 'border', cost: 800, cssClass: 'neon-pink' }, 
+    { id: 'b19', name: 'Neon Orange', type: 'border', cost: 800, cssClass: 'neon-orange' }, 
+    { id: 'b20', name: 'Dashed Rot', type: 'border', cost: 300, cssClass: 'dashed-red' }, 
+    { id: 'b21', name: 'Dashed Blau', type: 'border', cost: 300, cssClass: 'dashed-blue' }, 
+    { id: 'b22', name: 'Dotted Grün', type: 'border', cost: 300, cssClass: 'dotted-green' }, 
+    { id: 'b23', name: 'Double Lila', type: 'border', cost: 400, cssClass: 'double-purple' }, 
+    { id: 'b24', name: 'Double Gold', type: 'border', cost: 1500, cssClass: 'double-gold' }, 
+    { id: 'b25', name: 'Fire Gradient', type: 'border', cost: 2000, cssClass: 'grad-fire' }, 
+    { id: 'b26', name: 'Ice Gradient', type: 'border', cost: 2000, cssClass: 'grad-ice' }, 
+    { id: 'b27', name: 'Toxic Gradient', type: 'border', cost: 2000, cssClass: 'grad-toxic' }, 
+    { id: 'b28', name: 'Sunset Gradient', type: 'border', cost: 2000, cssClass: 'grad-sunset' }, 
+    { id: 'b29', name: 'Cyberpunk', type: 'border', cost: 3000, cssClass: 'cyberpunk' }, 
+    { id: 'b30', name: 'Vaporwave', type: 'border', cost: 3000, cssClass: 'vaporwave' }, 
+    { id: 'b31', name: 'Cosmic', type: 'border', cost: 3500, cssClass: 'cosmic' }, 
+    { id: 'b32', name: 'Rainbow', type: 'border', cost: 4000, cssClass: 'rainbow' }, 
+    { id: 'b_custom', name: 'Custom (Plus+++)', type: 'border', cost: 0, cssClass: 'custom', requiresPlusLevel: 3 } 
+];
+
+const allGifts = [ 
+    { id: 'g1', name: 'Rose', emoji: '🌹', price: 1 }, 
+    { id: 'g2', name: 'Kaffee', emoji: '☕', price: 1 }, 
+    { id: 'g3', name: 'Herz', emoji: '❤️', price: 5 }, 
+    { id: 'g4', name: 'GG', emoji: '🎮', price: 5 }, 
+    { id: 'g5', name: 'Mini 3663', emoji: '🧊', price: 10 }, 
+    { id: 'g6', name: 'Flamme', emoji: '🔥', price: 10 }, 
+    { id: 'g7', name: 'Applaus', emoji: '👏', price: 15 }, 
+    { id: 'g8', name: 'Brille', emoji: '🕶️', price: 20 }, 
+    { id: 'g9', name: 'Party', emoji: '🎉', price: 20 }, 
+    { id: 'g10', name: 'Flex', emoji: '💪', price: 50 }, 
+    { id: 'g11', name: '3663 Schild', emoji: '🛡️', price: 50 }, 
+    { id: 'g12', name: 'Diamant', emoji: '💎', price: 100 }, 
+    { id: 'g13', name: '3663 Krone', emoji: '👑', price: 100 }, 
+    { id: 'g14', name: 'Rakete', emoji: '🚀', price: 200 }, 
+    { id: 'g15', name: '3663 Kette', emoji: '⛓️', price: 250 }, 
+    { id: 'g16', name: 'Löwe', emoji: '🦁', price: 500 }, 
+    { id: 'g17', name: '3663 Auto', emoji: '🏎️', price: 500 }, 
+    { id: 'g18', name: 'Universum', emoji: '🌌', price: 1000, reqTier: 2 }, 
+    { id: 'g19', name: '3663 Villa', emoji: '🏰', price: 1000, reqTier: 2 }, 
+    { id: 'g20', name: '3663 Legende', emoji: '🦅', price: 5000, reqTier: 2 } 
+];
+
 // === GLOBALE VARIABLEN ===
 let allVideosData = [];
 let allKnownUsers = [];
@@ -48,7 +116,7 @@ if (!document.getElementById('dynamic-live-styles')) {
     document.head.appendChild(style);
 }
 
-// === MICRO-INTERACTIONS & GAMIFICATION ===
+// --- NEU: MICRO-INTERACTIONS & GAMIFICATION ---
 function triggerHaptic(type = 'light') {
     if (!navigator.vibrate) return;
     if (type === 'light') navigator.vibrate(20);
@@ -260,6 +328,7 @@ window.formatText = function(text) {
     return safeText;
 };
 
+// XSS Schutz & Fake-Haken Filter
 function escapeHTML(str) {
     if (!str) return '';
     return str.replace(/[&<>'"]/g, 
@@ -270,7 +339,7 @@ function escapeHTML(str) {
             "'": '&#39;',
             '"': '&quot;'
         }[tag])
-    ).replace(/✅|✔️|☑️/g, '');
+    ).replace(/✅|✔️|☑️/g, ''); // Fake Haken blockieren
 }
 
 window.openHashtag = function(tag, event) {
@@ -659,6 +728,7 @@ function initLiveDatabase() {
 function renderFeed(reset = false) {
     const container = document.getElementById('video-container');
     if (reset) {
+        // Bereinige alle Videos, aber behalte Skeleton und Initial Loader (falls vorhanden)
         const oldVids = container.querySelectorAll('.video');
         oldVids.forEach(v => v.remove());
         const oldLoaders = container.querySelectorAll('.feed-end-loader');
@@ -867,8 +937,6 @@ const videoObserver = new IntersectionObserver(entries => {
         }
     });
 }, { threshold: 0.6 });
-
-const allGifts = [ { id: 'g1', name: 'Rose', emoji: '🌹', price: 1 }, { id: 'g2', name: 'Kaffee', emoji: '☕', price: 1 }, { id: 'g3', name: 'Herz', emoji: '❤️', price: 5 }, { id: 'g4', name: 'GG', emoji: '🎮', price: 5 }, { id: 'g5', name: 'Mini 3663', emoji: '🧊', price: 10 }, { id: 'g6', name: 'Flamme', emoji: '🔥', price: 10 }, { id: 'g7', name: 'Applaus', emoji: '👏', price: 15 }, { id: 'g8', name: 'Brille', emoji: '🕶️', price: 20 }, { id: 'g9', name: 'Party', emoji: '🎉', price: 20 }, { id: 'g10', name: 'Flex', emoji: '💪', price: 50 }, { id: 'g11', name: '3663 Schild', emoji: '🛡️', price: 50 }, { id: 'g12', name: 'Diamant', emoji: '💎', price: 100 }, { id: 'g13', name: '3663 Krone', emoji: '👑', price: 100 }, { id: 'g14', name: 'Rakete', emoji: '🚀', price: 200 }, { id: 'g15', name: '3663 Kette', emoji: '⛓️', price: 250 }, { id: 'g16', name: 'Löwe', emoji: '🦁', price: 500 }, { id: 'g17', name: '3663 Auto', emoji: '🏎️', price: 500 }, { id: 'g18', name: 'Universum', emoji: '🌌', price: 1000, reqTier: 2 }, { id: 'g19', name: '3663 Villa', emoji: '🏰', price: 1000, reqTier: 2 }, { id: 'g20', name: '3663 Legende', emoji: '🦅', price: 5000, reqTier: 2 } ];
 
 window.openGiftModal = function(contextId) {
     if (!currentUser) return showCustomAlert("Fehler", "Bitte logge dich ein.");
@@ -1235,7 +1303,7 @@ window.openProfile = async function(targetUid) {
         const actionBtn = document.getElementById('profile-action-btn'); const msgBtn = document.getElementById('profile-message-btn'); const shopBtn = document.getElementById('profile-shop-btn'); const blockBtn = document.getElementById('profile-block-btn');
         actionBtn.dataset.uid = targetUid; const settingsIcon = document.getElementById('open-settings'); const adminDashboardBtn = document.getElementById('open-admin-dashboard'); const privateStats = document.getElementById('private-stats'); const adminControls = document.getElementById('admin-controls'); adminControls.innerHTML = '';
         
-        if (currentUser && (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) && targetUid !== currentUser.uid) { const isVerif = targetUser.verified || false; adminControls.innerHTML = `<button onclick="toggleVerify('${targetUid}', ${isVerif})" class="profile-action-btn" style="background: transparent; color: #00f2fe; border: 1px solid #00f2fe; margin-top: 15px; width: 100%;">👑 Admin: ${isVerif ? 'Blauen Haken entfernen' : 'Blauen Haken geben'}</button>`; }
+        if (currentUser && (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin) && targetUid !== currentUser.uid) { const isVerif = targetUser.verified || false; adminControls.innerHTML = `<button onclick="toggleVerify('${targetUid}', ${isVerif})" class="profile-action-btn" style="background: transparent; color: #00f2fe; border: 1px solid #00f2fe; margin-top: 15px; width: 100%;">👑 Admin: ${isVerif ? 'Blauen Haken entfernen' : 'Blauen Haken geben'}</button> <button onclick="openAdminPlusModal('${targetUid}')" class="profile-action-btn" style="background: transparent; color: #ffd700; border: 1px solid #ffd700; margin-top: 10px; width: 100%;">👑 Abo verwalten</button>`; }
         
         if (currentUser && targetUid === currentUser.uid) { 
             msgBtn.style.display = 'none'; shopBtn.style.display = 'block'; blockBtn.style.display = 'none'; document.getElementById('tab-profile-saved').style.display = 'block';
@@ -1263,144 +1331,6 @@ window.openProfile = async function(targetUid) {
     });
     if (currentUser && targetUid !== currentUser.uid && !checkPhilPlusStatus(3)) updateDoc(doc(db, "users", targetUid), { profileViews: increment(1) }).catch(e => {}); 
 };
-
-// DEVTOOL EXPLOIT FIX: Preise sind hier im Backend/JS verankert und können nicht über DOM-Manipulation gecheatet werden
-const SUBSCRIPTION_PRICES = {
-    1: { 5: 5000, 14: 12000, 30: 25000 },
-    2: { 5: 15000, 14: 35000, 30: 70000 },
-    3: { 5: 40000, 14: 90000, 30: 180000 }
-};
-
-const shopItems = [ { id: 'b1', name: 'Ohne', type: 'border', cost: 0, cssClass: 'none' }, { id: 'b2', name: 'Neon Blau', type: 'border', cost: 500, cssClass: 'neon-blue' }, { id: 'b3', name: 'Gold', type: 'border', cost: 1000, cssClass: 'gold' }, { id: 'b4', name: '3663 Pro', type: 'border', cost: 2500, cssClass: '3663' }, { id: 'b5', name: 'Diamant', type: 'border', cost: 5000, cssClass: 'diamond' }, { id: 'b6', name: 'RGB Chroma (Plus++)', type: 'border', cost: 0, cssClass: 'chroma', requiresPlusLevel: 2 }, { id: 'b7', name: 'Rot', type: 'border', cost: 100, cssClass: 'solid-red' }, { id: 'b8', name: 'Blau', type: 'border', cost: 100, cssClass: 'solid-blue' }, { id: 'b9', name: 'Grün', type: 'border', cost: 100, cssClass: 'solid-green' }, { id: 'b10', name: 'Gelb', type: 'border', cost: 100, cssClass: 'solid-yellow' }, { id: 'b11', name: 'Lila', type: 'border', cost: 100, cssClass: 'solid-purple' }, { id: 'b12', name: 'Orange', type: 'border', cost: 100, cssClass: 'solid-orange' }, { id: 'b13', name: 'Pink', type: 'border', cost: 100, cssClass: 'solid-pink' }, { id: 'b14', name: 'Weiß', type: 'border', cost: 100, cssClass: 'solid-white' }, { id: 'b15', name: 'Neon Rot', type: 'border', cost: 800, cssClass: 'neon-red' }, { id: 'b16', name: 'Neon Grün', type: 'border', cost: 800, cssClass: 'neon-green' }, { id: 'b17', name: 'Neon Lila', type: 'border', cost: 800, cssClass: 'neon-purple' }, { id: 'b18', name: 'Neon Pink', type: 'border', cost: 800, cssClass: 'neon-pink' }, { id: 'b19', name: 'Neon Orange', type: 'border', cost: 800, cssClass: 'neon-orange' }, { id: 'b20', name: 'Dashed Rot', type: 'border', cost: 300, cssClass: 'dashed-red' }, { id: 'b21', name: 'Dashed Blau', type: 'border', cost: 300, cssClass: 'dashed-blue' }, { id: 'b22', name: 'Dotted Grün', type: 'border', cost: 300, cssClass: 'dotted-green' }, { id: 'b23', name: 'Double Lila', type: 'border', cost: 400, cssClass: 'double-purple' }, { id: 'b24', name: 'Double Gold', type: 'border', cost: 1500, cssClass: 'double-gold' }, { id: 'b25', name: 'Fire Gradient', type: 'border', cost: 2000, cssClass: 'grad-fire' }, { id: 'b26', name: 'Ice Gradient', type: 'border', cost: 2000, cssClass: 'grad-ice' }, { id: 'b27', name: 'Toxic Gradient', type: 'border', cost: 2000, cssClass: 'grad-toxic' }, { id: 'b28', name: 'Sunset Gradient', type: 'border', cost: 2000, cssClass: 'grad-sunset' }, { id: 'b29', name: 'Cyberpunk', type: 'border', cost: 3000, cssClass: 'cyberpunk' }, { id: 'b30', name: 'Vaporwave', type: 'border', cost: 3000, cssClass: 'vaporwave' }, { id: 'b31', name: 'Cosmic', type: 'border', cost: 3500, cssClass: 'cosmic' }, { id: 'b32', name: 'Rainbow', type: 'border', cost: 4000, cssClass: 'rainbow' }, { id: 'b_custom', name: 'Custom (Plus+++)', type: 'border', cost: 0, cssClass: 'custom', requiresPlusLevel: 3 } ];
-
-document.getElementById('profile-shop-btn')?.addEventListener('click', () => { if(!currentUser) return; document.getElementById('shop-modal-coins').innerText = currentUser.coins; renderShopBorders(); document.getElementById('shop-modal').classList.add('show'); });
-document.querySelectorAll('.shop-tab:not(.pro-tab-btn)').forEach(tab => { tab.addEventListener('click', (e) => { document.querySelectorAll('.shop-tab:not(.pro-tab-btn)').forEach(t => t.classList.remove('active')); e.target.classList.add('active'); document.querySelectorAll('.shop-content-section').forEach(s => s.style.display = 'none'); document.getElementById(e.target.dataset.tab).style.display = 'block'; }); });
-document.getElementById('close-shop-modal')?.addEventListener('click', () => document.getElementById('shop-modal').classList.remove('show'));
-
-function renderShopBorders() {
-    const grid = document.getElementById('shop-borders-grid');
-    grid.innerHTML = shopItems.filter(i => i.type === 'border').map(item => {
-        const hasRequiredLevel = item.requiresPlusLevel ? checkPhilPlusStatus(item.requiresPlusLevel) : true; const isOwned = currentUser.decorations && currentUser.decorations.includes(item.id) || item.cost === 0; const isEquipped = currentUser.activeBorder === item.cssClass;
-        let btnHtml = ''; if(item.requiresPlusLevel && !hasRequiredLevel) btnHtml = `<button class="profile-action-btn edit-btn" style="width:100%; font-size:12px; min-height:30px;">Level ${item.requiresPlusLevel} benötigt</button>`; 
-        else if(item.cssClass === 'custom') btnHtml = `<button class="profile-action-btn" onclick="openCustomBorderConfig()" style="width:100%; font-size:12px; min-height:30px; background:#00f2fe; color:black;">Anpassen</button>`;
-        else if(isEquipped) btnHtml = `<button class="profile-action-btn edit-btn" style="width:100%; font-size:12px; min-height:30px;">Ausgerüstet</button>`; 
-        else if(isOwned) btnHtml = `<button class="profile-action-btn" onclick="equipDecoration('${item.id}', '${item.cssClass}')" style="width:100%; font-size:12px; min-height:30px; background:#00f2fe; color:black;">Ausrüsten</button>`; 
-        else btnHtml = `<button class="profile-action-btn" onclick="buyDecoration('${item.id}', ${item.cost})" style="width:100%; font-size:12px; min-height:30px;"><i class="fas fa-coins"></i> ${item.cost}</button>`; 
-        let previewStyle = item.cssClass === 'custom' && currentUser.customBorder ? getInlineBorderStyle('custom', currentUser.customBorder) : '';
-        return `<div class="shop-item-card"><div class="shop-item-preview border-${item.cssClass}" style="${previewStyle}"></div><strong style="font-size: 14px; display:block; margin-bottom:10px;">${item.name}</strong>${btnHtml}</div>`;
-    }).join('');
-}
-
-window.buyDecoration = async function(id, cost) { if(!currentUser) return; if(currentUser.coins < cost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins dafür!"); try { currentUser.coins -= cost; if(!currentUser.decorations) currentUser.decorations = []; currentUser.decorations.push(id); await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-cost), decorations: arrayUnion(id) }); document.getElementById('shop-modal-coins').innerText = currentUser.coins; document.getElementById('my-coins').innerText = currentUser.coins; renderShopBorders(); showToast("Gekauft!"); } catch(e) {} }
-window.equipDecoration = async function(id, cssClass) { if(!currentUser) return; try { let finalClass = cssClass === 'none' ? "" : cssClass; currentUser.activeBorder = finalClass; await updateDoc(doc(db, "users", currentUser.uid), { activeBorder: finalClass }); renderShopBorders(); showToast("Ausgerüstet!"); } catch(e) {} }
-
-window.openCustomBorderConfig = function() { if(!checkPhilPlusStatus(3)) return; const modal = document.getElementById('custom-border-modal'); if(currentUser.customBorder) { document.getElementById('cb-color1').value = currentUser.customBorder.c1; document.getElementById('cb-color2').value = currentUser.customBorder.c2; document.getElementById('cb-grad-toggle').checked = currentUser.customBorder.grad; } updateCustomBorderPreview(); modal.classList.add('show'); }
-function updateCustomBorderPreview() { const c1 = document.getElementById('cb-color1').value; const c2 = document.getElementById('cb-color2').value; const grad = document.getElementById('cb-grad-toggle').checked; document.getElementById('cb-color2-container').style.display = grad ? 'block' : 'none'; applyBorderStyles(document.getElementById('custom-border-preview'), 'custom', { c1, c2, grad }); }
-document.getElementById('cb-color1')?.addEventListener('input', updateCustomBorderPreview); document.getElementById('cb-color2')?.addEventListener('input', updateCustomBorderPreview); document.getElementById('cb-grad-toggle')?.addEventListener('change', updateCustomBorderPreview);
-window.saveCustomBorder = async function() { if(!currentUser || !checkPhilPlusStatus(3)) return; const c1 = document.getElementById('cb-color1').value; const c2 = document.getElementById('cb-color2').value; const grad = document.getElementById('cb-grad-toggle').checked; try { currentUser.activeBorder = 'custom'; currentUser.customBorder = { c1, c2, grad }; await updateDoc(doc(db, "users", currentUser.uid), { activeBorder: 'custom', customBorder: { c1, c2, grad } }); document.getElementById('custom-border-modal').classList.remove('show'); renderShopBorders(); showToast("Ausgerüstet!"); } catch(e) {} }
-
-window.pendingSub = null;
-window.buyPhilPlus = async function(days, tier) { 
-    if(!currentUser) return; 
-    
-    // DEVTOOL FIX: Der Preis wird aus der sicheren Konstante gezogen!
-    const secureCost = SUBSCRIPTION_PRICES[tier]?.[days];
-    if(!secureCost) return showCustomAlert("Fehler", "Ungültiges Abo ausgewählt.");
-
-    if(checkPhilPlusStatus(1)) {
-        window.pendingSub = { days, cost: secureCost, tier };
-        let msg = currentUser.philPlusTier === tier ? `Du hast bereits Stufe ${tier}. Möchtest du dein Abo um ${days} Tage verlängern, oder das Abo abbestellen?` : `Du besitzt aktuell Stufe ${currentUser.philPlusTier}. Möchtest du dein neues Abo (Stufe ${tier}) kaufen und das aktuelle überschreiben, oder dein Abo komplett löschen?`;
-        document.getElementById('sub-conflict-msg').innerText = msg; document.getElementById('shop-modal').classList.remove('show'); document.getElementById('sub-conflict-modal').classList.add('show'); return;
-    }
-    if(currentUser.coins < secureCost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins."); 
-    if(confirm(`Möchtest du Phil Shorts+ (Stufe ${tier}) für ${days} Tage kaufen? Kosten: ${secureCost} Coins.`)) executeSubPurchase(days, secureCost, tier);
-}
-
-window.confirmSubPurchase = function() { 
-    if(!window.pendingSub) return; 
-    const { days, cost, tier } = window.pendingSub; 
-    if(currentUser.coins < cost) return showCustomAlert("Zu wenig Coins", "Du hast nicht genug Coins."); 
-    document.getElementById('sub-conflict-modal').classList.remove('show'); 
-    executeSubPurchase(days, cost, tier); 
-}
-window.cancelSubscription = async function() { if(!currentUser) return; if(confirm("Möchtest du dein Phil Shorts+ Abo WIRKLICH endgültig löschen?")) { try { currentUser.philPlusUntil = 0; currentUser.philPlusTier = 0; await updateDoc(doc(db, "users", currentUser.uid), { philPlusUntil: 0, philPlusTier: 0 }); document.getElementById('sub-conflict-modal').classList.remove('show'); showToast("Abo gelöscht."); initLiveUser(); } catch(e) {} } }
-
-async function executeSubPurchase(days, cost, tier) { 
-    try { 
-        currentUser.coins -= cost; 
-        let currentUntil = currentUser.philPlusUntil && currentUser.philPlusUntil > Date.now() ? currentUser.philPlusUntil : Date.now(); 
-        let newUntil = currentUntil + (days * 86400000); 
-        currentUser.philPlusUntil = newUntil; 
-        currentUser.philPlusTier = tier; 
-        await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-cost), philPlusUntil: newUntil, philPlusTier: tier }); 
-        document.getElementById('shop-modal-coins').innerText = currentUser.coins; 
-        document.getElementById('my-coins').innerText = currentUser.coins; 
-        showToast(`Phil Shorts+ aktiviert! 🎉`); 
-        document.getElementById('shop-modal').classList.remove('show'); 
-        initLiveUser(); 
-    } catch(e) {} 
-}
-
-window.openStoryUpload = function() { if(!currentUser) return; document.getElementById('shop-modal').classList.remove('show'); document.getElementById('story-upload-modal').classList.add('show'); }
-document.getElementById('close-story-upload')?.addEventListener('click', () => document.getElementById('story-upload-modal').classList.remove('show'));
-document.getElementById('up-story-file')?.addEventListener('change', function(e) { const file = e.target.files[0]; if(file) { document.querySelector('#up-story-btn p').innerText = file.name; document.querySelector('#up-story-btn i').style.color = "#00f2fe"; document.getElementById('story-preview-img').src = URL.createObjectURL(file); document.getElementById('story-preview-img').style.display = 'block'; } });
-document.getElementById('submit-story-upload')?.addEventListener('click', async() => { 
-    const file = document.getElementById('up-story-file').files[0]; if(!file) return showCustomAlert("Fehler", "Bitte wähle ein Bild aus."); if(!currentUser) return; if(currentUser.coins < 1000) return showCustomAlert("Zu wenig Coins", "Eine Story kostet 1000 Coins."); 
-    const linkInput = document.getElementById('up-story-link').value.trim(); if(linkInput && !checkPhilPlusStatus(3)) return showCustomAlert("Fehler", "Links in Stories erfordern Plus+++!");
-    const btn = document.getElementById('submit-story-upload'); const status = document.getElementById('story-upload-status'); btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!"; 
-    try { 
-        const secure_url = await uploadFileToFirebase(file, 'stories'); const storyObj = { id: Date.now().toString(), url: secure_url, timestamp: Date.now(), link: linkInput || null }; currentUser.coins -= 1000; await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-1000), stories: arrayUnion(storyObj) }); document.getElementById('my-coins').innerText = currentUser.coins; showToast("Story gepostet! 📸"); document.getElementById('story-upload-modal').classList.remove('show'); document.getElementById('up-story-file').value = ''; document.getElementById('up-story-link').value = ''; document.getElementById('story-preview-img').style.display = 'none'; document.querySelector('#up-story-btn p').innerText = "Bild für Story auswählen"; document.querySelector('#up-story-btn i').style.color = "#aaa"; 
-    } catch(e) { showCustomAlert("Upload Fehler", "Story konnte nicht hochgeladen werden."); } finally { btn.disabled = false; status.innerText = ""; } 
-});
-
-let storyViewerTimer = null; window.currentStoryIndex = 0;
-window.viewUserStory = function(index = 0) {
-    if(profileUserStories.length === 0) { if(currentUser && document.getElementById('profile-action-btn').dataset.uid === currentUser.uid) openStoryUpload(); return; }
-    if(index >= profileUserStories.length) return closeStoryViewer(); if(index < 0) index = 0;
-    window.currentStoryIndex = index; const story = profileUserStories[index]; const uid = document.getElementById('profile-action-btn').dataset.uid; const authorData = getUserData(uid, "User", "user", "", false);
-    document.getElementById('sv-pic').src = authorData.pic || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'; document.getElementById('sv-name').innerText = authorData.displayName; document.getElementById('sv-time').innerText = timeAgo(story.timestamp); document.getElementById('sv-counter').innerText = `${index + 1}/${profileUserStories.length}`; document.getElementById('sv-img').src = story.url; document.getElementById('story-viewer').classList.add('show');
-    const linkBtn = document.getElementById('sv-link-btn'); if(story.link) { linkBtn.href = story.link; linkBtn.style.display = 'inline-flex'; } else linkBtn.style.display = 'none';
-    
-    // Mülleimer Anzeigen/Verstecken
-    const deleteBtn = document.getElementById('sv-delete-btn');
-    const isAdmin = currentUser && (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
-    const isMine = currentUser && currentUser.uid === uid;
-    if(isMine || isAdmin) { deleteBtn.style.display = 'block'; } else { deleteBtn.style.display = 'none'; }
-
-    const container = document.getElementById('sv-progress-container'); container.innerHTML = '';
-    for(let i=0; i < profileUserStories.length; i++){ let width = (i < index) ? '100%' : '0%'; container.innerHTML += `<div style="flex:1; height:100%; background:rgba(255,255,255,0.3); border-radius:2px; overflow:hidden;"><div id="sv-prog-${i}" style="height:100%; width:${width}; background:white; transition:${i === index ? 'width 5s linear' : 'none'};"></div></div>`; }
-    setTimeout(() => { const currentProg = document.getElementById(`sv-prog-${index}`); if(currentProg) currentProg.style.width = '100%'; }, 50);
-    clearTimeout(storyViewerTimer); storyViewerTimer = setTimeout(() => { nextStory(); }, 5000);
-}
-window.nextStory = function() { viewUserStory(window.currentStoryIndex + 1); }
-window.prevStory = function() { viewUserStory(window.currentStoryIndex - 1); }
-window.closeStoryViewer = function() { clearTimeout(storyViewerTimer); document.getElementById('story-viewer').classList.remove('show'); }
-
-window.deleteStory = async function() {
-    if(profileUserStories.length === 0) return;
-    const story = profileUserStories[window.currentStoryIndex];
-    const uid = document.getElementById('profile-action-btn').dataset.uid;
-    const isAdmin = currentUser && (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
-    const isMine = currentUser && currentUser.uid === uid;
-    if(!isMine && !isAdmin) return;
-    if(confirm("Möchtest du diese Story wirklich löschen?")) {
-        try {
-            const targetUserRef = doc(db, "users", uid);
-            const targetUserSnap = await getDoc(targetUserRef);
-            if(targetUserSnap.exists()) {
-                let stories = targetUserSnap.data().stories || [];
-                stories = stories.filter(s => s.id !== story.id);
-                await updateDoc(targetUserRef, { stories: stories });
-                showToast("Story erfolgreich gelöscht!");
-                closeStoryViewer();
-                openProfile(uid); // Aktualisiert Profilansicht
-            }
-        } catch(e) { showCustomAlert("Fehler", "Story konnte nicht gelöscht werden."); }
-    }
-};
-
-window.sendSupport = async function() { const msg = document.getElementById('support-msg').value.trim(); if(!msg || !currentUser) return; const ticketRef = await addDoc(collection(db, "reports"), { uid: currentUser.uid, name: currentUser.displayName, hasPlus: checkPhilPlusStatus(1), tier: currentUser.philPlusTier || 0, status: 'open', timestamp: Date.now() }); await addDoc(collection(db, `reports/${ticketRef.id}/messages`), { senderUid: currentUser.uid, text: msg, timestamp: Date.now() }); showToast("Ticket erstellt!"); document.getElementById('support-msg').value = ''; document.getElementById('app-settings-modal').classList.remove('show'); switchView('inbox'); document.getElementById('tab-support').click(); }
-window.toggleVerify = async function(targetUid, currentStatus) { try { await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus }); showToast(!currentStatus ? "Blauer Haken vergeben! 🔵" : "Haken entfernt."); } catch (e) {} };
 
 document.getElementById('save-settings-btn')?.addEventListener('click', async() => {
     const newDisplayName = document.getElementById('edit-displayname-input').value.trim(); const newUsername = document.getElementById('edit-username-input').value.trim().replace(/[^a-zA-Z0-9_]/g, '').toLowerCase(); const newBio = document.getElementById('edit-bio-input').value.trim(); const newPic = document.getElementById('edit-pic-input').value.trim() || currentUser.photoURL; const newSong = document.getElementById('edit-song-input').value.trim(); const newColor = document.getElementById('edit-color-input').value; const newIg = document.getElementById('edit-social-ig').value.trim().replace('@', ''); const newYt = document.getElementById('edit-social-yt').value.trim().replace('@', ''); const newTt = document.getElementById('edit-social-tt').value.trim().replace('@', ''); const newTw = document.getElementById('edit-social-tw').value.trim().replace('@', '');
@@ -1435,6 +1365,34 @@ document.getElementById('save-settings-btn')?.addEventListener('click', async() 
 
 document.getElementById('nav-profile')?.addEventListener('click', () => { if (currentUser) openProfile(currentUser.uid); });
 document.getElementById('open-admin-dashboard')?.addEventListener('click', () => { switchView('admin'); loadAdminDashboard(); });
+
+// NEUE FUNKTIONEN FÜR ADMIN ABO-VERWALTUNG
+window.openAdminPlusModal = function(targetUid) {
+    if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return;
+    window.adminTargetUid = targetUid;
+    document.getElementById('admin-plus-modal').classList.add('show');
+};
+
+window.adminGrantPlus = async function(tier) {
+    if (!currentUser || !window.adminTargetUid || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return;
+    try {
+        if (tier === 0) {
+            if(confirm("Sicher, dass du das Abo von diesem Nutzer komplett löschen willst?")) {
+                await updateDoc(doc(db, "users", window.adminTargetUid), { philPlusUntil: 0, philPlusTier: 0 });
+                showToast("Abo des Nutzers gelöscht.");
+            }
+        } else {
+            let newUntil = Date.now() + (30 * 86400000); // 30 Tage geschenkt
+            await updateDoc(doc(db, "users", window.adminTargetUid), { philPlusUntil: newUntil, philPlusTier: tier });
+            showToast(`Stufe ${tier} Plus für 30 Tage an Nutzer verschenkt!`);
+        }
+        document.getElementById('admin-plus-modal').classList.remove('show');
+        // Update das Profil visuell wenn man noch auf der Seite ist
+        openProfile(window.adminTargetUid); 
+    } catch(e) {
+        showCustomAlert("Fehler", "Abo konnte nicht verwaltet werden.");
+    }
+};
 
 window.adminEditProfile = function(uid) {
     const user = allKnownUsers.find(u => u.uid === uid);
@@ -1621,9 +1579,14 @@ window.openDM = async function(targetUid, targetName, targetPic) {
     const chatRef = doc(db, "chats", window.currentChatId); const chatSnap = await getDoc(chatRef);
     if (!chatSnap.exists()) await setDoc(chatRef, { participants: [currentUser.uid, targetUid], users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [targetUid]: { name: targetName, pic: targetPic } }, lastMessage: "", lastMessageTime: Date.now(), lastMessageRead: false });
     
-    // Check Plus++ for Read Receipts (optimized via allKnownUsers)
-    let partnerData = allKnownUsers.find(u => u.uid === targetUid);
-    let showReadReceipts = checkPhilPlusStatus(2) || (partnerData && partnerData.philPlusUntil > Date.now() && partnerData.philPlusTier >= 2);
+    // Check Plus++ Status for Shared Read Receipts
+    let showReadReceipts = checkPhilPlusStatus(2);
+    if (!showReadReceipts) {
+        const tDoc = await getDoc(doc(db, "users", targetUid));
+        if (tDoc.exists() && tDoc.data().philPlusUntil > Date.now() && tDoc.data().philPlusTier >= 2) {
+            showReadReceipts = true;
+        }
+    }
     
     currentDMSnapshot = onSnapshot(query(collection(db, `chats/${window.currentChatId}/messages`), orderBy("timestamp", "asc")), (snapshot) => {
         dmBox.innerHTML = '';
