@@ -2394,4 +2394,8 @@ function initResponsiveLayout() {
     }
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initResponsiveLayout);
+} else {
+    initResponsiveLayout();
+}
