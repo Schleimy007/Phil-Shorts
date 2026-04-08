@@ -596,23 +596,19 @@ function applyAlgorithm(videos, mode) {
             let rewatches = v.rewatches || 0; 
 
             // 1. Retention & Rewatch (Höchste Prio)
-            // Completion Rate schlägt bloße Klicks
             let completionRate = completions / views;
             let retentionScore = (completionRate * 500) + (rewatches * 50);
 
             // 2. Velocity Check (Viral-Status messen)
-            // Wie viele Interaktionen pro Stunde?
             let hoursOld = Math.max((now - v.timestamp) / 3600000, 0.1);
             let interactions = likes + comments + (gifts * 5);
             let velocity = interactions / hoursOld;
             let viralMultiplier = velocity > 10 ? 2.5 : 1; 
 
             // 3. Time-Decay (Frische-Faktor)
-            // Video verliert alle 12h exponentiell an Sichtbarkeit
             let timeDecay = Math.pow(0.8, hoursOld / 12); 
 
             // 4. Live Session Interests
-            // Boost, falls Video zu den gerade in dieser Session geliketen Tags passt
             let sessionBoost = 1;
             if (v.description) {
                 let tags = v.description.toLowerCase().match(/#\w+/g) || [];
@@ -622,7 +618,6 @@ function applyAlgorithm(videos, mode) {
             }
 
             // 5. Creator Affinity
-            // Boost, falls der User diesen Creator heute schon bis zum Ende geschaut hat
             let creatorBoost = 1;
             if (creatorAffinities[v.authorUid]) {
                 creatorBoost += (creatorAffinities[v.authorUid] * 0.2);
@@ -632,7 +627,6 @@ function applyAlgorithm(videos, mode) {
             let affinityScore = 1;
             if (currentUser) {
                 if (currentUser.following && currentUser.following.includes(v.authorUid)) affinityScore *= 2.0;
-                // Bestrafung für Videos, die in diesem Scroll-Run schon gesehen wurden
                 if (viewedVideos.has(v.id)) affinityScore *= 0.1; 
             }
 
@@ -644,8 +638,18 @@ function applyAlgorithm(videos, mode) {
                 if (authorData.philPlusUntil > now && authorData.philPlusTier >= 2) qualityBoost *= 1.3;
             }
 
+            // 8. NEU: The "Swipe-Away" Penalty (Toxizität für Retention)
+            // Straft Videos massiv ab, die in unter 2 Sekunden weggeskippt werden.
+            let fastSkips = v.fastSkips || 0;
+            let skipRate = views > 5 ? (fastSkips / views) : 0;
+            let skipPenalty = Math.max(0.1, 1 - skipRate); // Wenn 100% Skipped, score * 0.1
+
+            // 9. NEU: Epsilon-Greedy / Wildcard (Der "TikTok-Chance"-Faktor)
+            // Gibt komplett neuen Videos (unter 10 Views) einen massiven, künstlichen Boost
+            let wildcardBoost = (views < 10 && hoursOld < 24) ? (Math.random() * 500) : 0;
+
             // Finale Super-Formel
-            let totalScore = ((retentionScore + (interactions * 10)) * timeDecay * sessionBoost * creatorBoost * affinityScore * viralMultiplier * qualityBoost) + (Math.random() * 20);
+            let totalScore = ((retentionScore + (interactions * 10)) * timeDecay * sessionBoost * creatorBoost * affinityScore * viralMultiplier * qualityBoost * skipPenalty) + wildcardBoost + (Math.random() * 20);
 
             return { ...v, algoScore: totalScore };
         });
@@ -906,6 +910,10 @@ const videoObserver = new IntersectionObserver(entries => {
         const el = e.target; const vidId = el.dataset.id;
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
             if(el.classList.contains('dummy-ad-video')) return; 
+            
+            // Fast-Skip Timer Start
+            el.dataset.playStartTime = Date.now();
+
             if (vidId && !viewedVideos.has(vidId)) { viewedVideos.add(vidId); awardXP(2); updateDoc(doc(db, "videos", vidId), { views: increment(1) }).catch(() => {}); }
             const videoPlayer = el.querySelector('.video__player');
             if (videoPlayer) { 
@@ -922,6 +930,16 @@ const videoObserver = new IntersectionObserver(entries => {
                 } 
             }
         } else { 
+            // Fast-Skip Timer Ende & Check
+            if(el.dataset.playStartTime) {
+                let playedTime = Date.now() - Number(el.dataset.playStartTime);
+                // Wenn User zwischen 0.1 und 2.5 Sekunden bleibt -> Strike! (Weggeskippt)
+                if (playedTime > 100 && playedTime < 2500 && vidId) {
+                    updateDoc(doc(db, "videos", vidId), { fastSkips: increment(1) }).catch(()=>{});
+                }
+                el.dataset.playStartTime = "";
+            }
+
             const videoPlayer = el.querySelector('.video__player'); 
             if (videoPlayer) { 
                 videoPlayer.pause(); videoPlayer.currentTime = 0; 
@@ -978,8 +996,6 @@ window.sendSpecificGift = async function(giftId, price, emoji, name) {
         try { await updateDoc(doc(db, "users", currentUser.uid), { coins: increment(-price) }); await updateDoc(doc(db, "videos", videoId), { gifts: increment(price) }); await updateDoc(doc(db, "users", targetVidData.authorUid), { coins: increment(price) }); addNotification(targetVidData.authorUid, "gift", `hat dir ein ${name} ${emoji} gesendet!`, videoId); } catch (err) {}
     }
 };
-
-document.getElementById('live-gift-btn')?.addEventListener('click', () => { if(window.LiveManager && window.LiveManager.streamId) window.openGiftModal(window.LiveManager.streamId); });
 
 // Lokaler Tracker für Loops pro Video in dieser Session
 let sessionViewData = {};
