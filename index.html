@@ -336,9 +336,19 @@
                 <i class="fas fa-info-circle back-btn" style="opacity: 0; pointer-events: none;"></i>
             </div>
             <div class="chat-container" id="dm-box"></div>
-            <div class="chat-input-wrapper glass-nav-bottom">
-                <input type="text" id="dm-input" placeholder="Nachricht senden..." class="chat-input">
-                <button id="send-dm-btn" class="chat-send-btn"><i class="fas fa-paper-plane"></i></button>
+            
+            <div class="chat-input-wrapper glass-nav-bottom" style="flex-direction: column; align-items: stretch; padding-bottom: calc(10px + env(safe-area-inset-bottom));">
+                <div id="dm-reply-preview" style="display: none; background: rgba(0, 242, 254, 0.1); border-left: 3px solid #00f2fe; padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; font-size: 13px; color: #ddd; align-items: center;">
+                    <div style="flex: 1; overflow: hidden;">
+                        <strong id="dm-reply-name" style="color: #00f2fe; display: block; margin-bottom: 2px;">Name</strong>
+                        <span id="dm-reply-text" style="white-space: nowrap; text-overflow: ellipsis; overflow: hidden; display: block; color: #aaa;">Nachricht...</span>
+                    </div>
+                    <i class="fas fa-times" id="close-dm-reply" style="cursor: pointer; color: #ff4444; font-size: 16px; padding: 5px;"></i>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center; width: 100%;">
+                    <input type="text" id="dm-input" placeholder="Nachricht senden..." class="chat-input">
+                    <button id="send-dm-btn" class="chat-send-btn"><i class="fas fa-paper-plane"></i></button>
+                </div>
             </div>
         </div>
 
@@ -882,6 +892,16 @@
             </div>
             <div class="modal-body">
                 <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
+                    <h5 style="margin-bottom: 15px; color: #ff0050;"><i class="fas fa-lock"></i> Privatsphäre</h5>
+                    <label style="color:#888; font-size:12px; margin-left:5px;">Wer darf dir Nachrichten (DMs) senden?</label>
+                    <select id="dm-privacy-select" class="comment-input" style="width: 100%; background: #111; color: white; margin-bottom: 5px;">
+                        <option value="everyone">Jeder</option>
+                        <option value="friends">Nur Freunde (Gegenseitiges Folgen)</option>
+                        <option value="off">Niemand (Ausgeschaltet)</option>
+                    </select>
+                </div>
+
+                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
                     <h5 style="margin-bottom: 15px; color: #00f2fe;"><i class="fas fa-palette"></i> App Design (Plus++)</h5>
                     <select id="app-theme-select" class="comment-input" style="width: 100%; background: #111; color: white; margin-bottom: 15px;">
                         <option value="default">Standard (Dunkel)</option>
@@ -1014,6 +1034,26 @@
                 <i class="fas fa-times close-modal" onclick="document.getElementById('live-chat-context-modal').classList.remove('show')"></i>
             </div>
             <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;" id="live-chat-context-content">
+            </div>
+        </div>
+
+        <div id="dm-context-modal" class="modal" style="height: auto; max-height: 60%; z-index: 6000;">
+            <div class="modal-header">
+                <h4 id="dm-context-title">Nachricht Optionen</h4>
+                <i class="fas fa-times close-modal" onclick="document.getElementById('dm-context-modal').classList.remove('show')"></i>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;" id="dm-context-content">
+                </div>
+        </div>
+
+        <div id="dm-edit-modal" class="modal" style="height: auto; z-index: 6100;">
+            <div class="modal-header">
+                <h4>Nachricht bearbeiten</h4>
+                <i class="fas fa-times close-modal" onclick="document.getElementById('dm-edit-modal').classList.remove('show')"></i>
+            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;">
+                <input type="text" id="dm-edit-input" class="comment-input" style="width: 100%;">
+                <button id="save-dm-edit-btn" class="profile-action-btn" style="width: 100%; min-height: 50px;">Speichern</button>
             </div>
         </div>
 

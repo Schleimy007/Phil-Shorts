@@ -255,6 +255,25 @@ function getVerifiedBadge(isVerif) { return isVerif ? '<i class="fas fa-check-ci
 
 function timeAgo(timestamp) { const now = Date.now(); const diff = now - Number(timestamp); const minutes = Math.floor(diff / 60000); const hours = Math.floor(minutes / 60); const days = Math.floor(hours / 24); if (minutes < 1) return 'gerade eben'; if (minutes < 60) return `vor ${minutes} Min.`; if (hours < 24) return `vor ${hours} Std.`; if (days < 7) return `vor ${days} T.`; return new Date(Number(timestamp)).toLocaleDateString('de-DE'); }
 
+// === NEU: DM TEXT FORMATTING (DISCORD STYLE) ===
+function formatDMText(text) {
+    if (!text) return "";
+    let safeText = escapeHTML(text);
+    
+    // Link detection & Embeds
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    safeText = safeText.replace(urlRegex, function(url) {
+        // Image Links
+        if (url.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i)) {
+            return `<div class="link-embed"><a href="${url}" target="_blank" class="link-embed-title">${url}</a><img src="${url}" class="link-embed-img"></div>`;
+        } else {
+            return `<a href="${url}" target="_blank" class="dm-link">${url}</a>`;
+        }
+    });
+    
+    return safeText;
+}
+
 window.formatText = function(text) {
     if (!text) return "";
     let safeText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -372,6 +391,11 @@ function initLiveUser() {
             if (!currentUser.appIcon) currentUser.appIcon = 'default';
             if (!currentUser.philPlusTier) currentUser.philPlusTier = 0;
             if (!currentUser.customBorder) currentUser.customBorder = { c1: '#ff0050', c2: '#00f2fe', grad: true };
+            if (!currentUser.dmPrivacy) currentUser.dmPrivacy = 'everyone'; // NEU: DM Privacy Feature
+
+            // NEU: Update DM Privacy Select im HTML falls vorhanden
+            const dmPrivacySelect = document.getElementById('dm-privacy-select');
+            if(dmPrivacySelect) dmPrivacySelect.value = currentUser.dmPrivacy;
 
             const today = new Date().toDateString();
             if (currentUser.lastLogin !== today) { let bonus = 100; if (checkPhilPlusStatus(3)) bonus = 500;
@@ -469,7 +493,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
             while (!nameSnap.empty) { finalUser = baseUser + Math.floor(1000 + Math.random() * 9000);
                 nameQuery = query(collection(db, "users"), where("username", "==", finalUser));
                 nameSnap = await getDocs(nameQuery); }
-            const newUser = { uid: uid, displayName: rawDisplayName, username: finalUser, email: email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], savedVideos: [], blockedUsers: [], socialLinks: { ig: '', yt: '', tw: '', tt: '' }, verified: false, coins: 1000, xp: 0, streak: 1, profileViews: 0, isAdmin: false, banned: false, decorations: [], activeBorder: "", stories: [], appTheme: 'default', philPlusTier: 0, lastLogin: new Date().toDateString(), lastActive: Date.now(), customBorder: { c1: '#ff0050', c2: '#00f2fe', grad: true } };
+            const newUser = { uid: uid, displayName: rawDisplayName, username: finalUser, email: email, photoURL: pic, bio: "Neu in der Community! 👋", following: [], followers: [], savedVideos: [], blockedUsers: [], socialLinks: { ig: '', yt: '', tw: '', tt: '' }, verified: false, coins: 1000, xp: 0, streak: 1, profileViews: 0, isAdmin: false, banned: false, decorations: [], activeBorder: "", stories: [], appTheme: 'default', dmPrivacy: 'everyone', philPlusTier: 0, lastLogin: new Date().toDateString(), lastActive: Date.now(), customBorder: { c1: '#ff0050', c2: '#00f2fe', grad: true } };
             await setDoc(userRef, newUser);
             currentUser = newUser;
         } else {
@@ -486,6 +510,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             if (currentUser.coins === undefined) await updateDoc(userRef, { coins: 1000, profileViews: 0, followers: [] });
             if (!currentUser.customBorder) await updateDoc(userRef, { customBorder: { c1: '#ff0050', c2: '#00f2fe', grad: true } });
+            if (!currentUser.dmPrivacy) currentUser.dmPrivacy = 'everyone'; // NEU: DM Privacy
         }
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
         document.getElementById('login-screen').classList.remove('show');
@@ -506,6 +531,7 @@ window.onload = async function() {
         if (!currentUser.savedVideos) currentUser.savedVideos = [];
         if (!currentUser.blockedUsers) currentUser.blockedUsers = [];
         if (!currentUser.socialLinks) currentUser.socialLinks = { ig: '', yt: '', tw: '', tt: '' };
+        if (!currentUser.dmPrivacy) currentUser.dmPrivacy = 'everyone'; // NEU: DM Privacy
         initLiveDatabase();
         initLiveUser();
         initInbox();
@@ -514,6 +540,14 @@ window.onload = async function() {
         initLiveStreamsList();
         checkDailyStreak();
     }
+    
+    // NEU: DM Privacy Settings listener
+    document.getElementById('dm-privacy-select')?.addEventListener('change', (e) => {
+        if(currentUser) {
+            updateDoc(doc(db, "users", currentUser.uid), { dmPrivacy: e.target.value });
+        }
+    });
+
     document.getElementById('app-theme-select')?.addEventListener('change', (e) => { if (e.target.value !== 'default' && !checkPhilPlusStatus(2)) { showCustomAlert("Premium Feature", "App Themes erfordern mindestens Phil Shorts++!");
             e.target.value = 'default'; return; }
         applyAppTheme(e.target.value); if (currentUser) updateDoc(doc(db, "users", currentUser.uid), { appTheme: e.target.value }); });
@@ -944,6 +978,27 @@ function createVideoElement(video) {
             const muteBtn = div.querySelector('.mute-btn'); if(muteBtn) muteBtn.addEventListener('click', () => { audioEl.muted = window.globalMuted; });
         }
     }
+
+    // NEU: VIDEO SCALING LOGIC (breitere Videos füllen mehr Screen)
+    const vidEl = div.querySelector('.video__player');
+    if (vidEl) {
+        vidEl.addEventListener('loadedmetadata', () => {
+            const ratio = vidEl.videoWidth / vidEl.videoHeight;
+            if (ratio > 0.57) { 
+                if (window.innerWidth > 768) {
+                    const wrapper = div.querySelector('.video-wrapper');
+                    if (wrapper) {
+                        let newWidth = Math.min(80, 45 + (ratio * 15)); 
+                        wrapper.style.minWidth = newWidth + 'vh';
+                    }
+                } else {
+                    vidEl.style.objectFit = 'contain';
+                    vidEl.style.transform = 'scale(1.05)'; 
+                }
+            }
+        });
+    }
+
     attachInteractionsToVideo(div); return div;
 }
 
@@ -1827,9 +1882,111 @@ document.getElementById('send-ticket-btn')?.addEventListener('click', async() =>
 document.getElementById('ticket-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-ticket-btn').click(); });
 document.getElementById('admin-close-ticket-btn')?.addEventListener('click', async() => { if(!window.currentActiveTicketId) return; if(confirm("Ticket schließen?")) { await updateDoc(doc(db, "reports", window.currentActiveTicketId), { status: 'closed' }); showToast("Ticket geschlossen."); } });
 
+
+// === NEU: DM KONTEXT MENÜ LOKIK ===
+window.dmPressTimer = null;
+window.dmReplyTarget = null;
+window.currentEditDMId = null;
+
+window.openDMContextMenu = function(msgId, senderUid, text) {
+    if(!currentUser) return;
+    const isOwner = currentUser.uid === senderUid;
+    let html = '';
+    
+    html += `<button class="profile-action-btn edit-btn" onclick="copyDM('${text.replace(/'/g, "\\'")}')"><i class="fas fa-copy"></i> Kopieren</button>`;
+    html += `<button class="profile-action-btn edit-btn" onclick="replyDM('${msgId}', '${text.replace(/'/g, "\\'")}', '${senderUid}')"><i class="fas fa-reply"></i> Antworten</button>`;
+    
+    if (isOwner) {
+        html += `<button class="profile-action-btn edit-btn" onclick="openEditDMModal('${msgId}', '${text.replace(/'/g, "\\'")}')"><i class="fas fa-pen"></i> Bearbeiten</button>`;
+        html += `<button class="profile-action-btn" style="background:#ff4444; color:white;" onclick="deleteDM('${msgId}')"><i class="fas fa-trash"></i> Löschen</button>`;
+    } else {
+        html += `<button class="profile-action-btn" style="background:#ff4444; color:white;" onclick="reportDM('${msgId}')"><i class="fas fa-flag"></i> Melden</button>`;
+    }
+    
+    document.getElementById('dm-context-content').innerHTML = html;
+    document.getElementById('dm-context-modal').classList.add('show');
+};
+
+window.copyDM = function(text) {
+    navigator.clipboard.writeText(text);
+    showToast("Nachricht kopiert!");
+    document.getElementById('dm-context-modal').classList.remove('show');
+};
+
+window.replyDM = function(msgId, text, senderUid) {
+    const sender = allKnownUsers.find(u => u.uid === senderUid) || window.currentChatPartner;
+    window.dmReplyTarget = { id: msgId, text: text, name: sender ? sender.displayName : 'User' };
+    document.getElementById('dm-reply-name').innerText = window.dmReplyTarget.name;
+    document.getElementById('dm-reply-text').innerText = text;
+    document.getElementById('dm-reply-preview').style.display = 'flex';
+    document.getElementById('dm-context-modal').classList.remove('show');
+    document.getElementById('dm-input').focus();
+};
+
+document.getElementById('close-dm-reply')?.addEventListener('click', () => {
+    window.dmReplyTarget = null;
+    document.getElementById('dm-reply-preview').style.display = 'none';
+});
+
+window.deleteDM = async function(msgId) {
+    if(confirm("Möchtest du diese Nachricht für alle löschen?")) {
+        try {
+            await deleteDoc(doc(db, `chats/${window.currentChatId}/messages`, msgId));
+            showToast("Nachricht gelöscht.");
+            document.getElementById('dm-context-modal').classList.remove('show');
+        } catch(e) { showCustomAlert("Fehler", "Konnte nicht gelöscht werden."); }
+    }
+};
+
+window.reportDM = function(msgId) {
+    showToast("Die Nachricht wurde dem Support gemeldet.");
+    document.getElementById('dm-context-modal').classList.remove('show');
+};
+
+window.openEditDMModal = function(msgId, oldText) {
+    window.currentEditDMId = msgId;
+    document.getElementById('dm-edit-input').value = oldText;
+    document.getElementById('dm-context-modal').classList.remove('show');
+    document.getElementById('dm-edit-modal').classList.add('show');
+};
+
+document.getElementById('save-dm-edit-btn')?.addEventListener('click', async () => {
+    const newText = document.getElementById('dm-edit-input').value.trim();
+    if(!newText || !window.currentEditDMId) return;
+    try {
+        await updateDoc(doc(db, `chats/${window.currentChatId}/messages`, window.currentEditDMId), {
+            text: newText,
+            edited: true
+        });
+        showToast("Nachricht bearbeitet.");
+        document.getElementById('dm-edit-modal').classList.remove('show');
+    } catch(e) { showCustomAlert("Fehler", "Konnte nicht bearbeitet werden."); }
+});
+
+
 let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
 window.openDM = async function(targetUid, targetName, targetPic) {
-    if (!currentUser) return; window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic }; const uids = [currentUser.uid, targetUid].sort(); window.currentChatId = `${uids[0]}_${uids[1]}`; const nUser = getUserData(targetUid, targetName, targetName, targetPic, false); const isVerif = getVerifiedBadge(nUser.verified);
+    if (!currentUser) return; 
+
+    // === NEU: DM PRIVACY CHECK BEIM ÖFFNEN DES CHATS ===
+    const tUser = allKnownUsers.find(u => u.uid === targetUid);
+    if(tUser) {
+        const privacy = tUser.dmPrivacy || 'everyone';
+        if(privacy === 'off') {
+            showCustomAlert("Privatsphäre", "Dieser Nutzer empfängt momentan keine Nachrichten.");
+            return;
+        }
+        if(privacy === 'friends') {
+            const theyFollowMe = tUser.following && tUser.following.includes(currentUser.uid);
+            const iFollowThem = currentUser.following && currentUser.following.includes(targetUid);
+            if(!theyFollowMe || !iFollowThem) {
+                showCustomAlert("Privatsphäre", "Ihr müsst euch gegenseitig folgen (Freunde sein), um Nachrichten zu senden.");
+                return;
+            }
+        }
+    }
+
+    window.currentChatPartner = { uid: targetUid, name: targetName, pic: targetPic }; const uids = [currentUser.uid, targetUid].sort(); window.currentChatId = `${uids[0]}_${uids[1]}`; const nUser = getUserData(targetUid, targetName, targetName, targetPic, false); const isVerif = getVerifiedBadge(nUser.verified);
     document.getElementById('dm-name-span').innerHTML = '@' + targetName + ' ' + isVerif; switchView('dm');
     
     let statusHtml = ''; if(nUser.lastActive) { let diff = Date.now() - nUser.lastActive; statusHtml = diff < 5 * 60000 ? '<span style="color:#39ff14;">🟢 Online</span>' : 'Zuletzt online: ' + timeAgo(nUser.lastActive); }
@@ -1861,9 +2018,25 @@ window.openDM = async function(targetUid, targetName, targetPic) {
                     readReceipt = msg.read ? `<span style="font-size:10px; color:#00f2fe; margin-left:5px; font-weight:bold; letter-spacing:-2px;">✓✓</span>` : `<span style="font-size:10px; color:#888; margin-left:5px; font-weight:bold;">✓</span>`;
                 }
 
+                // NEU: REPLIES IN BUBBLE
+                let replyHtml = '';
+                if (msg.replyTo) {
+                    replyHtml = `<div class="chat-reply-quote" onclick="document.getElementById('dm-reply-preview').style.display='none';"><strong>${msg.replyTo.name}</strong><br>${formatText(msg.replyTo.text)}</div>`;
+                }
+
+                let editedHtml = msg.edited ? `<span style="font-size:10px; color:#888; margin-left:5px;">(bearbeitet)</span>` : '';
                 let extraClass = isMe && checkPhilPlusStatus(2) ? 'gold-bubble' : ''; 
-                let bubbleContent = formatText(msg.text);
-                dmBox.innerHTML += `<div class="chat-msg ${isMe}"><img src="${pic}" class="chat-avatar" style="flex-shrink:0;"><div style="min-width:0; max-width: 100%;"><div class="chat-bubble ${extraClass}">${bubbleContent}</div><div class="chat-time" style="font-size: 10px; color: #666; margin-top: 4px; text-align: ${isMe ? 'right' : 'left'};">${timeAgo(msg.timestamp)}${readReceipt}</div></div></div>`; 
+                
+                // NEU: EMBEDS RENDERN
+                let bubbleContent = formatDMText(msg.text);
+
+                // NEU: INTERAKTIVES KONTEXT MENÜ
+                let safeText = msg.text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                let interactions = `oncontextmenu="event.preventDefault(); window.openDMContextMenu('${docSnap.id}', '${msg.senderUid}', '${safeText}');"`;
+                interactions += ` onmousedown="window.dmPressTimer = setTimeout(() => { window.openDMContextMenu('${docSnap.id}', '${msg.senderUid}', '${safeText}'); }, 500);" onmouseup="clearTimeout(window.dmPressTimer)" onmouseleave="clearTimeout(window.dmPressTimer)" ontouchstart="window.dmPressTimer = setTimeout(() => { window.openDMContextMenu('${docSnap.id}', '${msg.senderUid}', '${safeText}'); }, 500);" ontouchend="clearTimeout(window.dmPressTimer)"`;
+
+
+                dmBox.innerHTML += `<div class="chat-msg ${isMe}"><img src="${pic}" class="chat-avatar" style="flex-shrink:0;"><div style="min-width:0; max-width: 100%;"><div class="chat-bubble ${extraClass}" ${interactions} style="cursor:pointer;">${replyHtml}${bubbleContent}${editedHtml}</div><div class="chat-time" style="font-size: 10px; color: #666; margin-top: 4px; text-align: ${isMe ? 'right' : 'left'};">${timeAgo(msg.timestamp)}${readReceipt}</div></div></div>`; 
             }); 
         }
         dmBox.scrollTop = dmBox.scrollHeight;
@@ -1874,7 +2047,31 @@ window.openDM = async function(targetUid, targetName, targetPic) {
     });
 };
 
-document.getElementById('send-dm-btn')?.addEventListener('click', async() => { const input = document.getElementById('dm-input'); const text = input.value.trim(); if (!text || !window.currentChatId || !currentUser) return; input.value = ''; await addDoc(collection(db, `chats/${window.currentChatId}/messages`), { senderUid: currentUser.uid, text: text, timestamp: Date.now(), read: false }); await updateDoc(doc(db, "chats", window.currentChatId), { lastMessage: text, lastMessageTime: Date.now(), lastMessageSender: currentUser.uid, lastMessageRead: false, users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic } } }); addNotification(window.currentChatPartner.uid, "message", `hat geschrieben: "${text}"`); });
+document.getElementById('send-dm-btn')?.addEventListener('click', async() => { 
+    const input = document.getElementById('dm-input'); 
+    const text = input.value.trim(); 
+    if (!text || !window.currentChatId || !currentUser) return; 
+    input.value = ''; 
+
+    // NEU: ReplyTo mitsenden
+    let msgObj = { senderUid: currentUser.uid, text: text, timestamp: Date.now(), read: false };
+    if(window.dmReplyTarget) {
+        msgObj.replyTo = window.dmReplyTarget;
+        window.dmReplyTarget = null;
+        document.getElementById('dm-reply-preview').style.display = 'none';
+    }
+
+    await addDoc(collection(db, `chats/${window.currentChatId}/messages`), msgObj); 
+
+    await updateDoc(doc(db, "chats", window.currentChatId), { 
+        lastMessage: text, 
+        lastMessageTime: Date.now(), 
+        lastMessageSender: currentUser.uid, 
+        lastMessageRead: false, 
+        users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [window.currentChatPartner.uid]: { name: window.currentChatPartner.name, pic: window.currentChatPartner.pic } } 
+    }); 
+    addNotification(window.currentChatPartner.uid, "message", `hat geschrieben: "${text}"`); 
+});
 document.getElementById('dm-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-dm-btn').click(); });
 
 let duetStream = null; let duetRecorder = null; let duetChunks = []; window.duetVideoId = null;

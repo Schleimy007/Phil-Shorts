@@ -1123,6 +1123,9 @@ body.theme-neon-pink .glass-nav-bottom {
     width: 100%;
     height: 100%;
     background: transparent;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .video__player {
@@ -1730,6 +1733,7 @@ body.theme-neon-pink .glass-nav-bottom {
     font-size: 15px;
     color: white;
     word-break: break-word;
+    cursor: pointer; /* NEW: for right click actions */
 }
 
 .chat-msg.me .chat-bubble {
@@ -1743,6 +1747,46 @@ body.theme-neon-pink .glass-nav-bottom {
     color: black !important;
     font-weight: 500;
     border: 1px solid #ffe066;
+}
+
+/* NEW: Discord-style DM Embeds */
+.link-embed {
+    background: #2b2d31; 
+    border-left: 4px solid #1e1f22;
+    border-radius: 4px;
+    padding: 10px;
+    margin-top: 8px;
+    max-width: 300px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.link-embed-title { font-weight: bold; color: #00a8fc; text-decoration: none; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
+.link-embed-desc { font-size: 12px; color: #dbdee1; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.link-embed-img { width: 100%; max-height: 150px; object-fit: cover; border-radius: 4px; margin-top: 5px; }
+.dm-link { color: #00f2fe; text-decoration: underline; word-break: break-all; }
+
+/* NEW: Reply Quote UI */
+.chat-reply-quote {
+    background: rgba(0, 0, 0, 0.2);
+    border-left: 3px solid #00f2fe;
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    margin-bottom: 5px;
+    color: #ccc;
+    cursor: pointer;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.chat-msg.me .chat-reply-quote {
+    background: rgba(255, 255, 255, 0.15);
+    border-left: 3px solid white;
+    color: white;
 }
 
 .chat-input-wrapper {
@@ -2424,7 +2468,7 @@ body.theme-neon-pink .glass-nav-bottom {
         flex-direction: row;
         position: relative;
         width: 100%;
-        max-width: 900px;
+        max-width: 1200px; /* UPDATED: Erlaubt mehr Breite */
         margin: 0 auto;
         height: calc(100dvh - 80px);
         align-items: center;
@@ -2435,8 +2479,9 @@ body.theme-neon-pink .glass-nav-bottom {
     .video-wrapper {
         position: relative;
         width: auto;
+        min-width: min(100%, 45vh); /* UPDATED: Dynamischere Breite */
         max-width: 100%;
-        aspect-ratio: 9/16;
+        aspect-ratio: auto;
         height: 100%;
         max-height: 80vh;
         border-radius: 20px;
@@ -2455,6 +2500,7 @@ body.theme-neon-pink .glass-nav-bottom {
         border-radius: 0;
         box-shadow: none;
         position: static;
+        object-fit: contain; /* UPDATED: Damit PC breitere Videos füllt! */
     }
     .mute-container {
         top: 20px;
@@ -2480,6 +2526,7 @@ body.theme-neon-pink .glass-nav-bottom {
         border-radius: 20px;
         padding: 20px;
         border: 1px solid rgba(255, 255, 255, 0.1);
+        flex-shrink: 0;
     }
     .pc-info-panel-container .video__footer {
         position: static;
