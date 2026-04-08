@@ -549,22 +549,21 @@ window.onload = async function() {
                 const image = document.getElementById('crop-image-target');
                 cropperInstance = new Cropper(image, {
                     aspectRatio: 1,
-                    viewMode: 3, // Restriction: Image must cover the crop box
-                    dragMode: 'move', // Only moving allowed (panning)
+                    viewMode: 0, // 0 = Keine Grenzen! Bild kann frei im schwarzen Raum schweben
+                    dragMode: 'move',
                     autoCropArea: 0.8,
-                    guides: false, // Hide guides
-                    center: false, // Hide center cross
-                    highlight: false, // Hide highlight
-                    cropBoxMovable: false, // Disable moving crop box
-                    cropBoxResizable: false, // Disable resizing crop box
+                    guides: false,
+                    center: false,
+                    highlight: false,
+                    cropBoxMovable: false,
+                    cropBoxResizable: false,
                     toggleDragModeOnDblclick: false,
-                    background: false, // Hide default bg
+                    background: false,
                     ready() {
                         const slider = document.getElementById('crop-zoom-slider');
                         const canvasData = cropperInstance.getCanvasData();
                         const containerData = cropperInstance.getContainerData();
                         
-                        // Set fixed perfect circle crop box in center
                         const cropBoxSize = Math.min(containerData.width, containerData.height) * 0.8;
                         cropperInstance.setCropBoxData({
                             width: cropBoxSize,
@@ -573,10 +572,18 @@ window.onload = async function() {
                             top: (containerData.height - cropBoxSize) / 2
                         });
 
-                        // Calculate zoom limits for slider
-                        window.minCropZoom = canvasData.width / canvasData.naturalWidth;
-                        window.maxCropZoom = window.minCropZoom * 3; // Max 3x zoom
-                        if(slider) slider.value = 0;
+                        // Limits berechnen (damit der Nutzer nicht endlos rein/raus zoomen kann)
+                        window.minCropZoom = (cropBoxSize / Math.max(canvasData.naturalWidth, canvasData.naturalHeight)) * 0.5; // Kann etwas kleiner als der Kreis werden
+                        window.maxCropZoom = window.minCropZoom * 8; // Max 8x Zoom
+                        
+                        // Start-Zoom setzen, damit das Bild den Kreis optimal füllt
+                        const startZoom = cropBoxSize / Math.min(canvasData.naturalWidth, canvasData.naturalHeight);
+                        cropperInstance.zoomTo(startZoom);
+                        
+                        if(slider) {
+                            let val = (startZoom - window.minCropZoom) / (window.maxCropZoom - window.minCropZoom);
+                            slider.value = Math.max(0, Math.min(1, val));
+                        }
                     }
                 });
             };
@@ -584,7 +591,6 @@ window.onload = async function() {
         }
     });
 
-    // Handle Zoom Slider (Slider -> Cropper)
     document.getElementById('crop-zoom-slider')?.addEventListener('input', (e) => {
         if(!cropperInstance || !window.minCropZoom) return;
         const val = parseFloat(e.target.value);
@@ -592,16 +598,27 @@ window.onload = async function() {
         cropperInstance.zoomTo(zoomRatio);
     });
 
-    // Sync Cropper Manual Zoom back to Slider (Cropper -> Slider)
     document.getElementById('crop-image-target')?.addEventListener('zoom', (e) => {
         if(!window.minCropZoom) return;
+        
+        // Zoom-Grenzen erzwingen (verhindert unendliches Zoomen)
+        if (e.detail.ratio < window.minCropZoom) {
+            e.preventDefault();
+            cropperInstance.zoomTo(window.minCropZoom);
+            return;
+        }
+        if (e.detail.ratio > window.maxCropZoom) {
+            e.preventDefault();
+            cropperInstance.zoomTo(window.maxCropZoom);
+            return;
+        }
+
         let val = (e.detail.ratio - window.minCropZoom) / (window.maxCropZoom - window.minCropZoom);
         val = Math.max(0, Math.min(1, val));
         const slider = document.getElementById('crop-zoom-slider');
         if(slider) slider.value = val;
     });
 
-    // Cancel Button
     document.getElementById('crop-cancel-btn')?.addEventListener('click', () => {
         document.getElementById('crop-modal').classList.remove('show');
         if(cropperInstance) cropperInstance.destroy();
@@ -611,15 +628,13 @@ window.onload = async function() {
         document.getElementById('crop-cancel-btn')?.click();
     });
 
-    // Save Button
     document.getElementById('crop-save-btn')?.addEventListener('click', () => {
         if(!cropperInstance) return;
         const btn = document.getElementById('crop-save-btn');
         btn.innerText = "Lädt..."; btn.disabled = true;
         
-        // Output perfect circle 400x400
         cropperInstance.getCroppedCanvas({ 
-            width: 400, height: 400, imageSmoothingEnabled: true, imageSmoothingQuality: 'high' 
+            width: 400, height: 400, imageSmoothingEnabled: true, imageSmoothingQuality: 'high', fillColor: '#000' // Füllt den leeren Raum mit schwarz
         }).toBlob(async (blob) => {
             try {
                 const fileToUpload = new File([blob], "avatar.jpg", { type: "image/jpeg" });
