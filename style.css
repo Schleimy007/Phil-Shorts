@@ -3451,8 +3451,29 @@ input:checked+.slider:before {
     transform: translateX(0);
 }
 
-/* CROPPER JS CICLE CSS FIX */
+
+/* CROPPER JS CICLE CSS FIX & TIKTOK STYLE */
+
 .cropper-view-box,
 .cropper-face {
     border-radius: 50%;
+}
+
+/* Make the area outside the crop circle darker */
+.cropper-modal {
+    background-color: #000;
+    opacity: 0.8;
+}
+
+/* Hide the dashed lines and center grid for a cleaner look */
+.cropper-dashed,
+.cropper-center,
+.cropper-line {
+    display: none !important;
+}
+
+/* Make the white outline around the circle slightly transparent or hide it */
+.cropper-view-box {
+    outline: 1px solid rgba(255, 255, 255, 0.5);
+    outline-color: rgba(255, 255, 255, 0.5);
 }

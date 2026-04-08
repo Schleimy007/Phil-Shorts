@@ -534,7 +534,7 @@ window.onload = async function() {
         window.editingProfileUid = null;
     });
 
-    // Cropper JS Logic
+    // === TIKTOK STYLE CROPPER LOGIC ===
     document.getElementById('edit-pic-upload-btn')?.addEventListener('click', () => document.getElementById('edit-pic-file').click());
     document.getElementById('edit-pic-file')?.addEventListener('change', (e) => {
         const file = e.target.files[0];
@@ -545,26 +545,91 @@ window.onload = async function() {
                 document.getElementById('crop-image-target').style.display = 'block';
                 document.getElementById('crop-modal').classList.add('show');
                 if(cropperInstance) cropperInstance.destroy();
-                cropperInstance = new Cropper(document.getElementById('crop-image-target'), {
-                    aspectRatio: 1, viewMode: 1, dragMode: 'move', guides: false, center: true, highlight: false, cropBoxMovable: true, cropBoxResizable: true, toggleDragModeOnDblclick: false
+                
+                const image = document.getElementById('crop-image-target');
+                cropperInstance = new Cropper(image, {
+                    aspectRatio: 1,
+                    viewMode: 3, // Restriction: Image must cover the crop box
+                    dragMode: 'move', // Only moving allowed (panning)
+                    autoCropArea: 0.8,
+                    guides: false, // Hide guides
+                    center: false, // Hide center cross
+                    highlight: false, // Hide highlight
+                    cropBoxMovable: false, // Disable moving crop box
+                    cropBoxResizable: false, // Disable resizing crop box
+                    toggleDragModeOnDblclick: false,
+                    background: false, // Hide default bg
+                    ready() {
+                        const slider = document.getElementById('crop-zoom-slider');
+                        const canvasData = cropperInstance.getCanvasData();
+                        const containerData = cropperInstance.getContainerData();
+                        
+                        // Set fixed perfect circle crop box in center
+                        const cropBoxSize = Math.min(containerData.width, containerData.height) * 0.8;
+                        cropperInstance.setCropBoxData({
+                            width: cropBoxSize,
+                            height: cropBoxSize,
+                            left: (containerData.width - cropBoxSize) / 2,
+                            top: (containerData.height - cropBoxSize) / 2
+                        });
+
+                        // Calculate zoom limits for slider
+                        window.minCropZoom = canvasData.width / canvasData.naturalWidth;
+                        window.maxCropZoom = window.minCropZoom * 3; // Max 3x zoom
+                        if(slider) slider.value = 0;
+                    }
                 });
             };
             reader.readAsDataURL(file);
         }
     });
 
+    // Handle Zoom Slider (Slider -> Cropper)
+    document.getElementById('crop-zoom-slider')?.addEventListener('input', (e) => {
+        if(!cropperInstance || !window.minCropZoom) return;
+        const val = parseFloat(e.target.value);
+        const zoomRatio = window.minCropZoom + (window.maxCropZoom - window.minCropZoom) * val;
+        cropperInstance.zoomTo(zoomRatio);
+    });
+
+    // Sync Cropper Manual Zoom back to Slider (Cropper -> Slider)
+    document.getElementById('crop-image-target')?.addEventListener('zoom', (e) => {
+        if(!window.minCropZoom) return;
+        let val = (e.detail.ratio - window.minCropZoom) / (window.maxCropZoom - window.minCropZoom);
+        val = Math.max(0, Math.min(1, val));
+        const slider = document.getElementById('crop-zoom-slider');
+        if(slider) slider.value = val;
+    });
+
+    // Cancel Button
+    document.getElementById('crop-cancel-btn')?.addEventListener('click', () => {
+        document.getElementById('crop-modal').classList.remove('show');
+        if(cropperInstance) cropperInstance.destroy();
+        document.getElementById('edit-pic-file').value = '';
+    });
+    document.getElementById('close-crop-modal')?.addEventListener('click', () => {
+        document.getElementById('crop-cancel-btn')?.click();
+    });
+
+    // Save Button
     document.getElementById('crop-save-btn')?.addEventListener('click', () => {
         if(!cropperInstance) return;
         const btn = document.getElementById('crop-save-btn');
-        btn.innerText = "Lädt hoch..."; btn.disabled = true;
-        cropperInstance.getCroppedCanvas({ width: 400, height: 400 }).toBlob(async (blob) => {
+        btn.innerText = "Lädt..."; btn.disabled = true;
+        
+        // Output perfect circle 400x400
+        cropperInstance.getCroppedCanvas({ 
+            width: 400, height: 400, imageSmoothingEnabled: true, imageSmoothingQuality: 'high' 
+        }).toBlob(async (blob) => {
             try {
-                const url = await uploadFileToFirebase(blob, 'avatars');
+                const fileToUpload = new File([blob], "avatar.jpg", { type: "image/jpeg" });
+                const url = await uploadFileToFirebase(fileToUpload, 'avatars');
                 document.getElementById('edit-pic-input').value = url;
                 document.getElementById('crop-modal').classList.remove('show');
                 showToast("Bild zugeschnitten!");
+                document.getElementById('edit-pic-file').value = '';
             } catch(e) { showToast("Fehler beim Upload"); }
-            btn.innerText = "Zuschneiden & Hochladen"; btn.disabled = false;
+            btn.innerText = "Anwenden"; btn.disabled = false;
         }, 'image/jpeg', 0.9);
     });
 };
