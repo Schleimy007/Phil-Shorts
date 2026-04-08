@@ -43,7 +43,6 @@ if (!document.getElementById('dynamic-live-styles')) {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         #view-live-room.active #live-chat-box { pointer-events: auto !important; }
         #live-chat-box { pointer-events: none; }
-        @media (min-width: 769px) { .chat-input-wrapper { position: absolute !important; bottom: 0 !important; left: 0 !important; width: 100% !important; background: #0a0a0a !important; border-top: 1px solid #333 !important; } }
     `;
     document.head.appendChild(style);
 }
@@ -2389,13 +2388,8 @@ function initResponsiveLayout() {
     function checkResponsiveMode() { const isPC = window.innerWidth > 768; if (isPC && currentMode !== 'pc') { currentMode = 'pc'; createPCContainers(); if (originalNav) pcSidebar.appendChild(originalNav); document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC); } else if (!isPC && currentMode !== 'handy') { currentMode = 'handy'; if (originalNav) appContainer.appendChild(originalNav); if (pcSidebar) { pcSidebar.remove(); pcSidebar = null; } document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy); } }
     checkResponsiveMode(); window.addEventListener('resize', checkResponsiveMode);
     if (window.innerWidth > 768) { 
-        document.querySelectorAll('.chat-input-wrapper').forEach(el => { el.style.position = 'absolute'; el.style.bottom = '0'; el.style.left = '0'; el.style.width = '100%'; el.style.background = '#0a0a0a'; el.style.borderTop = '1px solid #333'; });
         const videoObserver2 = new MutationObserver(function(mutations) { if (currentMode === 'pc') mutations.forEach(mutation => mutation.addedNodes.forEach(node => { if (node.classList && node.classList.contains('video')) restructureVideoForPC(node); })); }); const videoContainer = document.getElementById('video-container'); if (videoContainer) videoObserver2.observe(videoContainer, { childList: true }); 
     }
 }
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initResponsiveLayout);
-} else {
-    initResponsiveLayout();
-}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
