@@ -1,5 +1,4 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-// Ändere Zeile 2 so ab, dass "limit" mit importiert wird:
 import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot, query, orderBy, where, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -787,8 +786,10 @@ function initLiveDatabase() {
     const skelLoader = document.getElementById('skeleton-loader');
     if (skelLoader) skelLoader.style.display = 'block';
 
+    // NEU: Limit auf 30 Videos gesetzt
     const q = query(collection(db, "videos"), orderBy("timestamp", "desc"), limit(30));
-onSnapshot(q, (snapshot) => {
+    
+    onSnapshot(q, (snapshot) => {
         allVideosData = [];
         let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
         snapshot.forEach(doc => { const v = { id: doc.id, ...doc.data() }; if (!blocked.includes(v.authorUid)) allVideosData.push(v); });
@@ -842,7 +843,18 @@ function renderFeed(reset = false) {
     const container = document.getElementById('video-container');
     if (reset) {
         const oldVids = container.querySelectorAll('.video');
-        oldVids.forEach(v => v.remove());
+        
+        // NEU: Alte Videos leeren um RAM zu sparen
+        oldVids.forEach(v => {
+            const player = v.querySelector('.video__player');
+            if(player) {
+                player.pause();
+                player.src = "";
+                player.load();
+            }
+            v.remove();
+        });
+        
         const oldLoaders = container.querySelectorAll('.feed-end-loader');
         oldLoaders.forEach(l => l.remove());
         const emptyState = container.querySelector('.empty-state');
@@ -933,7 +945,8 @@ function createVideoElement(video) {
         if (video.urls.length > 1) { arrowsHTML = `<div class="carousel-arrow left" onclick="window.scrollCarousel('${video.id}', -1, event)"><i class="fas fa-chevron-left"></i></div><div class="carousel-arrow right" onclick="window.scrollCarousel('${video.id}', 1, event)"><i class="fas fa-chevron-right"></i></div>`; }
         mediaHTML = `<div class="carousel-container" data-vid="${video.id}">${video.urls.map(u => `<div class="carousel-item"><img src="${u}"></div>`).join('')}</div>${arrowsHTML}<div class="carousel-dots">${video.urls.map((_, i) => `<div class="dot ${i===0 ? 'active' : ''}"></div>`).join('')}</div>`; muteUIHtml = `<div class="mute-container" style="display:none;"></div>`;
     } else {
-        mediaHTML = `<video class="video__player" data-vid="${video.id}" preload="metadata" loop playsinline ${mutedAttr} src="${video.url}"></video><div class="play-indicator"><i class="fas fa-play"></i></div><div class="player-progress-bar"><div class="player-progress-filled"></div></div><div class="fast-forward-overlay">2x ▶▶</div><div class="seek-ripple left"><div class="seek-arrows"><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i></div><div class="seek-text">5s</div></div><div class="seek-ripple right"><div class="seek-arrows"><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i></div><div class="seek-text">5s</div></div>`;
+        // NEU: preload="metadata" spart MASSIV Arbeitsspeicher und Datenvolumen
+        mediaHTML = `<video class="video__player" data-vid="${video.id}" data-original-src="${video.url}" preload="metadata" loop playsinline ${mutedAttr} src="${video.url}"></video><div class="play-indicator"><i class="fas fa-play"></i></div><div class="player-progress-bar"><div class="player-progress-filled"></div></div><div class="fast-forward-overlay">2x ▶▶</div><div class="seek-ripple left"><div class="seek-arrows"><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i></div><div class="seek-text">5s</div></div><div class="seek-ripple right"><div class="seek-arrows"><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i></div><div class="seek-text">5s</div></div>`;
         muteUIHtml = `<div class="mute-container"><div class="mute-btn"><i class="fas fa-volume-up"></i></div><div class="volume-slider-wrapper"><input type="range" class="volume-slider" min="0" max="1" step="0.05" value="1"></div></div>`;
     }
     let rawPreview = (video.description || "").substring(0, 50); let previewHtml = formatText(rawPreview); if ((video.description && video.description.length > 50)) previewHtml += '... <strong>mehr anzeigen</strong>';
@@ -981,7 +994,6 @@ function createVideoElement(video) {
         }
     }
 
-    // NEU: VIDEO SCALING LOGIC (breitere Videos füllen mehr Screen)
     const vidEl = div.querySelector('.video__player');
     if (vidEl) {
         vidEl.addEventListener('loadedmetadata', () => {
@@ -990,10 +1002,8 @@ function createVideoElement(video) {
                 if (window.innerWidth > 768) {
                     const wrapper = div.querySelector('.video-wrapper');
                     if (wrapper) {
-                        // FIX: Nur ein "bisschen" breiter (max 52vh statt 80vh)
                         let newWidth = Math.min(52, 45 + (ratio * 4)); 
                         wrapper.style.minWidth = newWidth + 'vh';
-                        // FIX: Harte Grenze, damit die Sidebar IMMER Platz hat (Sidebar = 350px + 30px Gap)
                         wrapper.style.maxWidth = 'calc(100% - 390px)';
                     }
                 } else {
@@ -1048,16 +1058,22 @@ videoContainer?.addEventListener('wheel', (e) => {
 const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         const el = e.target; const vidId = el.dataset.id;
+        const videoPlayer = el.querySelector('.video__player');
+
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
             if(el.classList.contains('dummy-ad-video')) return; 
             
-            // Fast-Skip Timer Start
+            // NEU: Video Quelle wiederherstellen wenn im Sichtbereich
+            if(videoPlayer && videoPlayer.src === "") {
+                videoPlayer.src = videoPlayer.dataset.originalSrc;
+            }
+            
             el.dataset.playStartTime = Date.now();
 
             if (vidId && !viewedVideos.has(vidId)) { viewedVideos.add(vidId); awardXP(2); updateDoc(doc(db, "videos", vidId), { views: increment(1) }).catch(() => {}); }
-            const videoPlayer = el.querySelector('.video__player');
+            
             if (videoPlayer) { 
-                document.querySelectorAll('.video__player').forEach(otherVid => { if (otherVid !== videoPlayer && !otherVid.paused) { otherVid.pause(); otherVid.currentTime = 0; } }); 
+                document.querySelectorAll('.video__player').forEach(otherVid => { if (otherVid !== videoPlayer && !otherVid.paused) { otherVid.pause(); } }); 
                 videoPlayer.muted = window.globalMuted; 
                 const playPromise = videoPlayer.play(); 
                 if (playPromise !== undefined) { 
@@ -1070,19 +1086,20 @@ const videoObserver = new IntersectionObserver(entries => {
                 } 
             }
         } else { 
-            // Fast-Skip Timer Ende & Check
             if(el.dataset.playStartTime) {
                 let playedTime = Date.now() - Number(el.dataset.playStartTime);
-                // Wenn User zwischen 0.1 und 2.5 Sekunden bleibt -> Strike! (Weggeskippt)
                 if (playedTime > 100 && playedTime < 2500 && vidId) {
                     updateDoc(doc(db, "videos", vidId), { fastSkips: increment(1) }).catch(()=>{});
                 }
                 el.dataset.playStartTime = "";
             }
 
-            const videoPlayer = el.querySelector('.video__player'); 
             if (videoPlayer) { 
-                videoPlayer.pause(); videoPlayer.currentTime = 0; 
+                videoPlayer.pause(); 
+                // NEU: Quelle leeren um RAM massiv zu sparen bei Videos außerhalb des Bildschirms!
+                videoPlayer.removeAttribute('src'); 
+                videoPlayer.load();
+                
                 const soundWrap = el.querySelector('.sound-disc-wrap');
                 if(soundWrap) soundWrap.classList.remove('is-playing');
             } 
