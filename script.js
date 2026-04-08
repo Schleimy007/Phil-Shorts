@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+// Ändere Zeile 2 so ab, dass "limit" mit importiert wird:
+import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot, query, orderBy, where, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 // === KONFIGURATION ===
@@ -786,7 +787,8 @@ function initLiveDatabase() {
     const skelLoader = document.getElementById('skeleton-loader');
     if (skelLoader) skelLoader.style.display = 'block';
 
-    onSnapshot(collection(db, "videos"), (snapshot) => {
+    const q = query(collection(db, "videos"), orderBy("timestamp", "desc"), limit(30));
+onSnapshot(q, (snapshot) => {
         allVideosData = [];
         let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
         snapshot.forEach(doc => { const v = { id: doc.id, ...doc.data() }; if (!blocked.includes(v.authorUid)) allVideosData.push(v); });
@@ -931,7 +933,7 @@ function createVideoElement(video) {
         if (video.urls.length > 1) { arrowsHTML = `<div class="carousel-arrow left" onclick="window.scrollCarousel('${video.id}', -1, event)"><i class="fas fa-chevron-left"></i></div><div class="carousel-arrow right" onclick="window.scrollCarousel('${video.id}', 1, event)"><i class="fas fa-chevron-right"></i></div>`; }
         mediaHTML = `<div class="carousel-container" data-vid="${video.id}">${video.urls.map(u => `<div class="carousel-item"><img src="${u}"></div>`).join('')}</div>${arrowsHTML}<div class="carousel-dots">${video.urls.map((_, i) => `<div class="dot ${i===0 ? 'active' : ''}"></div>`).join('')}</div>`; muteUIHtml = `<div class="mute-container" style="display:none;"></div>`;
     } else {
-        mediaHTML = `<video class="video__player" data-vid="${video.id}" preload="auto" loop playsinline ${mutedAttr} src="${video.url}"></video><div class="play-indicator"><i class="fas fa-play"></i></div><div class="player-progress-bar"><div class="player-progress-filled"></div></div><div class="fast-forward-overlay">2x ▶▶</div><div class="seek-ripple left"><div class="seek-arrows"><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i></div><div class="seek-text">5s</div></div><div class="seek-ripple right"><div class="seek-arrows"><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i></div><div class="seek-text">5s</div></div>`;
+        mediaHTML = `<video class="video__player" data-vid="${video.id}" preload="metadata" loop playsinline ${mutedAttr} src="${video.url}"></video><div class="play-indicator"><i class="fas fa-play"></i></div><div class="player-progress-bar"><div class="player-progress-filled"></div></div><div class="fast-forward-overlay">2x ▶▶</div><div class="seek-ripple left"><div class="seek-arrows"><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i></div><div class="seek-text">5s</div></div><div class="seek-ripple right"><div class="seek-arrows"><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i></div><div class="seek-text">5s</div></div>`;
         muteUIHtml = `<div class="mute-container"><div class="mute-btn"><i class="fas fa-volume-up"></i></div><div class="volume-slider-wrapper"><input type="range" class="volume-slider" min="0" max="1" step="0.05" value="1"></div></div>`;
     }
     let rawPreview = (video.description || "").substring(0, 50); let previewHtml = formatText(rawPreview); if ((video.description && video.description.length > 50)) previewHtml += '... <strong>mehr anzeigen</strong>';
