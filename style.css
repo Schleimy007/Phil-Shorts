@@ -216,13 +216,18 @@ body.theme-neon-pink .glass-nav-bottom {
 }
 
 
-/* --- BESTEHEND --- */
+/* --- VERIFIZIERT FIX (gradient entfernt) --- */
 
 .verified-badge {
-    color: #00f2fe;
+    color: #00f2fe !important;
     margin-left: 5px;
     font-size: 0.9em;
     filter: drop-shadow(0 0 3px rgba(0, 242, 254, 0.4));
+    /* WICHTIG: Verhindert, dass der Gradient des Namens übernommen wird */
+    -webkit-text-fill-color: #00f2fe !important;
+    background: none !important;
+    -webkit-background-clip: border-box !important;
+    display: inline-block;
 }
 
 
