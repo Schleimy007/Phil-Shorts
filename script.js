@@ -21,7 +21,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const GIPHY_API_KEY = "Vj2uCqfOmAT1sXEKQgQvneGy60VIxgCk";
 
-// === GLOBALE VARIABLEN ===
+// === GLOBALE VARIABLEN & ALGORITHMUS TRACKER ===
 let allVideosData = [];
 let allKnownUsers = [];
 let currentUser = JSON.parse(localStorage.getItem('phil_session'));
@@ -33,6 +33,10 @@ window.editingProfileUid = null;
 window.globalMuted = false;
 window.globalVolume = 1;
 let cropperInstance = null;
+
+// Algorithmus Live-Session Tracker
+let sessionInterests = {};
+let creatorAffinities = {};
 
 if (!document.getElementById('dynamic-live-styles')) {
     const style = document.createElement('style');
@@ -575,67 +579,78 @@ async function addNotification(targetUid, type, text, videoId = null) {
     await addDoc(collection(db, "users", targetUid, "notifications"), { fromUid: currentUser.uid, fromName: currentUser.displayName, fromUsername: currentUser.username, fromPic: currentUser.photoURL, type: type, text: text, videoId: videoId, timestamp: Date.now() });
 }
 
-// === TIKTOK & YOUTUBE ALGORITHM 1:1 ===
+// === ULTIMATE ALGORITHM 1:1 ===
 function applyAlgorithm(videos, mode) {
     if (mode === 'following') { 
         let followedVids = videos.filter(v => currentUser && currentUser.following && currentUser.following.includes(v.authorUid)); 
-        return followedVids.sort((a, b) => b.timestamp - a.timestamp); // Chronologisch für Abos
+        return followedVids.sort((a, b) => b.timestamp - a.timestamp);
     } else {
         const now = Date.now();
         let scoredVids = videos.map(v => {
-            // 1. Engagement Score (Basierend auf Interaktionsrate)
+            // 0. Base Metrics fetching
             let likes = v.likedBy ? v.likedBy.length : 0;
             let comments = v.comments ? v.comments.length : 0;
             let gifts = v.gifts || 0;
             let views = Math.max(v.views || 1, 1);
-            
-            // Engagement-Gewichtung (TikTok Style)
-            let engagementPoints = (likes * 10) + (comments * 25) + (gifts * 100);
-            let engagementRatio = engagementPoints / views;
+            let completions = v.completions || 0; 
+            let rewatches = v.rewatches || 0; 
 
-            // 2. Freshness Score (Zeitlicher Zerfall)
-            // Videos verlieren nach 48 Stunden massiv an Relevanz
-            let hoursOld = (now - v.timestamp) / 3600000;
-            let timeDecay = Math.pow(0.5, hoursOld / 24); // Halbwertszeit von 24h
+            // 1. Retention & Rewatch (Höchste Prio)
+            // Completion Rate schlägt bloße Klicks
+            let completionRate = completions / views;
+            let retentionScore = (completionRate * 500) + (rewatches * 50);
 
-            // 3. User Affinity (Interessen-Match)
+            // 2. Velocity Check (Viral-Status messen)
+            // Wie viele Interaktionen pro Stunde?
+            let hoursOld = Math.max((now - v.timestamp) / 3600000, 0.1);
+            let interactions = likes + comments + (gifts * 5);
+            let velocity = interactions / hoursOld;
+            let viralMultiplier = velocity > 10 ? 2.5 : 1; 
+
+            // 3. Time-Decay (Frische-Faktor)
+            // Video verliert alle 12h exponentiell an Sichtbarkeit
+            let timeDecay = Math.pow(0.8, hoursOld / 12); 
+
+            // 4. Live Session Interests
+            // Boost, falls Video zu den gerade in dieser Session geliketen Tags passt
+            let sessionBoost = 1;
+            if (v.description) {
+                let tags = v.description.toLowerCase().match(/#\w+/g) || [];
+                tags.forEach(tag => {
+                    if (sessionInterests[tag]) sessionBoost += (sessionInterests[tag] * 0.5);
+                });
+            }
+
+            // 5. Creator Affinity
+            // Boost, falls der User diesen Creator heute schon bis zum Ende geschaut hat
+            let creatorBoost = 1;
+            if (creatorAffinities[v.authorUid]) {
+                creatorBoost += (creatorAffinities[v.authorUid] * 0.2);
+            }
+
+            // 6. General Affinity & Watch-History
             let affinityScore = 1;
             if (currentUser) {
-                // Erhöhte Chance für Creator, denen man folgt
-                if (currentUser.following && currentUser.following.includes(v.authorUid)) affinityScore *= 2.5;
-                
-                // Bestrafung für bereits gesehene Videos im selben Feed-Lauf
-                if (viewedVideos.has(v.id)) affinityScore *= 0.1;
-
-                // Hashtag-Affinität (Simuliert durch Beschreibungsscan)
-                if (currentUser.bio && v.description) {
-                    let interests = currentUser.bio.toLowerCase().match(/#\w+/g) || [];
-                    interests.forEach(tag => {
-                        if (v.description.toLowerCase().includes(tag)) affinityScore *= 1.5;
-                    });
-                }
+                if (currentUser.following && currentUser.following.includes(v.authorUid)) affinityScore *= 2.0;
+                // Bestrafung für Videos, die in diesem Scroll-Run schon gesehen wurden
+                if (viewedVideos.has(v.id)) affinityScore *= 0.1; 
             }
 
-            // 4. Viral Boost & Quality
-            let viralBoost = 1;
+            // 7. Quality & Verification Boost
+            let qualityBoost = 1;
             let authorData = allKnownUsers.find(u => u.uid === v.authorUid);
             if (authorData) {
-                if (authorData.verified) viralBoost *= 1.3;
-                if (authorData.philPlusUntil > now && authorData.philPlusTier >= 2) viralBoost *= 1.5; // Plus++ Algorithmus Boost
+                if (authorData.verified) qualityBoost *= 1.2;
+                if (authorData.philPlusUntil > now && authorData.philPlusTier >= 2) qualityBoost *= 1.3;
             }
-            if (v.seriesId) viralBoost *= 1.2; // Serien-Bindung
 
-            // 5. Entropy (Zufallsfaktor für Discovery)
-            // TikTok gibt jedem Video eine "Test-Gruppe" von Views
-            let entropy = Math.random() * 50;
-
-            // FINALE BERECHNUNG
-            let totalScore = (engagementRatio * 1000 * timeDecay * affinityScore * viralBoost) + entropy;
+            // Finale Super-Formel
+            let totalScore = ((retentionScore + (interactions * 10)) * timeDecay * sessionBoost * creatorBoost * affinityScore * viralMultiplier * qualityBoost) + (Math.random() * 20);
 
             return { ...v, algoScore: totalScore };
         });
 
-        // Sortierung nach berechnetem Score
+        // Absteigend nach neuem Algo-Score sortieren
         return scoredVids.sort((a, b) => b.algoScore - a.algoScore);
     }
 }
@@ -917,7 +932,6 @@ const videoObserver = new IntersectionObserver(entries => {
     });
 }, { threshold: 0.6 });
 
-// DevTool Exploit Fix: Preise sind fest programmiert
 const SUBSCRIPTION_PRICES = {
     1: { 5: 5000, 14: 12000, 30: 25000 },
     2: { 5: 15000, 14: 35000, 30: 70000 },
@@ -967,8 +981,14 @@ window.sendSpecificGift = async function(giftId, price, emoji, name) {
 
 document.getElementById('live-gift-btn')?.addEventListener('click', () => { if(window.LiveManager && window.LiveManager.streamId) window.openGiftModal(window.LiveManager.streamId); });
 
+// Lokaler Tracker für Loops pro Video in dieser Session
+let sessionViewData = {};
+
 function attachInteractionsToVideo(videoContainerEl) {
     const v = videoContainerEl.querySelector('.video__player'); const c = videoContainerEl.querySelector('.carousel-container'); const container = videoContainerEl.querySelector('.video-inner'); videoObserver.observe(videoContainerEl); 
+    const vidId = videoContainerEl.dataset.id;
+    const targetVidData = allVideosData.find(vd => vd.id === vidId); 
+
     let lastTap = 0;
     
     const handleDoubleTap = (e) => { 
@@ -1013,7 +1033,26 @@ function attachInteractionsToVideo(videoContainerEl) {
             if(soundWrap) soundWrap.classList.remove('is-playing');
         });
         v.addEventListener('click', (e) => { if (handleDoubleTap(e)) return; if (v.paused) { document.querySelectorAll('.video__player').forEach(vid => { if (vid !== v && !vid.paused) vid.pause(); }); window.globalMuted = false; v.muted = window.globalMuted; window.updateGlobalVolumeUI(); v.play().catch(err=>{}); } else { v.pause(); } });
-        v.addEventListener('timeupdate', () => { const prog = container.querySelector('.player-progress-filled'); if(prog) prog.style.width = (v.currentTime / v.duration * 100) + '%'; });
+        
+        let hasCompleted = false;
+        v.addEventListener('timeupdate', () => { 
+            const prog = container.querySelector('.player-progress-filled'); 
+            if(prog) prog.style.width = (v.currentTime / v.duration * 100) + '%'; 
+
+            // RETENTION TRACKING: 90% geschaut
+            if(v.currentTime >= v.duration * 0.9 && !hasCompleted) {
+                hasCompleted = true;
+                if(targetVidData && targetVidData.authorUid) {
+                    creatorAffinities[targetVidData.authorUid] = (creatorAffinities[targetVidData.authorUid] || 0) + 1;
+                }
+                updateDoc(doc(db, "videos", vidId), { completions: increment(1) }).catch(()=>{});
+            }
+            // REWATCH TRACKING: Wieder am Anfang
+            if(v.currentTime < v.duration * 0.5 && hasCompleted) {
+                hasCompleted = false;
+                updateDoc(doc(db, "videos", vidId), { rewatches: increment(1) }).catch(()=>{});
+            }
+        });
         
         let holdTimer;
         const startHold = () => { holdTimer = setTimeout(() => { v.playbackRate = 2.0; const overlay = container.querySelector('.fast-forward-overlay'); if(overlay) overlay.classList.add('active'); triggerHaptic('heavy'); }, 500); };
@@ -1042,8 +1081,9 @@ function attachInteractionsToVideo(videoContainerEl) {
 
     document.addEventListener('mouseup', () => document.querySelectorAll('.mute-container').forEach(mc => mc.classList.remove('active-slider'))); document.addEventListener('touchend', () => document.querySelectorAll('.mute-container').forEach(mc => mc.classList.remove('active-slider')));
     const mc = container.querySelector('.mute-container'); if (mc) mc.addEventListener('click', (e) => e.stopPropagation());
+    
     container.querySelector('.like-btn')?.addEventListener('click', async(e) => { 
-        triggerHaptic('heavy'); const btn = e.currentTarget; const id = btn.dataset.id; const isLiked = btn.classList.contains('liked'); const targetVidData = allVideosData.find(vd => vd.id === id); 
+        triggerHaptic('heavy'); const btn = e.currentTarget; const id = btn.dataset.id; const isLiked = btn.classList.contains('liked'); 
         document.querySelectorAll(`.like-btn[data-id="${id}"]`).forEach(el => { const countEl = el.querySelector('.like-count'); let currentLikes = Number(countEl.innerText) || 0; if (isLiked) { el.classList.remove('liked'); countEl.innerText = Math.max(0, currentLikes - 1); } else { el.classList.add('liked'); countEl.innerText = currentLikes + 1; } }); 
         if (isLiked) {
             await updateDoc(doc(db, "videos", id), { likedBy: arrayRemove(currentUser.uid) }); 
@@ -1051,9 +1091,17 @@ function attachInteractionsToVideo(videoContainerEl) {
             const rect = btn.getBoundingClientRect();
             createParticles(rect.left + rect.width/2, rect.top + rect.height/2, document.body);
             btn.classList.add('micro-pop'); setTimeout(()=>btn.classList.remove('micro-pop'),300); awardXP(1); 
+            
+            // SESSION INTERESTS TRACKING (Lernen aus Likes)
+            if(targetVidData && targetVidData.description) {
+                let tags = targetVidData.description.toLowerCase().match(/#\w+/g) || [];
+                tags.forEach(tag => { sessionInterests[tag] = (sessionInterests[tag] || 0) + 1; });
+            }
+
             await updateDoc(doc(db, "videos", id), { likedBy: arrayUnion(currentUser.uid) }); if (targetVidData) addNotification(targetVidData.authorUid, "like", "hat dein Post geliket.", id); 
         } 
     });
+    
     container.querySelector('.comment-btn')?.addEventListener('click', (e) => { window.currentCommentVideoId = e.currentTarget.dataset.id; renderComments(window.currentCommentVideoId); document.getElementById('comment-modal').classList.add('show'); });
     container.querySelector('.gift-btn')?.addEventListener('click', (e) => { window.openGiftModal(e.currentTarget.dataset.id); });
     container.querySelector('.share-btn')?.addEventListener('click', async(e) => { const vidId = e.currentTarget.dataset.id; const shareUrl = `${window.location.origin}${window.location.pathname}?video=${vidId}`; if (navigator.share) { try { await navigator.share({ title: 'Phil Shorts', text: 'Schau dir dieses an!', url: shareUrl }); } catch (err) {} } else { navigator.clipboard.writeText(shareUrl); showToast("Link kopiert!"); } });
@@ -1322,7 +1370,7 @@ window.openProfile = async function(targetUid) {
 };
 
 
-const shopItems = [ { id: 'b1', name: 'Ohne', type: 'border', cost: 0, cssClass: 'none' }, { id: 'b2', name: 'Neon Blau', type: 'border', cost: 500, cssClass: 'neon-blue' }, { id: 'b3', name: 'Gold', type: 'border', cost: 1000, cssClass: 'gold' }, { id: 'b4', name: '3663 Pro', type: 'border', cost: 2500, cssClass: '3663' }, { id: 'b5', name: 'Diamant', type: 'border', cost: 5000, cssClass: 'diamond' }, { id: 'b6', name: 'RGB Chroma (Plus++)', type: 'border', cost: 0, cssClass: 'chroma', requiresPlusLevel: 2 }, { id: 'b7', name: 'Rot', type: 'border', cost: 100, cssClass: 'solid-red' }, { id: 'b8', name: 'Blau', type: 'border', cost: 100, cssClass: 'solid-blue' }, { id: 'b9', name: 'Grün', type: 'border', cost: 100, cssClass: 'solid-green' }, { id: 'b10', name: 'Gelb', type: 'border', cost: 100, cssClass: 'solid-yellow' }, { id: 'b11', name: 'Lila', type: 'border', cost: 100, cssClass: 'solid-purple' }, { id: 'b12', name: 'Orange', type: 'border', cost: 100, cssClass: 'solid-orange' }, { id: 'b13', name: 'Pink', type: 'border', cost: 100, cssClass: 'solid-pink' }, { id: 'b14', name: 'Weiß', type: 'border', cost: 100, cssClass: 'solid-white' }, { id: 'b15', name: 'Neon Rot', type: 'border', cost: 800, cssClass: 'neon-red' }, { id: 'b16', name: 'Neon Grün', type: 'border', cost: 800, cssClass: 'neon-green' }, { id: 'b17', name: 'Neon Lila', type: 'border', cost: 800, cssClass: 'neon-purple' }, { id: 'b18', name: 'Neon Pink', type: 'border', cost: 800, cssClass: 'neon-pink' }, { id: 'b19', name: 'Neon Orange', type: 'border', cost: 800, cssClass: 'neon-orange' }, { id: 'b20', name: 'Dashed Rot', type: 'border', cost: 300, cssClass: 'dashed-red' }, { id: 'b21', name: 'Dashed Blau', type: 'border', cost: 300, cssClass: 'dashed-blue' }, { id: 'b22', name: 'Dotted Grün', type: 'border', cost: 300, cssClass: 'dotted-green' }, { id: 'b23', name: 'Double Lila', type: 'border', cost: 400, cssClass: 'double-purple' }, { id: 'b24', name: 'Double Gold', type: 'border', cost: 1500, cssClass: 'double-gold' }, { id: 'b25', name: 'Fire Gradient', type: 'border', cost: 2000, cssClass: 'grad-fire' }, { id: 'b26', name: 'Ice Gradient', type: 'border', cost: 2000, cssClass: 'grad-ice' }, { id: 'b27', name: 'Toxic Gradient', type: 'border', cost: 2000, cssClass: 'grad-toxic' }, { id: 'b28', name: 'Sunset Gradient', type: 'border', cost: 2000, cssClass: 'grad-sunset' }, { id: 'b29', name: 'Cyberpunk', type: 'border', cost: 3000, cssClass: 'cyberpunk' }, { id: 'b30', name: 'Vaporwave', type: 'border', cost: 3000, cssClass: 'vaporwave' }, { id: 'b31', name: 'Cosmic', type: 'border', cost: 3500, cssClass: 'cosmic' }, { id: 'b32', name: 'Rainbow', type: 'border', cost: 4000, cssClass: 'rainbow' }, { id: 'b_custom', name: 'Custom (Plus+++)', type: 'border', cost: 0, cssClass: 'custom', requiresPlusLevel: 3 } ];
+const shopItems = [ { id: 'b1', name: 'Ohne', type: 'border', cost: 0, cssClass: 'none' }, { id: 'b2', name: 'Neon Blau', type: 'border', cost: 500, cssClass: 'neon-blue' }, { id: 'b3', name: 'Gold', type: 'border', cost: 1000, cssClass: 'gold' }, { id: 'b4', name: '3663 Pro', type: 'border', cost: 2500, cssClass: '3663' }, { id: 'b5', name: 'Diamant', type: 'border', cost: 5000, cssClass: 'diamond' }, { id: 'b6', name: 'RGB Chroma (Plus++)', type: 'border', cost: 0, cssClass: 'chroma', requiresPlusLevel: 2 }, { id: 'b7', name: 'Rot', type: 'border', cost: 100, cssClass: 'solid-red' }, { id: 'b8', name: 'Blau', type: 'border', cost: 100, cssClass: 'solid-blue' }, { id: 'b9', name: 'Grün', type: 'border', cost: 100, cssClass: 'solid-green' }, { id: 'b10', name: 'Gelb', type: 'border', cost: 100, cssClass: 'solid-yellow' }, { id: 'b11', name: 'Lila', type: 'border', cost: 100, cssClass: 'solid-purple' }, { id: 'b12', name: 'Orange', type: 'border', cost: 100, cssClass: 'solid-orange' }, { id: 'b13', name: 'Pink', type: 'border', cost: 100, cssClass: 'solid-white' }, { id: 'b15', name: 'Neon Rot', type: 'border', cost: 800, cssClass: 'neon-red' }, { id: 'b16', name: 'Neon Grün', type: 'border', cost: 800, cssClass: 'neon-green' }, { id: 'b17', name: 'Neon Lila', type: 'border', cost: 800, cssClass: 'neon-purple' }, { id: 'b18', name: 'Neon Pink', type: 'border', cost: 800, cssClass: 'neon-pink' }, { id: 'b19', name: 'Neon Orange', type: 'border', cost: 800, cssClass: 'neon-orange' }, { id: 'b20', name: 'Dashed Rot', type: 'border', cost: 300, cssClass: 'dashed-red' }, { id: 'b21', name: 'Dashed Blau', type: 'border', cost: 300, cssClass: 'dashed-blue' }, { id: 'b22', name: 'Dotted Grün', type: 'border', cost: 300, cssClass: 'dotted-green' }, { id: 'b23', name: 'Double Lila', type: 'border', cost: 400, cssClass: 'double-purple' }, { id: 'b24', name: 'Double Gold', type: 'border', cost: 1500, cssClass: 'double-gold' }, { id: 'b25', name: 'Fire Gradient', type: 'border', cost: 2000, cssClass: 'grad-fire' }, { id: 'b26', name: 'Ice Gradient', type: 'border', cost: 2000, cssClass: 'grad-ice' }, { id: 'b27', name: 'Toxic Gradient', type: 'border', cost: 2000, cssClass: 'grad-toxic' }, { id: 'b28', name: 'Sunset Gradient', type: 'border', cost: 2000, cssClass: 'grad-sunset' }, { id: 'b29', name: 'Cyberpunk', type: 'border', cost: 3000, cssClass: 'cyberpunk' }, { id: 'b30', name: 'Vaporwave', type: 'border', cost: 3000, cssClass: 'vaporwave' }, { id: 'b31', name: 'Cosmic', type: 'border', cost: 3500, cssClass: 'cosmic' }, { id: 'b32', name: 'Rainbow', type: 'border', cost: 4000, cssClass: 'rainbow' }, { id: 'b_custom', name: 'Custom (Plus+++)', type: 'border', cost: 0, cssClass: 'custom', requiresPlusLevel: 3 } ];
 
 document.getElementById('profile-shop-btn')?.addEventListener('click', () => { if(!currentUser) return; document.getElementById('shop-modal-coins').innerText = currentUser.coins; renderShopBorders(); document.getElementById('shop-modal').classList.add('show'); });
 document.querySelectorAll('.shop-tab:not(.pro-tab-btn)').forEach(tab => { tab.addEventListener('click', (e) => { document.querySelectorAll('.shop-tab:not(.pro-tab-btn)').forEach(t => t.classList.remove('active')); e.target.classList.add('active'); document.querySelectorAll('.shop-content-section').forEach(s => s.style.display = 'none'); document.getElementById(e.target.dataset.tab).style.display = 'block'; }); });
