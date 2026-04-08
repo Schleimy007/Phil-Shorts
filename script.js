@@ -477,7 +477,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
             if (!currentUser.following) currentUser.following = [];
             if (!currentUser.savedVideos) currentUser.savedVideos = [];
             if (!currentUser.blockedUsers) currentUser.blockedUsers = [];
-            if (!currentUser.socialLinks) currentUser.socialLinks = { ig: '', yt: '', tw: '', tt: '' };
+            if (!currentUser.socialLinks) currentUser.socialLinks = { ig: '', yt: '', tt: '' };
             if (!currentUser.decorations) currentUser.decorations = [];
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             if (currentUser.coins === undefined) await updateDoc(userRef, { coins: 1000, profileViews: 0, followers: [] });
@@ -575,21 +575,67 @@ async function addNotification(targetUid, type, text, videoId = null) {
     await addDoc(collection(db, "users", targetUid, "notifications"), { fromUid: currentUser.uid, fromName: currentUser.displayName, fromUsername: currentUser.username, fromPic: currentUser.photoURL, type: type, text: text, videoId: videoId, timestamp: Date.now() });
 }
 
+// === TIKTOK & YOUTUBE ALGORITHM 1:1 ===
 function applyAlgorithm(videos, mode) {
-    if (mode === 'following') { let followedVids = videos.filter(v => currentUser && currentUser.following && currentUser.following.includes(v.authorUid)); return followedVids.sort(() => Math.random() - 0.5); } else {
+    if (mode === 'following') { 
+        let followedVids = videos.filter(v => currentUser && currentUser.following && currentUser.following.includes(v.authorUid)); 
+        return followedVids.sort((a, b) => b.timestamp - a.timestamp); // Chronologisch für Abos
+    } else {
+        const now = Date.now();
         let scoredVids = videos.map(v => {
+            // 1. Engagement Score (Basierend auf Interaktionsrate)
             let likes = v.likedBy ? v.likedBy.length : 0;
             let comments = v.comments ? v.comments.length : 0;
             let gifts = v.gifts || 0;
-            let engagementScore = (likes * 5) + (comments * 10) + (gifts * 20);
-            let baseViralPower = Math.log(engagementScore + 1) * 30;
+            let views = Math.max(v.views || 1, 1);
+            
+            // Engagement-Gewichtung (TikTok Style)
+            let engagementPoints = (likes * 10) + (comments * 25) + (gifts * 100);
+            let engagementRatio = engagementPoints / views;
+
+            // 2. Freshness Score (Zeitlicher Zerfall)
+            // Videos verlieren nach 48 Stunden massiv an Relevanz
+            let hoursOld = (now - v.timestamp) / 3600000;
+            let timeDecay = Math.pow(0.5, hoursOld / 24); // Halbwertszeit von 24h
+
+            // 3. User Affinity (Interessen-Match)
+            let affinityScore = 1;
+            if (currentUser) {
+                // Erhöhte Chance für Creator, denen man folgt
+                if (currentUser.following && currentUser.following.includes(v.authorUid)) affinityScore *= 2.5;
+                
+                // Bestrafung für bereits gesehene Videos im selben Feed-Lauf
+                if (viewedVideos.has(v.id)) affinityScore *= 0.1;
+
+                // Hashtag-Affinität (Simuliert durch Beschreibungsscan)
+                if (currentUser.bio && v.description) {
+                    let interests = currentUser.bio.toLowerCase().match(/#\w+/g) || [];
+                    interests.forEach(tag => {
+                        if (v.description.toLowerCase().includes(tag)) affinityScore *= 1.5;
+                    });
+                }
+            }
+
+            // 4. Viral Boost & Quality
+            let viralBoost = 1;
             let authorData = allKnownUsers.find(u => u.uid === v.authorUid);
-            if (authorData && authorData.philPlusUntil && authorData.philPlusUntil > Date.now() && authorData.philPlusTier >= 2) baseViralPower += 50;
-            let affinityScore = 0;
-            if (currentUser) { if (currentUser.following && currentUser.following.includes(v.authorUid)) affinityScore += 30; if (v.likedBy && v.likedBy.includes(currentUser.uid)) affinityScore -= 40; if (v.authorUid === currentUser.uid) affinityScore -= 100; }
-            let seriesBoost = v.seriesId ? 50 : 0;
-            return {...v, algoScore: baseViralPower + affinityScore + seriesBoost + (Math.random() * 120) };
+            if (authorData) {
+                if (authorData.verified) viralBoost *= 1.3;
+                if (authorData.philPlusUntil > now && authorData.philPlusTier >= 2) viralBoost *= 1.5; // Plus++ Algorithmus Boost
+            }
+            if (v.seriesId) viralBoost *= 1.2; // Serien-Bindung
+
+            // 5. Entropy (Zufallsfaktor für Discovery)
+            // TikTok gibt jedem Video eine "Test-Gruppe" von Views
+            let entropy = Math.random() * 50;
+
+            // FINALE BERECHNUNG
+            let totalScore = (engagementRatio * 1000 * timeDecay * affinityScore * viralBoost) + entropy;
+
+            return { ...v, algoScore: totalScore };
         });
+
+        // Sortierung nach berechnetem Score
         return scoredVids.sort((a, b) => b.algoScore - a.algoScore);
     }
 }
@@ -1308,7 +1354,6 @@ window.pendingSub = null;
 window.buyPhilPlus = async function(days, tier) { 
     if(!currentUser) return; 
     
-    // DEVTOOL FIX: Der Preis wird aus der sicheren Konstante gezogen!
     const secureCost = SUBSCRIPTION_PRICES[tier]?.[days];
     if(!secureCost) return showCustomAlert("Fehler", "Ungültiges Abo ausgewählt.");
 
@@ -1366,7 +1411,6 @@ window.viewUserStory = function(index = 0) {
     document.getElementById('sv-pic').src = authorData.pic || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'; document.getElementById('sv-name').innerText = authorData.displayName; document.getElementById('sv-time').innerText = timeAgo(story.timestamp); document.getElementById('sv-counter').innerText = `${index + 1}/${profileUserStories.length}`; document.getElementById('sv-img').src = story.url; document.getElementById('story-viewer').classList.add('show');
     const linkBtn = document.getElementById('sv-link-btn'); if(story.link) { linkBtn.href = story.link; linkBtn.style.display = 'inline-flex'; } else linkBtn.style.display = 'none';
     
-    // Mülleimer Anzeigen/Verstecken
     const deleteBtn = document.getElementById('sv-delete-btn');
     const isAdmin = currentUser && (currentUser.email === "schleimyverteilung@gmail.com" || currentUser.isAdmin);
     const isMine = currentUser && currentUser.uid === uid;
@@ -1398,7 +1442,7 @@ window.deleteStory = async function() {
                 await updateDoc(targetUserRef, { stories: stories });
                 showToast("Story erfolgreich gelöscht!");
                 closeStoryViewer();
-                openProfile(uid); // Aktualisiert Profilansicht
+                openProfile(uid); 
             }
         } catch(e) { showCustomAlert("Fehler", "Story konnte nicht gelöscht werden."); }
     }
@@ -1441,7 +1485,6 @@ document.getElementById('save-settings-btn')?.addEventListener('click', async() 
 document.getElementById('nav-profile')?.addEventListener('click', () => { if (currentUser) openProfile(currentUser.uid); });
 document.getElementById('open-admin-dashboard')?.addEventListener('click', () => { switchView('admin'); loadAdminDashboard(); });
 
-// NEUE FUNKTIONEN FÜR ADMIN ABO-VERWALTUNG
 window.openAdminPlusModal = function(targetUid) {
     if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return;
     window.adminTargetUid = targetUid;
@@ -1457,12 +1500,11 @@ window.adminGrantPlus = async function(tier) {
                 showToast("Abo des Nutzers gelöscht.");
             }
         } else {
-            let newUntil = Date.now() + (30 * 86400000); // 30 Tage geschenkt
+            let newUntil = Date.now() + (30 * 86400000); 
             await updateDoc(doc(db, "users", window.adminTargetUid), { philPlusUntil: newUntil, philPlusTier: tier });
             showToast(`Stufe ${tier} Plus für 30 Tage an Nutzer verschenkt!`);
         }
         document.getElementById('admin-plus-modal').classList.remove('show');
-        // Update das Profil visuell wenn man noch auf der Seite ist
         openProfile(window.adminTargetUid); 
     } catch(e) {
         showCustomAlert("Fehler", "Abo konnte nicht verwaltet werden.");
@@ -1570,7 +1612,6 @@ function initInboxChats() {
             let colorMsg = isUnread ? "white" : "#888";
             let unreadDot = isUnread ? '<div style="width:10px; height:10px; background:#ff0050; border-radius:50%; margin-left:auto;"></div>' : '';
             
-            // Check Plus++ for Read Receipts (optimized via allKnownUsers)
             let partnerData = allKnownUsers.find(u => u.uid === partnerUid);
             let showReadReceipts = checkPhilPlusStatus(2) || (partnerData && partnerData.philPlusUntil > Date.now() && partnerData.philPlusTier >= 2);
             let tickHtml = '';
@@ -1654,7 +1695,6 @@ window.openDM = async function(targetUid, targetName, targetPic) {
     const chatRef = doc(db, "chats", window.currentChatId); const chatSnap = await getDoc(chatRef);
     if (!chatSnap.exists()) await setDoc(chatRef, { participants: [currentUser.uid, targetUid], users: { [currentUser.uid]: { name: currentUser.displayName, pic: currentUser.photoURL }, [targetUid]: { name: targetName, pic: targetPic } }, lastMessage: "", lastMessageTime: Date.now(), lastMessageRead: false });
     
-    // Check Plus++ Status for Shared Read Receipts
     let showReadReceipts = checkPhilPlusStatus(2);
     if (!showReadReceipts) {
         const tDoc = await getDoc(doc(db, "users", targetUid));
