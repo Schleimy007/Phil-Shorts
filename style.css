@@ -1621,11 +1621,28 @@ body.theme-neon-pink .glass-nav-bottom {
     height: calc(100% - 60px - env(safe-area-inset-bottom));
 }
 
-/* VEREINHEITLICHTER CHAT CONTAINER (FIX FÜR NEBENEINANDER BUG) */
+
+/* --- CHAT/INBOX CONTAINERS (REPARIERT) --- */
+
+/* Für Posteingang: Nachrichten starten ganz normal oben */
+.inbox-list-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 15px;
+    gap: 15px;
+    width: 100%;
+    position: relative;
+    z-index: 1; /* Tabs nicht blockieren */
+}
+
+/* Für DMs und Tickets (WhatsApp Style: Starten unten) */
 .chat-container {
     flex: 1;
-    display: flex !important;
-    flex-direction: column !important;
+    display: flex;
+    flex-direction: column;
     min-height: 0;
     overflow-y: auto;
     padding: 15px;
@@ -1634,15 +1651,11 @@ body.theme-neon-pink .glass-nav-bottom {
     width: 100%;
 }
 
-#view-dm .chat-container, 
-#view-ticket .chat-container {
-    flex: 1;
-    overflow-y: auto;
-    padding: 15px;
-    padding-bottom: 15px;
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
+/* Drückt die Nachrichten bei leerem Chat nach unten */
+#dm-box::before,
+#ticket-box::before {
+    content: "";
+    flex: 1 1 auto;
 }
 
 .inbox-msg {
