@@ -32,6 +32,8 @@ window.currentSoundPreviewPlayer = new Audio();
 window.editingProfileUid = null;
 window.globalMuted = false;
 window.globalVolume = 1;
+
+// NEU: Globale Cache-Variable für Embeds (gegen Lags)
 window.linkPreviewCache = window.linkPreviewCache || {};
 let cropperInstance = null;
 
@@ -256,48 +258,63 @@ function getVerifiedBadge(isVerif) { return isVerif ? '<i class="fas fa-check-ci
 
 function timeAgo(timestamp) { const now = Date.now(); const diff = now - Number(timestamp); const minutes = Math.floor(diff / 60000); const hours = Math.floor(minutes / 60); const days = Math.floor(hours / 24); if (minutes < 1) return 'gerade eben'; if (minutes < 60) return `vor ${minutes} Min.`; if (hours < 24) return `vor ${hours} Std.`; if (days < 7) return `vor ${days} T.`; return new Date(Number(timestamp)).toLocaleDateString('de-DE'); }
 
-// === NEU: DISCORD STYLE EMBEDS (VORSCHAU) ===
-async function loadDiscordEmbed(url, elementId) {
-    const el = document.getElementById(elementId);
-    if (!el) return;
+// === NEU: OPTIMIERTE DISCORD STYLE EMBEDS OHNE LAGS ===
 
-    if (window.linkPreviewCache[url]) {
-        renderDiscordEmbed(window.linkPreviewCache[url], el);
-        return;
-    }
+// Die Worker-Funktion sucht im gerenderten DOM nach Platzhaltern und füllt sie
+window.processEmbeds = async function() {
+    const placeholders = document.querySelectorAll('.embed-placeholder[data-url]');
+    for (const el of placeholders) {
+        const url = el.getAttribute('data-url');
+        // Markiert als in Bearbeitung, damit es nicht 10x aufgerufen wird
+        el.removeAttribute('data-url'); 
 
-    try {
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-        const response = await fetch(proxyUrl);
-        const data = await response.json();
-        const html = data.contents;
-        if (!html) return;
-        
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, "text/html");
-        
-        const getMeta = (prop) => {
-            const tag = doc.querySelector(`meta[property="${prop}"], meta[name="${prop}"]`);
-            return tag ? tag.getAttribute("content") : "";
-        };
-        
-        const siteName = getMeta("og:site_name") || new URL(url).hostname.replace('www.', '');
-        const title = getMeta("og:title") || doc.title || "";
-        const desc = getMeta("og:description") || getMeta("description") || "";
-        const image = getMeta("og:image") || "";
-        
-        if (title || image || desc) {
-            const embedData = { siteName, title, desc, image, url };
-            window.linkPreviewCache[url] = embedData;
-            renderDiscordEmbed(embedData, el);
+        // Ist der Link schon im globalen Cache?
+        if (window.linkPreviewCache[url]) {
+            if (window.linkPreviewCache[url] instanceof Promise) {
+                // Er lädt gerade im Hintergrund -> Warte ab
+                window.linkPreviewCache[url].then(data => {
+                    if (data) renderDiscordEmbed(data, el);
+                });
+            } else {
+                // Schon fertig -> Direkt anzeigen
+                renderDiscordEmbed(window.linkPreviewCache[url], el);
+            }
+            continue;
         }
+
+        // Lade den Link (ersetze die Cache-Variable temporär mit dem Promise)
+        window.linkPreviewCache[url] = fetchPreviewData(url).then(data => {
+            window.linkPreviewCache[url] = data; // Ergebnis dauerhaft speichern
+            if (data) renderDiscordEmbed(data, el);
+            return data;
+        });
+    }
+};
+
+// Nutzt eine saubere API anstelle des fehleranfälligen HTML-Scrapings
+async function fetchPreviewData(url) {
+    try {
+        const response = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}`);
+        const json = await response.json();
+        if (json.status === 'success' && json.data) {
+            const d = json.data;
+            return {
+                siteName: d.publisher || new URL(url).hostname.replace('www.', ''),
+                title: d.title || "",
+                desc: d.description || "",
+                image: d.image ? d.image.url : (d.logo ? d.logo.url : ""),
+                url: url
+            };
+        }
+        return null;
     } catch(e) {
-        console.log("Embed fetch failed for", url);
+        console.error("Embed load failed:", e);
+        return null;
     }
 }
 
 function renderDiscordEmbed(data, el) {
-    if (!el) return;
+    if (!el || !document.body.contains(el)) return;
     const chatBox = el.closest('.chat-container');
     const isNearBottom = chatBox ? (chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < 100) : false;
 
@@ -310,6 +327,7 @@ function renderDiscordEmbed(data, el) {
     
     el.outerHTML = html;
     
+    // Smooth Auto-Scroll, wenn man unten war und das Bild aufploppt
     if (chatBox && isNearBottom) {
         setTimeout(() => chatBox.scrollTop = chatBox.scrollHeight, 100);
     }
@@ -319,14 +337,15 @@ function formatDMText(text) {
     if (!text) return "";
     let safeText = escapeHTML(text);
     
+    // Link Erkennung
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     safeText = safeText.replace(urlRegex, function(url) {
+        // Direkte Bilder
         if (url.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i)) {
             return `<div class="link-embed"><a href="${url}" target="_blank" class="link-embed-title">${url}</a><img src="${url}" class="link-embed-img"></div>`;
         } else {
-            const safeId = 'embed-' + Math.random().toString(36).substr(2, 9);
-            setTimeout(() => loadDiscordEmbed(url, safeId), 10);
-            return `<a href="${url}" target="_blank" class="dm-link">${url}</a><div id="${safeId}" class="embed-placeholder"></div>`;
+            // Setzt nur einen Platzhalter, der später vom DOM geparst wird!
+            return `<a href="${url}" target="_blank" class="dm-link">${url}</a><div class="embed-placeholder" data-url="${url}"></div>`;
         }
     });
     
@@ -589,7 +608,7 @@ window.onload = async function() {
         if (!currentUser.savedVideos) currentUser.savedVideos = [];
         if (!currentUser.blockedUsers) currentUser.blockedUsers = [];
         if (!currentUser.socialLinks) currentUser.socialLinks = { ig: '', yt: '', tw: '', tt: '' };
-        if (!currentUser.dmPrivacy) currentUser.dmPrivacy = 'everyone';
+        if (!currentUser.dmPrivacy) currentUser.dmPrivacy = 'everyone'; 
         initLiveDatabase();
         initLiveUser();
         initInbox();
@@ -1029,6 +1048,26 @@ function createVideoElement(video) {
         }
     }
 
+    const vidEl = div.querySelector('.video__player');
+    if (vidEl) {
+        vidEl.addEventListener('loadedmetadata', () => {
+            const ratio = vidEl.videoWidth / vidEl.videoHeight;
+            if (ratio > 0.57) { 
+                if (window.innerWidth > 768) {
+                    const wrapper = div.querySelector('.video-wrapper');
+                    if (wrapper) {
+                        let newWidth = Math.min(52, 45 + (ratio * 4)); 
+                        wrapper.style.minWidth = newWidth + 'vh';
+                        wrapper.style.maxWidth = 'calc(100% - 390px)';
+                    }
+                } else {
+                    vidEl.style.objectFit = 'contain';
+                    vidEl.style.transform = 'scale(1.05)'; 
+                }
+            }
+        });
+    }
+
     attachInteractionsToVideo(div); return div;
 }
 
@@ -1078,7 +1117,7 @@ const videoObserver = new IntersectionObserver(entries => {
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
             if(el.classList.contains('dummy-ad-video')) return; 
             
-            if(videoPlayer && !videoPlayer.src) {
+            if(videoPlayer && videoPlayer.src === "") {
                 videoPlayer.src = videoPlayer.dataset.originalSrc;
             }
             
@@ -2003,7 +2042,7 @@ let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPar
 window.openDM = async function(targetUid, targetName, targetPic) {
     if (!currentUser) return; 
 
-    // === NEU: DM PRIVACY CHECK BEIM ÖFFNEN DES CHATS ===
+    // === DM PRIVACY CHECK ===
     const tUser = allKnownUsers.find(u => u.uid === targetUid);
     if(tUser) {
         const privacy = tUser.dmPrivacy || 'everyone';
@@ -2053,7 +2092,7 @@ window.openDM = async function(targetUid, targetName, targetPic) {
                     readReceipt = msg.read ? `<span style="font-size:10px; color:#00f2fe; margin-left:5px; font-weight:bold; letter-spacing:-2px;">✓✓</span>` : `<span style="font-size:10px; color:#888; margin-left:5px; font-weight:bold;">✓</span>`;
                 }
 
-                // NEU: REPLIES IN BUBBLE
+                // REPLIES IN BUBBLE
                 let replyHtml = '';
                 if (msg.replyTo) {
                     replyHtml = `<div class="chat-reply-quote" onclick="document.getElementById('dm-reply-preview').style.display='none';"><strong>${msg.replyTo.name}</strong><br>${formatText(msg.replyTo.text)}</div>`;
@@ -2062,10 +2101,10 @@ window.openDM = async function(targetUid, targetName, targetPic) {
                 let editedHtml = msg.edited ? `<span style="font-size:10px; color:#888; margin-left:5px;">(bearbeitet)</span>` : '';
                 let extraClass = isMe && checkPhilPlusStatus(2) ? 'gold-bubble' : ''; 
                 
-                // NEU: EMBEDS RENDERN
+                // EMBEDS RENDERN
                 let bubbleContent = formatDMText(msg.text);
 
-                // NEU: INTERAKTIVES KONTEXT MENÜ
+                // INTERAKTIVES KONTEXT MENÜ
                 let safeText = msg.text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 let interactions = `oncontextmenu="event.preventDefault(); window.openDMContextMenu('${docSnap.id}', '${msg.senderUid}', '${safeText}');"`;
                 interactions += ` onmousedown="window.dmPressTimer = setTimeout(() => { window.openDMContextMenu('${docSnap.id}', '${msg.senderUid}', '${safeText}'); }, 500);" onmouseup="clearTimeout(window.dmPressTimer)" onmouseleave="clearTimeout(window.dmPressTimer)" ontouchstart="window.dmPressTimer = setTimeout(() => { window.openDMContextMenu('${docSnap.id}', '${msg.senderUid}', '${safeText}'); }, 500);" ontouchend="clearTimeout(window.dmPressTimer)"`;
@@ -2075,6 +2114,10 @@ window.openDM = async function(targetUid, targetName, targetPic) {
             }); 
         }
         dmBox.scrollTop = dmBox.scrollHeight;
+        
+        // NEU: Lädt Embeds nach dem der Chat gerendert wurde
+        window.processEmbeds();
+
         if (unreadIds.length > 0) {
             unreadIds.forEach(id => updateDoc(doc(db, `chats/${window.currentChatId}/messages`, id), { read: true }));
             updateDoc(doc(db, "chats", window.currentChatId), { lastMessageRead: true });
@@ -2088,7 +2131,7 @@ document.getElementById('send-dm-btn')?.addEventListener('click', async() => {
     if (!text || !window.currentChatId || !currentUser) return; 
     input.value = ''; 
 
-    // NEU: ReplyTo mitsenden
+    // ReplyTo mitsenden
     let msgObj = { senderUid: currentUser.uid, text: text, timestamp: Date.now(), read: false };
     if(window.dmReplyTarget) {
         msgObj.replyTo = window.dmReplyTarget;
