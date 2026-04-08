@@ -223,7 +223,6 @@ body.theme-neon-pink .glass-nav-bottom {
     margin-left: 5px;
     font-size: 0.9em;
     filter: drop-shadow(0 0 3px rgba(0, 242, 254, 0.4));
-    /* WICHTIG: Verhindert, dass der Gradient des Namens übernommen wird */
     -webkit-text-fill-color: #00f2fe !important;
     background: none !important;
     -webkit-background-clip: border-box !important;
@@ -2485,12 +2484,14 @@ body.theme-neon-pink .glass-nav-bottom {
         width: calc(100% - 250px);
         left: 250px;
     }
+    
+    /* ORIGINAL PC LAYOUT (Wie am Anfang) */
     .video-inner {
         display: flex;
         flex-direction: row;
         position: relative;
         width: 100%;
-        max-width: 900px;
+        max-width: 1200px;
         margin: 0 auto;
         height: calc(100dvh - 80px);
         align-items: center;
@@ -2499,12 +2500,12 @@ body.theme-neon-pink .glass-nav-bottom {
         margin-top: 40px;
     }
     
-    /* FIX FÜR DIE BOX-ÜBERLAGERUNG */
     .video-wrapper {
         position: relative;
         width: auto;
-        max-width: calc(100% - 390px); /* Garantiert 350px für die Sidebar + 40px Abstand */
-        aspect-ratio: 9/16;
+        min-width: min(100%, 45vh);
+        max-width: 100%;
+        aspect-ratio: auto;
         height: 100%;
         max-height: 80vh;
         border-radius: 20px;
@@ -2514,7 +2515,7 @@ body.theme-neon-pink .glass-nav-bottom {
         justify-content: center;
         align-items: center;
         background: #000;
-        flex-shrink: 0; /* Verhindert, dass das Video geschrumpft wird */
+        flex-shrink: 0; 
     }
     
     .video__player {
@@ -2524,7 +2525,9 @@ body.theme-neon-pink .glass-nav-bottom {
         border-radius: 0;
         box-shadow: none;
         position: static;
+        object-fit: contain; 
     }
+    
     .mute-container {
         top: 20px;
         right: 20px;
@@ -2540,7 +2543,6 @@ body.theme-neon-pink .glass-nav-bottom {
         margin-right: 5px;
     }
     
-    /* FIX FÜR DIE SEITENLEISTE */
     .pc-info-panel-container {
         display: flex;
         flex-direction: column;
@@ -2551,7 +2553,7 @@ body.theme-neon-pink .glass-nav-bottom {
         border-radius: 20px;
         padding: 20px;
         border: 1px solid rgba(255, 255, 255, 0.1);
-        flex-shrink: 0; /* Verhindert, dass die Box vom Video weggedrückt/verkleinert wird */
+        flex-shrink: 0; 
         position: relative;
     }
     
@@ -2590,10 +2592,10 @@ body.theme-neon-pink .glass-nav-bottom {
     }
     
     #view-dm, #view-ticket {
-        height: 100%; /* Fix missing bottom nav on PC */
+        height: 100%; 
     }
     .chat-input-wrapper {
-        position: relative !important; /* Ensure no absolute positioning on PC */
+        position: relative !important; 
         bottom: auto !important;
         left: auto !important;
     }
