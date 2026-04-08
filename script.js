@@ -32,6 +32,7 @@ window.currentSoundPreviewPlayer = new Audio();
 window.editingProfileUid = null;
 window.globalMuted = false;
 window.globalVolume = 1;
+window.linkPreviewCache = window.linkPreviewCache || {};
 let cropperInstance = null;
 
 // Algorithmus Live-Session Tracker
@@ -255,19 +256,77 @@ function getVerifiedBadge(isVerif) { return isVerif ? '<i class="fas fa-check-ci
 
 function timeAgo(timestamp) { const now = Date.now(); const diff = now - Number(timestamp); const minutes = Math.floor(diff / 60000); const hours = Math.floor(minutes / 60); const days = Math.floor(hours / 24); if (minutes < 1) return 'gerade eben'; if (minutes < 60) return `vor ${minutes} Min.`; if (hours < 24) return `vor ${hours} Std.`; if (days < 7) return `vor ${days} T.`; return new Date(Number(timestamp)).toLocaleDateString('de-DE'); }
 
-// === NEU: DM TEXT FORMATTING (DISCORD STYLE) ===
+// === NEU: DISCORD STYLE EMBEDS (VORSCHAU) ===
+async function loadDiscordEmbed(url, elementId) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+
+    if (window.linkPreviewCache[url]) {
+        renderDiscordEmbed(window.linkPreviewCache[url], el);
+        return;
+    }
+
+    try {
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl);
+        const data = await response.json();
+        const html = data.contents;
+        if (!html) return;
+        
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+        
+        const getMeta = (prop) => {
+            const tag = doc.querySelector(`meta[property="${prop}"], meta[name="${prop}"]`);
+            return tag ? tag.getAttribute("content") : "";
+        };
+        
+        const siteName = getMeta("og:site_name") || new URL(url).hostname.replace('www.', '');
+        const title = getMeta("og:title") || doc.title || "";
+        const desc = getMeta("og:description") || getMeta("description") || "";
+        const image = getMeta("og:image") || "";
+        
+        if (title || image || desc) {
+            const embedData = { siteName, title, desc, image, url };
+            window.linkPreviewCache[url] = embedData;
+            renderDiscordEmbed(embedData, el);
+        }
+    } catch(e) {
+        console.log("Embed fetch failed for", url);
+    }
+}
+
+function renderDiscordEmbed(data, el) {
+    if (!el) return;
+    const chatBox = el.closest('.chat-container');
+    const isNearBottom = chatBox ? (chatBox.scrollHeight - chatBox.scrollTop - chatBox.clientHeight < 100) : false;
+
+    let html = `<div class="discord-embed">`;
+    if (data.siteName) html += `<div class="discord-embed-site">${data.siteName}</div>`;
+    if (data.title) html += `<a href="${data.url}" target="_blank" class="discord-embed-title">${data.title}</a>`;
+    if (data.desc) html += `<div class="discord-embed-desc">${data.desc.length > 150 ? data.desc.substring(0, 150) + '...' : data.desc}</div>`;
+    if (data.image) html += `<img src="${data.image}" class="discord-embed-img" onerror="this.style.display='none'">`;
+    html += `</div>`;
+    
+    el.outerHTML = html;
+    
+    if (chatBox && isNearBottom) {
+        setTimeout(() => chatBox.scrollTop = chatBox.scrollHeight, 100);
+    }
+}
+
 function formatDMText(text) {
     if (!text) return "";
     let safeText = escapeHTML(text);
     
-    // Link detection & Embeds
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     safeText = safeText.replace(urlRegex, function(url) {
-        // Image Links
         if (url.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i)) {
             return `<div class="link-embed"><a href="${url}" target="_blank" class="link-embed-title">${url}</a><img src="${url}" class="link-embed-img"></div>`;
         } else {
-            return `<a href="${url}" target="_blank" class="dm-link">${url}</a>`;
+            const safeId = 'embed-' + Math.random().toString(36).substr(2, 9);
+            setTimeout(() => loadDiscordEmbed(url, safeId), 10);
+            return `<a href="${url}" target="_blank" class="dm-link">${url}</a><div id="${safeId}" class="embed-placeholder"></div>`;
         }
     });
     
@@ -391,9 +450,8 @@ function initLiveUser() {
             if (!currentUser.appIcon) currentUser.appIcon = 'default';
             if (!currentUser.philPlusTier) currentUser.philPlusTier = 0;
             if (!currentUser.customBorder) currentUser.customBorder = { c1: '#ff0050', c2: '#00f2fe', grad: true };
-            if (!currentUser.dmPrivacy) currentUser.dmPrivacy = 'everyone'; // NEU: DM Privacy Feature
+            if (!currentUser.dmPrivacy) currentUser.dmPrivacy = 'everyone'; 
 
-            // NEU: Update DM Privacy Select im HTML falls vorhanden
             const dmPrivacySelect = document.getElementById('dm-privacy-select');
             if(dmPrivacySelect) dmPrivacySelect.value = currentUser.dmPrivacy;
 
@@ -510,7 +568,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
             if (!currentUser.username) currentUser.username = currentUser.displayName.replace(/[^a-zA-Z0-9_]/g, '').toLowerCase();
             if (currentUser.coins === undefined) await updateDoc(userRef, { coins: 1000, profileViews: 0, followers: [] });
             if (!currentUser.customBorder) await updateDoc(userRef, { customBorder: { c1: '#ff0050', c2: '#00f2fe', grad: true } });
-            if (!currentUser.dmPrivacy) currentUser.dmPrivacy = 'everyone'; // NEU: DM Privacy
+            if (!currentUser.dmPrivacy) currentUser.dmPrivacy = 'everyone'; 
         }
         localStorage.setItem('phil_session', JSON.stringify(currentUser));
         document.getElementById('login-screen').classList.remove('show');
@@ -531,7 +589,7 @@ window.onload = async function() {
         if (!currentUser.savedVideos) currentUser.savedVideos = [];
         if (!currentUser.blockedUsers) currentUser.blockedUsers = [];
         if (!currentUser.socialLinks) currentUser.socialLinks = { ig: '', yt: '', tw: '', tt: '' };
-        if (!currentUser.dmPrivacy) currentUser.dmPrivacy = 'everyone'; // NEU: DM Privacy
+        if (!currentUser.dmPrivacy) currentUser.dmPrivacy = 'everyone';
         initLiveDatabase();
         initLiveUser();
         initInbox();
@@ -541,7 +599,6 @@ window.onload = async function() {
         checkDailyStreak();
     }
     
-    // NEU: DM Privacy Settings listener
     document.getElementById('dm-privacy-select')?.addEventListener('change', (e) => {
         if(currentUser) {
             updateDoc(doc(db, "users", currentUser.uid), { dmPrivacy: e.target.value });
@@ -555,7 +612,6 @@ window.onload = async function() {
             e.target.value = 'default'; return; } if (currentUser) updateDoc(doc(db, "users", currentUser.uid), { appIcon: e.target.value });
         showToast("Icon wird beim nächsten Neuladen aktualisiert."); });
     
-    // Modal Close Buttons & Admin State Reset
     document.querySelectorAll('.close-modal').forEach(btn => {
         btn.addEventListener('click', (e) => {
             e.target.closest('.modal').classList.remove('show');
@@ -568,7 +624,6 @@ window.onload = async function() {
         window.editingProfileUid = null;
     });
 
-    // === TIKTOK STYLE CROPPER LOGIC ===
     document.getElementById('edit-pic-upload-btn')?.addEventListener('click', () => document.getElementById('edit-pic-file').click());
     document.getElementById('edit-pic-file')?.addEventListener('change', (e) => {
         const file = e.target.files[0];
@@ -583,7 +638,7 @@ window.onload = async function() {
                 const image = document.getElementById('crop-image-target');
                 cropperInstance = new Cropper(image, {
                     aspectRatio: 1,
-                    viewMode: 0, // 0 = Keine Grenzen! Bild kann frei im schwarzen Raum schweben
+                    viewMode: 0, 
                     dragMode: 'move',
                     autoCropArea: 0.8,
                     guides: false,
@@ -606,11 +661,9 @@ window.onload = async function() {
                             top: (containerData.height - cropBoxSize) / 2
                         });
 
-                        // Limits berechnen (damit der Nutzer nicht endlos rein/raus zoomen kann)
-                        window.minCropZoom = (cropBoxSize / Math.max(canvasData.naturalWidth, canvasData.naturalHeight)) * 0.5; // Kann etwas kleiner als der Kreis werden
-                        window.maxCropZoom = window.minCropZoom * 8; // Max 8x Zoom
+                        window.minCropZoom = (cropBoxSize / Math.max(canvasData.naturalWidth, canvasData.naturalHeight)) * 0.5; 
+                        window.maxCropZoom = window.minCropZoom * 8; 
                         
-                        // Start-Zoom setzen, damit das Bild den Kreis optimal füllt
                         const startZoom = cropBoxSize / Math.min(canvasData.naturalWidth, canvasData.naturalHeight);
                         cropperInstance.zoomTo(startZoom);
                         
@@ -635,7 +688,6 @@ window.onload = async function() {
     document.getElementById('crop-image-target')?.addEventListener('zoom', (e) => {
         if(!window.minCropZoom) return;
         
-        // Zoom-Grenzen erzwingen (verhindert unendliches Zoomen)
         if (e.detail.ratio < window.minCropZoom) {
             e.preventDefault();
             cropperInstance.zoomTo(window.minCropZoom);
@@ -668,7 +720,7 @@ window.onload = async function() {
         btn.innerText = "Lädt..."; btn.disabled = true;
         
         cropperInstance.getCroppedCanvas({ 
-            width: 400, height: 400, imageSmoothingEnabled: true, imageSmoothingQuality: 'high', fillColor: '#000' // Füllt den leeren Raum mit schwarz
+            width: 400, height: 400, imageSmoothingEnabled: true, imageSmoothingQuality: 'high', fillColor: '#000'
         }).toBlob(async (blob) => {
             try {
                 const fileToUpload = new File([blob], "avatar.jpg", { type: "image/jpeg" });
@@ -701,7 +753,6 @@ function applyAlgorithm(videos, mode) {
     } else {
         const now = Date.now();
         let scoredVids = videos.map(v => {
-            // 0. Base Metrics fetching
             let likes = v.likedBy ? v.likedBy.length : 0;
             let comments = v.comments ? v.comments.length : 0;
             let gifts = v.gifts || 0;
@@ -709,20 +760,16 @@ function applyAlgorithm(videos, mode) {
             let completions = v.completions || 0; 
             let rewatches = v.rewatches || 0; 
 
-            // 1. Retention & Rewatch (Höchste Prio)
             let completionRate = completions / views;
             let retentionScore = (completionRate * 500) + (rewatches * 50);
 
-            // 2. Velocity Check (Viral-Status messen)
             let hoursOld = Math.max((now - v.timestamp) / 3600000, 0.1);
             let interactions = likes + comments + (gifts * 5);
             let velocity = interactions / hoursOld;
             let viralMultiplier = velocity > 10 ? 2.5 : 1; 
 
-            // 3. Time-Decay (Frische-Faktor)
             let timeDecay = Math.pow(0.8, hoursOld / 12); 
 
-            // 4. Live Session Interests
             let sessionBoost = 1;
             if (v.description) {
                 let tags = v.description.toLowerCase().match(/#\w+/g) || [];
@@ -731,20 +778,17 @@ function applyAlgorithm(videos, mode) {
                 });
             }
 
-            // 5. Creator Affinity
             let creatorBoost = 1;
             if (creatorAffinities[v.authorUid]) {
                 creatorBoost += (creatorAffinities[v.authorUid] * 0.2);
             }
 
-            // 6. General Affinity & Watch-History
             let affinityScore = 1;
             if (currentUser) {
                 if (currentUser.following && currentUser.following.includes(v.authorUid)) affinityScore *= 2.0;
                 if (viewedVideos.has(v.id)) affinityScore *= 0.1; 
             }
 
-            // 7. Quality & Verification Boost
             let qualityBoost = 1;
             let authorData = allKnownUsers.find(u => u.uid === v.authorUid);
             if (authorData) {
@@ -752,23 +796,17 @@ function applyAlgorithm(videos, mode) {
                 if (authorData.philPlusUntil > now && authorData.philPlusTier >= 2) qualityBoost *= 1.3;
             }
 
-            // 8. NEU: The "Swipe-Away" Penalty (Toxizität für Retention)
-            // Straft Videos massiv ab, die in unter 2 Sekunden weggeskippt werden.
             let fastSkips = v.fastSkips || 0;
             let skipRate = views > 5 ? (fastSkips / views) : 0;
-            let skipPenalty = Math.max(0.1, 1 - skipRate); // Wenn 100% Skipped, score * 0.1
+            let skipPenalty = Math.max(0.1, 1 - skipRate); 
 
-            // 9. NEU: Epsilon-Greedy / Wildcard (Der "TikTok-Chance"-Faktor)
-            // Gibt komplett neuen Videos (unter 10 Views) einen massiven, künstlichen Boost
             let wildcardBoost = (views < 10 && hoursOld < 24) ? (Math.random() * 500) : 0;
 
-            // Finale Super-Formel
             let totalScore = ((retentionScore + (interactions * 10)) * timeDecay * sessionBoost * creatorBoost * affinityScore * viralMultiplier * qualityBoost * skipPenalty) + wildcardBoost + (Math.random() * 20);
 
             return { ...v, algoScore: totalScore };
         });
 
-        // Absteigend nach neuem Algo-Score sortieren
         return scoredVids.sort((a, b) => b.algoScore - a.algoScore);
     }
 }
@@ -786,7 +824,6 @@ function initLiveDatabase() {
     const skelLoader = document.getElementById('skeleton-loader');
     if (skelLoader) skelLoader.style.display = 'block';
 
-    // NEU: Limit auf 30 Videos gesetzt
     const q = query(collection(db, "videos"), orderBy("timestamp", "desc"), limit(30));
     
     onSnapshot(q, (snapshot) => {
@@ -844,7 +881,6 @@ function renderFeed(reset = false) {
     if (reset) {
         const oldVids = container.querySelectorAll('.video');
         
-        // NEU: Alte Videos leeren um RAM zu sparen
         oldVids.forEach(v => {
             const player = v.querySelector('.video__player');
             if(player) {
@@ -945,7 +981,6 @@ function createVideoElement(video) {
         if (video.urls.length > 1) { arrowsHTML = `<div class="carousel-arrow left" onclick="window.scrollCarousel('${video.id}', -1, event)"><i class="fas fa-chevron-left"></i></div><div class="carousel-arrow right" onclick="window.scrollCarousel('${video.id}', 1, event)"><i class="fas fa-chevron-right"></i></div>`; }
         mediaHTML = `<div class="carousel-container" data-vid="${video.id}">${video.urls.map(u => `<div class="carousel-item"><img src="${u}"></div>`).join('')}</div>${arrowsHTML}<div class="carousel-dots">${video.urls.map((_, i) => `<div class="dot ${i===0 ? 'active' : ''}"></div>`).join('')}</div>`; muteUIHtml = `<div class="mute-container" style="display:none;"></div>`;
     } else {
-        // NEU: preload="metadata" spart MASSIV Arbeitsspeicher und Datenvolumen
         mediaHTML = `<video class="video__player" data-vid="${video.id}" data-original-src="${video.url}" preload="metadata" loop playsinline ${mutedAttr} src="${video.url}"></video><div class="play-indicator"><i class="fas fa-play"></i></div><div class="player-progress-bar"><div class="player-progress-filled"></div></div><div class="fast-forward-overlay">2x ▶▶</div><div class="seek-ripple left"><div class="seek-arrows"><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i></div><div class="seek-text">5s</div></div><div class="seek-ripple right"><div class="seek-arrows"><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i></div><div class="seek-text">5s</div></div>`;
         muteUIHtml = `<div class="mute-container"><div class="mute-btn"><i class="fas fa-volume-up"></i></div><div class="volume-slider-wrapper"><input type="range" class="volume-slider" min="0" max="1" step="0.05" value="1"></div></div>`;
     }
@@ -1063,7 +1098,6 @@ const videoObserver = new IntersectionObserver(entries => {
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
             if(el.classList.contains('dummy-ad-video')) return; 
             
-            // NEU: Video Quelle wiederherstellen wenn im Sichtbereich
             if(videoPlayer && videoPlayer.src === "") {
                 videoPlayer.src = videoPlayer.dataset.originalSrc;
             }
@@ -1096,7 +1130,6 @@ const videoObserver = new IntersectionObserver(entries => {
 
             if (videoPlayer) { 
                 videoPlayer.pause(); 
-                // NEU: Quelle leeren um RAM massiv zu sparen bei Videos außerhalb des Bildschirms!
                 videoPlayer.removeAttribute('src'); 
                 videoPlayer.load();
                 
