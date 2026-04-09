@@ -757,42 +757,42 @@ window.onload = async function() {
         }, 'image/jpeg', 0.9);
     });
 
-    // === NEU: MEDIA UPLOAD & AUDIO LOGIK ===
+    // === NEU: MEDIA UPLOAD & AUDIO LOGIK (verbessert) ===
     document.getElementById('up-file')?.addEventListener('change', function(e) {
-        const files = e.target.files; const txt = document.querySelector('#up-file-btn p'); const icon = document.querySelector('#up-file-btn i'); 
-        
+        const files = e.target.files; 
         const prevContainer = document.getElementById('upload-media-preview-container');
         const vidPrev = document.getElementById('upload-video-preview');
         const imgPrev = document.getElementById('upload-image-preview');
         const audioControls = document.getElementById('upload-audio-controls');
         
-        if (!files || files.length === 0) { 
-            txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; 
-            if(prevContainer) prevContainer.style.display = 'none';
-            if(audioControls) audioControls.style.display = 'none';
-            if(vidPrev) { vidPrev.pause(); vidPrev.src = ''; }
-            return; 
-        }
+        if (!files || files.length === 0) return; 
         
+        // 1. Vorschau & Controls zwingend anzeigen, Upload-Box verstecken
         if(prevContainer) prevContainer.style.display = 'block';
         if(audioControls) audioControls.style.display = 'block';
-        document.getElementById('main-file-upload-wrapper').style.display = 'none'; // Versteckt große Box nach Upload
+        document.getElementById('main-file-upload-wrapper').style.display = 'none'; 
         
         const file = files[0];
         const fileUrl = URL.createObjectURL(file);
         
+        // 2. Video oder Bild in die Vorschau laden
         if (file.type.startsWith('video/')) { 
             if(imgPrev) imgPrev.style.display = 'none';
             if(vidPrev) {
                 vidPrev.style.display = 'block';
                 vidPrev.src = fileUrl;
-                vidPrev.volume = document.getElementById('up-volume-slider') ? parseFloat(document.getElementById('up-volume-slider').value) : 1;
-                vidPrev.muted = document.getElementById('up-mute-original-toggle') ? document.getElementById('up-mute-original-toggle').checked : false;
-                vidPrev.play().catch(e=>{});
+                
+                // Sound-Einstellungen anwenden
+                const volSlider = document.getElementById('up-volume-slider');
+                const muteToggle = document.getElementById('up-mute-original-toggle');
+                vidPrev.volume = volSlider ? parseFloat(volSlider.value) : 1;
+                vidPrev.muted = muteToggle ? muteToggle.checked : false;
+                
+                vidPrev.play().catch(e=>{ console.log("Autoplay blockiert"); });
             }
         } 
         else { 
-            if(vidPrev) { vidPrev.style.display = 'none'; vidPrev.pause(); }
+            if(vidPrev) { vidPrev.style.display = 'none'; vidPrev.pause(); vidPrev.src = ''; }
             if(imgPrev) { imgPrev.style.display = 'block'; imgPrev.src = fileUrl; }
         }
     });

@@ -814,9 +814,13 @@
             </div>
             <div class="modal-body upload-body">
 
-                <div id="upload-media-preview-container" class="upload-media-preview">
+                <div id="upload-media-preview-container" class="upload-media-preview" style="display: none; position: relative;">
                     <video id="upload-video-preview" playsinline loop class="upload-preview-el"></video>
                     <img id="upload-image-preview" class="upload-preview-el">
+                    
+                    <div onclick="document.getElementById('up-file').click()" style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.7); width: 35px; height: 35px; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; border: 1px solid rgba(255,255,255,0.5); z-index: 10; box-shadow: 0 2px 10px rgba(0,0,0,0.5);">
+                        <i class="fas fa-pen" style="color: white; font-size: 14px;"></i>
+                    </div>
                 </div>
 
                 <div id="upload-sound-preview" style="display:none; background: rgba(0, 242, 254, 0.1); border: 1px solid #00f2fe; padding: 10px 15px; border-radius: 15px; align-items: center; justify-content: space-between; margin-bottom: 10px;">
