@@ -3001,6 +3001,171 @@ document.getElementById('sound-play-btn')?.addEventListener('click', () => {
 
 window.removeSelectedSound = function() { window.selectedUploadSound = null; document.getElementById('upload-sound-preview').style.display = 'none'; }
 
+// === NEU: MEDIA UPLOAD & AUDIO LOGIK ===
+document.getElementById('up-file')?.addEventListener('change', function(e) {
+    const files = e.target.files; const txt = document.querySelector('#up-file-btn p'); const icon = document.querySelector('#up-file-btn i'); 
+    
+    const prevContainer = document.getElementById('upload-media-preview-container');
+    const vidPrev = document.getElementById('upload-video-preview');
+    const imgPrev = document.getElementById('upload-image-preview');
+    const audioControls = document.getElementById('upload-audio-controls');
+    
+    if (!files || files.length === 0) { 
+        txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; 
+        if(prevContainer) prevContainer.style.display = 'none';
+        if(audioControls) audioControls.style.display = 'none';
+        if(vidPrev) { vidPrev.pause(); vidPrev.src = ''; }
+        return; 
+    }
+    
+    if(prevContainer) prevContainer.style.display = 'block';
+    if(audioControls) audioControls.style.display = 'block';
+    document.getElementById('main-file-upload-wrapper').style.display = 'none'; 
+    
+    const file = files[0];
+    const fileUrl = URL.createObjectURL(file);
+    
+    if (file.type.startsWith('video/')) { 
+        if(imgPrev) imgPrev.style.display = 'none';
+        if(vidPrev) {
+            vidPrev.style.display = 'block';
+            vidPrev.src = fileUrl;
+            vidPrev.volume = document.getElementById('up-volume-slider') ? parseFloat(document.getElementById('up-volume-slider').value) : 1;
+            vidPrev.muted = document.getElementById('up-mute-original-toggle') ? document.getElementById('up-mute-original-toggle').checked : false;
+            vidPrev.play().catch(e=>{});
+        }
+    } 
+    else { 
+        if(vidPrev) { vidPrev.style.display = 'none'; vidPrev.pause(); }
+        if(imgPrev) { imgPrev.style.display = 'block'; imgPrev.src = fileUrl; }
+    }
+});
+
+document.getElementById('up-custom-audio-file')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if(file) {
+        window.customUploadAudioFile = file;
+        window.uploadCustomAudioPlayer.src = URL.createObjectURL(file);
+        window.uploadCustomAudioPlayer.loop = true;
+        window.uploadCustomAudioPlayer.volume = document.getElementById('up-volume-slider') ? parseFloat(document.getElementById('up-volume-slider').value) : 1;
+        
+        document.getElementById('custom-audio-name').style.display = 'block';
+        document.getElementById('custom-audio-name-text').innerText = file.name;
+        document.getElementById('up-remove-audio-btn').style.display = 'block';
+        
+        const vidPrev = document.getElementById('upload-video-preview');
+        if(vidPrev && vidPrev.style.display === 'block' && !vidPrev.paused) {
+            window.uploadCustomAudioPlayer.play().catch(e=>{});
+        } else if(document.getElementById('upload-image-preview')?.style.display === 'block') {
+            window.uploadCustomAudioPlayer.play().catch(e=>{});
+        }
+    }
+});
+
+document.getElementById('up-remove-audio-btn')?.addEventListener('click', () => {
+    window.customUploadAudioFile = null;
+    window.uploadCustomAudioPlayer.pause();
+    window.uploadCustomAudioPlayer.src = '';
+    document.getElementById('up-custom-audio-file').value = '';
+    document.getElementById('custom-audio-name').style.display = 'none';
+    document.getElementById('up-remove-audio-btn').style.display = 'none';
+});
+
+document.getElementById('up-volume-slider')?.addEventListener('input', (e) => {
+    const vol = parseFloat(e.target.value);
+    const vidPrev = document.getElementById('upload-video-preview');
+    if(vidPrev) vidPrev.volume = vol;
+    window.uploadCustomAudioPlayer.volume = vol;
+});
+
+document.getElementById('up-mute-original-toggle')?.addEventListener('change', (e) => {
+    const vidPrev = document.getElementById('upload-video-preview');
+    if(vidPrev) vidPrev.muted = e.target.checked;
+});
+
+const vPrev = document.getElementById('upload-video-preview');
+if(vPrev) {
+    vPrev.addEventListener('play', () => { if(window.customUploadAudioFile) window.uploadCustomAudioPlayer.play().catch(e=>{}); });
+    vPrev.addEventListener('pause', () => { window.uploadCustomAudioPlayer.pause(); });
+    vPrev.addEventListener('seeked', () => { if(window.customUploadAudioFile && window.uploadCustomAudioPlayer.duration) window.uploadCustomAudioPlayer.currentTime = vPrev.currentTime % window.uploadCustomAudioPlayer.duration || 0; });
+}
+
+document.getElementById('close-upload')?.addEventListener('click', () => {
+    if(vPrev) { vPrev.pause(); vPrev.src = ''; }
+    window.uploadCustomAudioPlayer.pause(); window.uploadCustomAudioPlayer.src = '';
+    window.customUploadAudioFile = null;
+    document.getElementById('up-custom-audio-file').value = '';
+    document.getElementById('up-file').value = '';
+    document.getElementById('main-file-upload-wrapper').style.display = 'block';
+    document.getElementById('upload-media-preview-container').style.display = 'none';
+    document.getElementById('upload-audio-controls').style.display = 'none';
+    document.getElementById('custom-audio-name').style.display = 'none';
+    document.getElementById('up-remove-audio-btn').style.display = 'none';
+    document.getElementById('upload-modal').classList.remove('show');
+});
+
+document.getElementById('submit-upload')?.addEventListener('click', async() => {
+    const files = document.getElementById('up-file').files; const titleInput = document.getElementById('up-title'); const descInput = document.getElementById('up-desc');
+    const titleVal = titleInput ? titleInput.value.trim() : ""; const desc = descInput ? descInput.value.trim() : "";
+    if (!files || files.length === 0) return showCustomAlert("Fehlende Daten", "Bitte wähle mindestens eine Datei aus.");
+    if (!titleVal || !desc) return showCustomAlert("Fehlende Daten", "Bitte gib einen Titel UND eine Beschreibung ein.");
+    
+    let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
+    for(let i=0; i<files.length; i++) { if(files[i].size > maxSize) return showCustomAlert("Zu groß", `Dateien dürfen maximal ${limitText} MB groß sein!`); }
+    
+    const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); 
+    btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
+    
+    const isSeries = document.getElementById('up-series-toggle') ? document.getElementById('up-series-toggle').checked : false;
+    const isMuted = document.getElementById('up-mute-original-toggle')?.checked || false;
+    const postVol = document.getElementById('up-volume-slider') ? parseFloat(document.getElementById('up-volume-slider').value) : 1;
+    
+    try {
+        const isVideo = files[0].type.startsWith('video/');
+        let uploadObj = { 
+            authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
+            title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now(),
+            muteOriginal: isMuted, postVolume: postVol
+        };
+
+        if(window.customUploadAudioFile) {
+            status.innerText = "Lade Audio hoch...";
+            const audioUrl = await uploadFileToFirebase(window.customUploadAudioFile, 'sounds');
+            uploadObj.soundId = "custom_" + Date.now();
+            uploadObj.soundName = "Originalton - " + currentUser.displayName;
+            uploadObj.soundUrl = audioUrl;
+        } else if(window.selectedUploadSound) {
+            uploadObj.soundId = window.selectedUploadSound.id;
+            uploadObj.soundName = window.selectedUploadSound.name;
+            uploadObj.soundUrl = window.selectedUploadSound.url;
+        }
+        
+        if(isSeries) uploadObj.seriesId = "series_" + currentUser.uid + "_" + Date.now();
+        awardXP(20);
+
+        status.innerText = "Lade Video hoch...";
+        if (isVideo) {
+            const finalUrl = await uploadFileToFirebase(files[0], 'videos');
+            await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, ...uploadObj });
+        } else {
+            let uploadedUrls = [];
+            for(let i=0; i<files.length; i++) { const secure_url = await uploadFileToFirebase(files[i], 'images'); uploadedUrls.push(secure_url); }
+            await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, ...uploadObj });
+        }
+        
+        showToast("Erfolgreich veröffentlicht! 🎉"); 
+        document.getElementById('close-upload').click(); 
+        if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
+        if(document.getElementById('up-series-toggle')) document.getElementById('up-series-toggle').checked = false;
+        window.removeSelectedSound();
+    } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
+});
+
+document.getElementById('open-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
+document.getElementById('close-comments')?.addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
+
+// =======================================================
+// HIER BEGINNT DEIN ALTER CODE WIEDER:
 function initResponsiveLayout() {
     const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;
     function createPCContainers() { if (!pcSidebar) { pcSidebar = document.createElement('div'); pcSidebar.id = 'pc-nav-sidebar'; pcSidebar.innerHTML = `<div class="logo-area"><img src="https://i.imgur.com/JDPRzCc.png" class="app-logo" alt="Logo">Phil Shorts</div>`; appContainer.prepend(pcSidebar); } }
