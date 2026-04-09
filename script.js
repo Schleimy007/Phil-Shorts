@@ -2864,4 +2864,53 @@ function initResponsiveLayout() {
     }
 }
 
+// === TIKTOK STYLE: SWIPE TO CLOSE MODALS ===
+let modalStartY = 0;
+let currentSwipeModal = null;
+
+document.querySelectorAll('.modal').forEach(modal => {
+    const header = modal.querySelector('.modal-header');
+    if(!header) return;
+
+    // Wenn der Finger den oberen Teil des Menüs berührt
+    header.addEventListener('touchstart', (e) => {
+        modalStartY = e.touches[0].clientY;
+        currentSwipeModal = modal;
+        currentSwipeModal.style.transition = 'none'; // Fließende Bewegung am Finger
+    }, {passive: true});
+
+    // Wenn der Finger zieht
+    header.addEventListener('touchmove', (e) => {
+        if(!currentSwipeModal) return;
+        let currentY = e.touches[0].clientY;
+        let diff = currentY - modalStartY;
+        
+        // Nur Wischen nach UNTEN erlauben
+        if(diff > 0) { 
+            currentSwipeModal.style.transform = `translateY(${diff}px)`;
+        }
+    }, {passive: true});
+
+    // Wenn der Finger loslässt
+    header.addEventListener('touchend', (e) => {
+        if(!currentSwipeModal) return;
+        let currentY = e.changedTouches[0].clientY;
+        let diff = currentY - modalStartY;
+        
+        // Animation wieder einschalten
+        currentSwipeModal.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
+        
+        // Wenn weit genug nach unten gezogen wurde -> Menü schließen
+        if(diff > 80) { 
+            currentSwipeModal.classList.remove('show');
+            setTimeout(() => currentSwipeModal.style.transform = '', 300);
+        } else { 
+            // Nicht weit genug gezogen -> Menü springt zurück nach oben
+            currentSwipeModal.style.transform = 'translateY(0)';
+            setTimeout(() => currentSwipeModal.style.transform = '', 300);
+        }
+        currentSwipeModal = null;
+    }, {passive: true});
+});
+
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
