@@ -2667,9 +2667,14 @@ window.sendEmailOTP = async function(email, code) {
     console.log("DEBUG: Code für " + email + " ist " + code);
     try {
         if(typeof emailjs !== 'undefined') {
+            // Berechne die Uhrzeit in 15 Minuten
+            const expirationTime = new Date(Date.now() + 15 * 60000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+
+            // Hier schicken wir die korrekten Platzhalter an EmailJS
             await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
                 to_email: email,
-                otp_code: code
+                passcode: code,
+                time: expirationTime
             });
             showToast("Code an E-Mail gesendet! 📧");
         } else {
