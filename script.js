@@ -28,7 +28,6 @@ let currentUser = JSON.parse(localStorage.getItem('phil_session'));
 if (currentUser) currentUser.verified = false;
 let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || { master: false, comments: true, likes: true, dms: true, follows: true };
 
-window.currentSoundPreviewPlayer = new Audio();
 window.editingProfileUid = null;
 window.globalMuted = false;
 window.globalVolume = 1;
@@ -43,8 +42,8 @@ let creatorAffinities = {};
 
 // === NEU: SOUND SYSTEM VARIABLEN ===
 window.selectedLibrarySound = null; 
-window.soundPreviewPlayer = new Audio(); 
-window.soundRequestFile = null; 
+window.soundPreviewPlayer = new Audio();
+window.soundRequestFile = null;
 
 if (!document.getElementById('dynamic-live-styles')) {
     const style = document.createElement('style');
@@ -60,11 +59,11 @@ if (!document.getElementById('dynamic-live-styles')) {
 }
 
 // --- SOUND BIBLIOTHEK LOGIK ---
-window.switchSoundTab = function(tabId) {
+window.switchSoundTab = function(tabId, element) {
     document.querySelectorAll('.sound-tab-content').forEach(c => c.style.display = 'none');
     document.querySelectorAll('#sound-library-modal .shop-tab').forEach(t => t.classList.remove('active'));
-    document.getElementById(tabId).style.display = 'block';
-    if(event) event.target.classList.add('active');
+    document.querySelectorAll('#' + tabId).forEach(c => c.style.display = 'block');
+    if (element) element.classList.add('active');
     
     if (tabId === 'lib-discover') window.loadOfficialLibrary();
     if (tabId === 'lib-trends') window.loadCommunityTrends();
@@ -301,7 +300,7 @@ let sortedFeed = [];
 const viewedVideos = new Set();
 
 window.switchView = function(viewId) {
-    if (viewId !== 'sound' && window.currentSoundPreviewPlayer) { window.currentSoundPreviewPlayer.pause(); const icon = document.getElementById('sound-play-icon'); if (icon) icon.className = 'fas fa-play'; }
+    if (viewId !== 'sound' && window.soundPreviewPlayer) { window.soundPreviewPlayer.pause(); const icon = document.getElementById('sound-play-icon'); if (icon) icon.className = 'fas fa-play'; }
     if (window.soundPreviewPlayer) window.soundPreviewPlayer.pause();
     
     document.querySelectorAll('.view').forEach(v => {
@@ -355,6 +354,8 @@ function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackV
 function getVerifiedBadge(isVerif) { return isVerif ? '<i class="fas fa-check-circle verified-badge"></i>' : ''; }
 
 function timeAgo(timestamp) { const now = Date.now(); const diff = now - Number(timestamp); const minutes = Math.floor(diff / 60000); const hours = Math.floor(minutes / 60); const days = Math.floor(hours / 24); if (minutes < 1) return 'gerade eben'; if (minutes < 60) return `vor ${minutes} Min.`; if (hours < 24) return `vor ${hours} Std.`; if (days < 7) return `vor ${days} T.`; return new Date(Number(timestamp)).toLocaleDateString('de-DE'); }
+
+// === OPTIMIERTE DISCORD STYLE EMBEDS OHNE LAGS ===
 
 window.processEmbeds = async function() {
     const placeholders = document.querySelectorAll('.embed-placeholder[data-url]');
@@ -702,6 +703,64 @@ window.onload = async function() {
         checkDailyStreak();
     }
     
+    // UI Setup
+    document.querySelectorAll('#open-upload, .add-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#upload-modal').forEach(modal => modal.classList.add('show'));
+        });
+    });
+
+    document.querySelectorAll('#open-sound-library-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#sound-library-modal').forEach(modal => modal.classList.add('show'));
+            if (window.loadOfficialLibrary) window.loadOfficialLibrary();
+        });
+    });
+
+    document.querySelectorAll('#close-sound-library, .close-modal').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const targetModal = e.target.closest('.modal');
+            if (targetModal && targetModal.id === 'sound-library-modal') {
+                targetModal.classList.remove('show');
+                if (window.soundPreviewPlayer) window.soundPreviewPlayer.pause();
+            }
+        });
+    });
+
+    document.getElementById('sound-offset-slider')?.addEventListener('input', (e) => {
+        const val = e.target.value;
+        document.getElementById('sound-start-time-display').innerText = `0:${val.padStart(2, '0')}`;
+        if (window.selectedLibrarySound) window.selectedLibrarySound.offset = parseInt(val);
+        
+        window.soundPreviewPlayer.src = window.selectedLibrarySound.url;
+        window.soundPreviewPlayer.currentTime = parseInt(val);
+        window.soundPreviewPlayer.play().catch(e=>{});
+        setTimeout(() => window.soundPreviewPlayer.pause(), 1500);
+    });
+
+    document.getElementById('req-song-file')?.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if(file) {
+            window.soundRequestFile = file;
+            document.getElementById('req-file-status').innerText = "Datei: " + file.name;
+        }
+    });
+
+    document.getElementById('submit-sound-request')?.addEventListener('click', async () => {
+        const title = document.getElementById('req-song-title').value.trim();
+        if(!title || !window.soundRequestFile) return showToast("Bitte Titel und Datei angeben!");
+        const btn = document.getElementById('submit-sound-request'); btn.disabled = true; btn.innerText = "Lade hoch...";
+        try {
+            const url = await uploadFileToFirebase(window.soundRequestFile, 'sound_requests');
+            await addDoc(collection(db, "sound_requests"), { title, url, senderName: currentUser.displayName, senderUid: currentUser.uid, timestamp: Date.now() });
+            showToast("Anfrage gesendet! 👍");
+            document.getElementById('sound-library-modal').classList.remove('show');
+            window.soundRequestFile = null;
+            document.getElementById('req-file-status').innerText = "Keine Datei gewählt";
+            document.getElementById('req-song-title').value = '';
+        } catch(e) { showToast("Fehler!"); } finally { btn.disabled = false; btn.innerText = "Absenden"; }
+    });
+
     document.getElementById('dm-privacy-select')?.addEventListener('change', (e) => {
         if(currentUser) {
             updateDoc(doc(db, "users", currentUser.uid), { dmPrivacy: e.target.value });
@@ -921,18 +980,28 @@ window.onload = async function() {
         for(let i=0; i<files.length; i++) { if(files[i].size > maxSize) return showCustomAlert("Zu groß", `Dateien dürfen maximal ${limitText} MB groß sein!`); }
         
         const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); 
-        btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
+        const overlay = document.getElementById('video-processing-overlay');
+        btn.disabled = true; 
+        if(overlay) overlay.style.display = 'flex';
         
         const isSeries = document.getElementById('up-series-toggle') ? document.getElementById('up-series-toggle').checked : false;
+        const isMuted = document.getElementById('up-mute-original-toggle')?.checked || false;
         
         try {
-            const isVideo = files[0].type.startsWith('video/');
+            let mediaUrls = [];
+            let isVideo = files[0].type.startsWith('video/');
+            
+            for(let i=0; i<files.length; i++) {
+                const url = await uploadFileToFirebase(files[i], isVideo ? 'videos' : 'images');
+                mediaUrls.push(url);
+            }
+
             let uploadObj = { 
-                soundUrl: window.selectedLibrarySound ? window.selectedLibrarySound.url : null,
+                soundUrl: window.selectedLibrarySound ? window.selectedLibrarySound.url : (isVideo ? mediaUrls[0] : null),
                 soundOffset: window.selectedLibrarySound ? window.selectedLibrarySound.offset : 0,
                 videoVolume: parseFloat(document.getElementById('up-video-vol')?.value || 1),
                 musicVolume: parseFloat(document.getElementById('up-music-vol')?.value || 1),
-                muteOriginal: document.getElementById('up-mute-original-toggle')?.checked || false,
+                muteOriginal: isMuted,
                 soundId: window.selectedLibrarySound ? window.selectedLibrarySound.id : "original",
                 soundName: window.selectedLibrarySound ? window.selectedLibrarySound.name : `Originalton - ${currentUser.displayName}`,
                 authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
@@ -942,80 +1011,18 @@ window.onload = async function() {
             if(isSeries) uploadObj.seriesId = "series_" + currentUser.uid + "_" + Date.now();
             awardXP(20);
 
-            status.innerText = "Verarbeite Media...";
             if (isVideo) {
-                const finalUrl = await uploadFileToFirebase(files[0], 'videos');
-                await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, ...uploadObj });
+                await addDoc(collection(db, "videos"), { mediaType: 'video', url: mediaUrls[0], ...uploadObj });
             } else {
-                let uploadedUrls = [];
-                for(let i=0; i<files.length; i++) { const secure_url = await uploadFileToFirebase(files[i], 'images'); uploadedUrls.push(secure_url); }
-                await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, ...uploadObj });
+                await addDoc(collection(db, "videos"), { mediaType: 'images', urls: mediaUrls, ...uploadObj });
             }
             
             showToast("Erfolgreich veröffentlicht! 🎉"); 
             document.getElementById('close-upload').click(); 
             if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
             if(document.getElementById('up-series-toggle')) document.getElementById('up-series-toggle').checked = false;
-        } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
+        } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(overlay) overlay.style.display = 'none'; }
     });
-
-    document.querySelectorAll('#open-sound-library-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('#sound-library-modal').forEach(modal => modal.classList.add('show'));
-            if (window.loadOfficialLibrary) window.loadOfficialLibrary();
-        });
-    });
-
-    document.querySelectorAll('#close-sound-library, .close-modal').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const targetModal = e.target.closest('.modal');
-            if (targetModal && targetModal.id === 'sound-library-modal') {
-                targetModal.classList.remove('show');
-                if (window.soundPreviewPlayer) window.soundPreviewPlayer.pause();
-            }
-        });
-    });
-
-    document.getElementById('sound-offset-slider')?.addEventListener('input', (e) => {
-        const val = e.target.value;
-        document.getElementById('sound-start-time-display').innerText = val + ".0s";
-        if (window.selectedLibrarySound) window.selectedLibrarySound.offset = parseInt(val);
-        
-        window.soundPreviewPlayer.src = window.selectedLibrarySound.url;
-        window.soundPreviewPlayer.currentTime = parseInt(val);
-        window.soundPreviewPlayer.play().catch(e=>{});
-        setTimeout(() => window.soundPreviewPlayer.pause(), 1500);
-    });
-
-    document.getElementById('req-song-file')?.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if(file) {
-            window.soundRequestFile = file;
-            document.getElementById('req-file-status').innerText = "Datei: " + file.name;
-        }
-    });
-
-    document.getElementById('submit-sound-request')?.addEventListener('click', async () => {
-        const title = document.getElementById('req-song-title').value.trim();
-        if(!title || !window.soundRequestFile) return showToast("Bitte Titel und Datei angeben!");
-        const btn = document.getElementById('submit-sound-request'); btn.disabled = true; btn.innerText = "Lade hoch...";
-        try {
-            const url = await uploadFileToFirebase(window.soundRequestFile, 'sound_requests');
-            await addDoc(collection(db, "sound_requests"), { title, url, senderName: currentUser.displayName, senderUid: currentUser.uid, timestamp: Date.now() });
-            showToast("Anfrage gesendet! 👍");
-            document.getElementById('sound-library-modal').classList.remove('show');
-            window.soundRequestFile = null;
-            document.getElementById('req-file-status').innerText = "Keine Datei gewählt";
-            document.getElementById('req-song-title').value = '';
-        } catch(e) { showToast("Fehler!"); } finally { btn.disabled = false; btn.innerText = "Absenden"; }
-    });
-
-    document.querySelectorAll('#open-upload, .add-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            document.querySelectorAll('#upload-modal').forEach(modal => modal.classList.add('show'));
-        });
-    });
-
 };
 
 document.getElementById('logout-btn')?.addEventListener('click', () => { localStorage.removeItem('phil_session');
@@ -1202,17 +1209,21 @@ window.updateGlobalVolumeUI = function() {
         const v = container.querySelector('.video__player');
         const muteBtn = container.querySelector('.mute-btn');
         const volumeSlider = container.querySelector('.volume-slider');
-        if (!v || !muteBtn || !volumeSlider) return;
+        if (!muteBtn || !volumeSlider) return; // Fotomodus hat vllt keinen muteBtn etc
         
         const vidId = container.closest('.video').dataset.id;
         const vData = allVideosData.find(x => x.id === vidId);
-        const postVol = vData && vData.videoVolume !== undefined ? vData.videoVolume : 1;
-        const origMuted = vData && vData.muteOriginal ? true : false;
-
-        v.volume = window.globalVolume * postVol; 
-        v.muted = window.globalMuted || origMuted;
         
+        // --- ANPASSUNG FÜR BILDER/VIDEOS SYNC ---
         const audioEl = container.closest('.video').audioEl;
+        
+        if (v) {
+            const postVol = vData && vData.videoVolume !== undefined ? vData.videoVolume : 1;
+            const origMuted = vData && vData.muteOriginal ? true : false;
+            v.volume = window.globalVolume * postVol; 
+            v.muted = window.globalMuted || origMuted;
+        }
+        
         if(audioEl) { 
             const musicVol = vData && vData.musicVolume !== undefined ? vData.musicVolume : 1;
             audioEl.volume = window.globalVolume * musicVol; 
@@ -1231,6 +1242,7 @@ window.updateGlobalVolumeUI = function() {
         }
     });
 };
+
 window.scrollCarousel = function(vidId, dir, event) { if (event) event.stopPropagation(); const container = document.querySelector(`.carousel-container[data-vid="${vidId}"]`); if (container) { const scrollAmount = container.clientWidth;
         container.scrollBy({ left: dir * scrollAmount, behavior: 'smooth' }); } };
 
@@ -1257,38 +1269,49 @@ function createVideoElement(video) {
     div.className = "video";
     div.dataset.id = video.id;
     div.dataset.authorUid = video.authorUid;
-    const commentCount = video.comments ? video.comments.length : 0;
-    const giftCount = video.gifts || 0;
+
+    const authorData = getUserData(video.authorUid, video.authorName, video.authorUsername || video.authorName, video.authorPic, video.authorVerified);
+    const verifiedBadge = getVerifiedBadge(authorData.verified);
     const isMe = currentUser && video.authorUid === currentUser.uid;
     const isFollowing = currentUser && currentUser.following && currentUser.following.includes(video.authorUid);
     const hasSaved = currentUser && currentUser.savedVideos && currentUser.savedVideos.includes(video.id) ? 'saved' : '';
-    const plusButton = (!isMe) ? `<i class="fas fa-circle-plus follow-btn" data-target="${video.authorUid}" onclick="toggleFollow('${video.authorUid}', this, event)" style="${isFollowing ? 'display: none;' : ''}"></i>` : '';
-    const authorData = getUserData(video.authorUid, video.authorName, video.authorUsername || video.authorName, video.authorPic, video.authorVerified);
-    const verifiedBadge = getVerifiedBadge(authorData.verified);
-    let tier3Badge = authorData.philPlusUntil > Date.now() && authorData.philPlusTier === 3 ? ' <i class="fas fa-gem" style="color: #00f2fe; font-size: 12px;" title="Plus+++ Legende"></i>' : "";
-    let nameClass = (authorData.philPlusUntil > Date.now() && authorData.philPlusTier >= 1) ? "name-phil-plus" : "";
     const hasLiked = video.likedBy && video.likedBy.includes(currentUser.uid) ? 'liked' : '';
     const realLikes = video.likedBy ? video.likedBy.length : 0;
+    const commentCount = video.comments ? video.comments.length : 0;
+    const giftCount = video.gifts || 0;
+    const plusButton = (!isMe) ? `<i class="fas fa-circle-plus follow-btn" data-target="${video.authorUid}" onclick="toggleFollow('${video.authorUid}', this, event)" style="${isFollowing ? 'display: none;' : ''}"></i>` : '';
+    
+    let tier3Badge = authorData.philPlusUntil > Date.now() && authorData.philPlusTier === 3 ? ' <i class="fas fa-gem" style="color: #00f2fe; font-size: 12px;" title="Plus+++ Legende"></i>' : "";
+    let nameClass = (authorData.philPlusUntil > Date.now() && authorData.philPlusTier >= 1) ? "name-phil-plus" : "";
+    
     const soundDataId = video.soundId || video.id;
     const soundDataName = video.soundName || `Originalton - ${authorData.displayName}`;
     const soundDataUrl = video.soundUrl || video.url;
     const soundDisc = `<div class="videoSidebar__button sound-disc-wrap" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')" style="margin-top:15px;"><img src="${authorData.pic}" class="sound-disc"><div class="sound-wave"></div><div class="sound-wave"></div></div>`;
 
-    const mutedAttr = (window.globalMuted || video.muteOriginal) ? 'muted' : '';
     let mediaHTML = '';
-    let muteUIHtml = '';
-    if (video.mediaType === 'images' && video.urls && video.urls.length > 0) {
-        let arrowsHTML = '';
-        if (video.urls.length > 1) { arrowsHTML = `<div class="carousel-arrow left" onclick="window.scrollCarousel('${video.id}', -1, event)"><i class="fas fa-chevron-left"></i></div><div class="carousel-arrow right" onclick="window.scrollCarousel('${video.id}', 1, event)"><i class="fas fa-chevron-right"></i></div>`; }
-        mediaHTML = `<div class="carousel-container" data-vid="${video.id}">${video.urls.map(u => `<div class="carousel-item"><img src="${u}"></div>`).join('')}</div>${arrowsHTML}<div class="carousel-dots">${video.urls.map((_, i) => `<div class="dot ${i===0 ? 'active' : ''}"></div>`).join('')}</div>`; muteUIHtml = `<div class="mute-container" style="display:none;"></div>`;
+    if (video.mediaType === 'images' && video.urls) {
+        mediaHTML = `
+            <div class="carousel-container" data-vid="${video.id}">
+                ${video.urls.map(u => `<div class="carousel-item"><img src="${u}"></div>`).join('')}
+            </div>
+            <div class="carousel-dots">${video.urls.map((_, i) => `<div class="dot ${i===0?'active':''}"></div>`).join('')}</div>
+            <div class="carousel-arrow left" onclick="window.scrollCarousel('${video.id}', -1, event)"><i class="fas fa-chevron-left"></i></div>
+            <div class="carousel-arrow right" onclick="window.scrollCarousel('${video.id}', 1, event)"><i class="fas fa-chevron-right"></i></div>
+        `;
     } else {
-        mediaHTML = `<video class="video__player" data-vid="${video.id}" data-original-src="${video.url}" preload="metadata" loop playsinline ${mutedAttr} src="${video.url}"></video><div class="play-indicator"><i class="fas fa-play"></i></div><div class="player-progress-bar"><div class="player-progress-filled"></div></div><div class="fast-forward-overlay">2x ▶▶</div><div class="seek-ripple left"><div class="seek-arrows"><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i></div><div class="seek-text">5s</div></div><div class="seek-ripple right"><div class="seek-arrows"><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i></div><div class="seek-text">5s</div></div>`;
-        muteUIHtml = `<div class="mute-container"><div class="mute-btn"><i class="fas fa-volume-up"></i></div><div class="volume-slider-wrapper"><input type="range" class="volume-slider" min="0" max="1" step="0.05" value="1"></div></div>`;
+        mediaHTML = `
+            <video class="video__player" data-vid="${video.id}" data-original-src="${video.url}" preload="metadata" loop playsinline src="${video.url}"></video>
+            <div class="play-indicator"><i class="fas fa-play"></i></div>
+            <div class="player-progress-bar"><div class="player-progress-filled"></div></div>
+            <div class="fast-forward-overlay">2x ▶▶</div>
+            <div class="seek-ripple left"><div class="seek-arrows"><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i><i class="fas fa-caret-left"></i></div><div class="seek-text">5s</div></div>
+            <div class="seek-ripple right"><div class="seek-arrows"><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i><i class="fas fa-caret-right"></i></div><div class="seek-text">5s</div></div>
+        `;
     }
+
     let rawPreview = (video.description || "").substring(0, 50); let previewHtml = formatText(rawPreview); if ((video.description && video.description.length > 50)) previewHtml += '... <strong>mehr anzeigen</strong>';
     const inlineStyle = getInlineBorderStyle(authorData.activeBorder, authorData.customBorder); const bClass = getBorderClass(authorData.activeBorder);
-
-    const soundUI = `<div style="font-size:12px; margin-top:8px; display:flex; align-items:center; gap:5px; pointer-events:auto; cursor:pointer;" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')"><i class="fas fa-music"></i> <marquee scrollamount="3" style="width:120px;">${soundDataName}</marquee></div>`;
 
     let seriesBtnHTML = '';
     if(video.seriesId) {
@@ -1300,12 +1323,23 @@ function createVideoElement(video) {
 
     div.innerHTML = `
         <div class="video-inner is-paused">
-            <div class="video-wrapper">${mediaHTML}${muteUIHtml}<div class="like-animation"><i class="fas fa-heart"></i></div><div class="gift-animation" id="gift-anim-${video.id}"></div></div>
+            <div class="video-wrapper">
+                ${mediaHTML}
+                <div class="mute-container">
+                    <div class="mute-btn"><i class="fas fa-volume-up"></i></div>
+                    <div class="volume-slider-wrapper"><input type="range" class="volume-slider" min="0" max="1" step="0.05" value="1"></div>
+                </div>
+                <div class="like-animation"><i class="fas fa-heart"></i></div>
+                <div class="gift-animation" id="gift-anim-${video.id}"></div>
+            </div>
             <div class="video__footer">
                 <h3 class="creator-name" onclick="openProfile('${video.authorUid}')"><span class="live-name-${video.authorUid} ${nameClass}">${authorData.displayName}${verifiedBadge}${tier3Badge}</span></h3>
                 <p class="live-username-${video.authorUid}" style="color:#aaa; font-size:13px; margin-bottom:5px; cursor:pointer;" onclick="openProfile('${video.authorUid}')">@${authorData.username}</p>
                 <h4 class="video-title" onclick="openVideoDetails('${video.id}')">${video.title || 'Ohne Titel'}</h4>
-                <p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${previewHtml}</p>${soundUI}
+                <p class="video-desc-preview" onclick="openVideoDetails('${video.id}')">${previewHtml}</p>
+                <div style="font-size:12px; margin-top:8px; display:flex; align-items:center; gap:5px; pointer-events:auto; cursor:pointer;" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')">
+                    <i class="fas fa-music"></i> <marquee scrollamount="3" style="width:120px;">${soundDataName}</marquee>
+                </div>
                 ${seriesBtnHTML}
             </div>
             <div class="video__sidebar">
@@ -1319,29 +1353,32 @@ function createVideoElement(video) {
                 ${soundDisc}
             </div>
         </div>`;
-    
-    // --- NEU: SYNCHRONES AUDIO PLAYBACK ---
+
+    // --- PERSISTENTER SOUND SYNC ---
     if (video.soundUrl) {
         const audioEl = new Audio(video.soundUrl);
         audioEl.loop = true;
         div.audioEl = audioEl;
-
         const v = div.querySelector('.video__player');
-        if (v) {
-            v.addEventListener('play', () => {
-                audioEl.currentTime = (video.soundOffset || 0) + v.currentTime;
-                audioEl.volume = video.musicVolume !== undefined ? (window.globalVolume * video.musicVolume) : window.globalVolume;
-                audioEl.play().catch(e => {});
-                
-                v.volume = video.videoVolume !== undefined ? (window.globalVolume * video.videoVolume) : window.globalVolume;
-                if (video.muteOriginal) v.muted = true;
-            });
-            
+        
+        const startSyncPlayback = () => {
+            audioEl.currentTime = (video.soundOffset || 0) + (v ? v.currentTime : 0);
+            audioEl.volume = window.globalVolume * (video.musicVolume !== undefined ? video.musicVolume : 1);
+            audioEl.muted = window.globalMuted;
+            audioEl.play().catch(()=>{});
+            if(v) {
+                v.volume = window.globalVolume * (video.videoVolume !== undefined ? video.videoVolume : 1);
+                v.muted = window.globalMuted || video.muteOriginal;
+                v.play().catch(()=>{});
+            }
+        };
+
+        if(v) {
+            v.addEventListener('play', startSyncPlayback);
             v.addEventListener('pause', () => audioEl.pause());
-            
-            v.addEventListener('seeking', () => {
-                audioEl.currentTime = (video.soundOffset || 0) + v.currentTime;
-            });
+            v.addEventListener('seeking', () => audioEl.currentTime = (video.soundOffset || 0) + v.currentTime);
+        } else {
+            // Fotomodus: Musik startet bei Sichtbarkeit (über Observer angesteuert)
         }
     } else {
         const v = div.querySelector('.video__player');
@@ -1418,6 +1455,7 @@ const videoObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
         const el = e.target; const vidId = el.dataset.id;
         const videoPlayer = el.querySelector('.video__player');
+        const containerInner = el.querySelector('.video-inner');
 
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
             if(el.classList.contains('dummy-ad-video')) return; 
@@ -1439,9 +1477,15 @@ const videoObserver = new IntersectionObserver(entries => {
                         const soundWrap = el.querySelector('.sound-disc-wrap');
                         if(soundWrap) soundWrap.classList.add('is-playing');
                     }).catch(error => { 
-                        videoPlayer.pause(); const container = videoPlayer.closest('.video-inner'); if(container) container.classList.add('is-paused'); 
+                        videoPlayer.pause(); if(containerInner) containerInner.classList.add('is-paused'); 
                     }); 
                 } 
+            } else if (el.audioEl) {
+                // FOTO MODUS SOUND
+                el.audioEl.currentTime = el.audioEl.dataset.offset || 0;
+                el.audioEl.play().catch(e=>{});
+                const soundWrap = el.querySelector('.sound-disc-wrap');
+                if(soundWrap) soundWrap.classList.add('is-playing');
             }
         } else { 
             if(el.dataset.playStartTime) {
@@ -1459,7 +1503,11 @@ const videoObserver = new IntersectionObserver(entries => {
                 
                 const soundWrap = el.querySelector('.sound-disc-wrap');
                 if(soundWrap) soundWrap.classList.remove('is-playing');
-            } 
+            } else if (el.audioEl) {
+                el.audioEl.pause();
+                const soundWrap = el.querySelector('.sound-disc-wrap');
+                if(soundWrap) soundWrap.classList.remove('is-playing');
+            }
         }
     });
 }, { threshold: 0.6 });
@@ -2120,6 +2168,7 @@ window.loadAdminDashboard = async function() {
             userList.innerHTML += `<div class="admin-user-card ${u.banned ? 'banned-card' : ''}"><div class="admin-user-header" onclick="openProfile('${u.uid}')" style="cursor:pointer;"><img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}"><div style="flex:1; min-width:0;"><strong style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;">@${u.displayName} ${isVerif}${isAdminBadge}${isBannedBadge}</strong><div style="font-size:11px; color:#888;">${u.email} | Coins: ${u.coins || 0}</div></div></div>${actionsHtml}</div>`;
         });
 
+        // Admin Sound Requests Laden
         const soundList = document.getElementById('admin-sound-requests-list');
         onSnapshot(collection(db, "sound_requests"), (snap) => {
             soundList.innerHTML = '';
@@ -2399,7 +2448,6 @@ document.getElementById('save-dm-edit-btn')?.addEventListener('click', async () 
         document.getElementById('dm-edit-modal').classList.remove('show');
     } catch(e) { showCustomAlert("Fehler", "Konnte nicht bearbeitet werden."); }
 });
-
 
 let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
 window.openDM = async function(targetUid, targetName, targetPic) {
@@ -2938,8 +2986,8 @@ class LiveManager {
             } else if(!this.isBroadcaster) {
                 this.disconnectGraceTimer = setTimeout(() => {
                     showCustomAlert("Beendet", "Live-Stream wurde beendet."); 
-                    this.leave();
-                    }, 5000);
+                    this.leave(); 
+                }, 5000);
             }
         }));
 
