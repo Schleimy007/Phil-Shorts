@@ -37,6 +37,10 @@ window.globalVolume = 1;
 window.linkPreviewCache = window.linkPreviewCache || {};
 let cropperInstance = null;
 
+// NEU: Globale Variablen für Audio Upload
+window.uploadCustomAudioPlayer = new Audio();
+window.customUploadAudioFile = null;
+
 // Algorithmus Live-Session Tracker
 let sessionInterests = {};
 let creatorAffinities = {};
@@ -212,10 +216,20 @@ let isInitialLoad = true;
 let sortedFeed = [];
 const viewedVideos = new Set();
 
+// BLACKSCREEN BUGFIX: Die initLiveStreamsList() Funktion gibt es hier nicht mehr direkt als Funktionsobjekt,
+// daher binden wir sie so ein, dass sie keinen Error mehr wirft.
 window.switchView = function(viewId) {
     if (viewId !== 'sound' && window.currentSoundPreviewPlayer) { window.currentSoundPreviewPlayer.pause(); const icon = document.getElementById('sound-play-icon'); if (icon) icon.className = 'fas fa-play'; }
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.getElementById('view-' + viewId).classList.add('active');
+    
+    document.querySelectorAll('.view').forEach(v => {
+        v.classList.remove('active');
+    });
+    
+    const targetView = document.getElementById('view-' + viewId);
+    if(targetView) {
+        targetView.classList.add('active');
+    }
+    
     document.querySelectorAll('.nav__item').forEach(n => n.classList.remove('active'));
     if (viewId === 'feed') document.querySelectorAll('.nav__item')[0].classList.add('active');
     if (viewId === 'search') document.querySelectorAll('.nav__item')[1].classList.add('active');
@@ -226,7 +240,8 @@ window.switchView = function(viewId) {
         v.currentTime = 0; });
     const audioPlayer = document.getElementById('profile-audio-player');
     if (viewId !== 'profile' && audioPlayer) audioPlayer.pause();
-    if (viewId === 'live-list') initLiveStreamsList();
+    
+    if (viewId === 'live-list' && window.LiveManager) window.LiveManager.init();
 };
 
 window.jumpToVideo = function(videoId) {
@@ -260,38 +275,31 @@ function timeAgo(timestamp) { const now = Date.now(); const diff = now - Number(
 
 // === NEU: OPTIMIERTE DISCORD STYLE EMBEDS OHNE LAGS ===
 
-// Die Worker-Funktion sucht im gerenderten DOM nach Platzhaltern und füllt sie
 window.processEmbeds = async function() {
     const placeholders = document.querySelectorAll('.embed-placeholder[data-url]');
     for (const el of placeholders) {
         const url = el.getAttribute('data-url');
-        // Markiert als in Bearbeitung, damit es nicht 10x aufgerufen wird
         el.removeAttribute('data-url'); 
 
-        // Ist der Link schon im globalen Cache?
         if (window.linkPreviewCache[url]) {
             if (window.linkPreviewCache[url] instanceof Promise) {
-                // Er lädt gerade im Hintergrund -> Warte ab
                 window.linkPreviewCache[url].then(data => {
                     if (data) renderDiscordEmbed(data, el);
                 });
             } else {
-                // Schon fertig -> Direkt anzeigen
                 renderDiscordEmbed(window.linkPreviewCache[url], el);
             }
             continue;
         }
 
-        // Lade den Link (ersetze die Cache-Variable temporär mit dem Promise)
         window.linkPreviewCache[url] = fetchPreviewData(url).then(data => {
-            window.linkPreviewCache[url] = data; // Ergebnis dauerhaft speichern
+            window.linkPreviewCache[url] = data; 
             if (data) renderDiscordEmbed(data, el);
             return data;
         });
     }
 };
 
-// Nutzt eine saubere API anstelle des fehleranfälligen HTML-Scrapings
 async function fetchPreviewData(url) {
     try {
         const response = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}`);
@@ -327,7 +335,6 @@ function renderDiscordEmbed(data, el) {
     
     el.outerHTML = html;
     
-    // Smooth Auto-Scroll, wenn man unten war und das Bild aufploppt
     if (chatBox && isNearBottom) {
         setTimeout(() => chatBox.scrollTop = chatBox.scrollHeight, 100);
     }
@@ -337,14 +344,11 @@ function formatDMText(text) {
     if (!text) return "";
     let safeText = escapeHTML(text);
     
-    // Link Erkennung
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     safeText = safeText.replace(urlRegex, function(url) {
-        // Direkte Bilder
         if (url.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i)) {
             return `<div class="link-embed"><a href="${url}" target="_blank" class="link-embed-title">${url}</a><img src="${url}" class="link-embed-img"></div>`;
         } else {
-            // Setzt nur einen Platzhalter, der später vom DOM geparst wird!
             return `<a href="${url}" target="_blank" class="dm-link">${url}</a><div class="embed-placeholder" data-url="${url}"></div>`;
         }
     });
@@ -360,7 +364,6 @@ window.formatText = function(text) {
     return safeText;
 };
 
-// XSS Schutz & Fake-Haken Filter
 function escapeHTML(str) {
     if (!str) return '';
     return str.replace(/[&<>'"]/g, 
@@ -371,7 +374,7 @@ function escapeHTML(str) {
             "'": '&#39;',
             '"': '&quot;'
         }[tag])
-    ).replace(/✅|✔️|☑️/g, ''); // Fake Haken blockieren
+    ).replace(/✅|✔️|☑️/g, ''); 
 }
 
 window.openHashtag = function(tag, event) {
@@ -596,7 +599,7 @@ window.addEventListener('googleLoginSuccess', async(event) => {
         initInbox();
         initInboxChats();
         initSearchUsers();
-        initLiveStreamsList();
+        if(window.LiveManager) window.LiveManager.init();
         checkDailyStreak();
     } catch (error) { showCustomAlert("Login Fehler", "Datenbank-Fehler beim Login."); }
 });
@@ -614,7 +617,7 @@ window.onload = async function() {
         initInbox();
         initInboxChats();
         initSearchUsers();
-        initLiveStreamsList();
+        if(window.LiveManager) window.LiveManager.init();
         checkDailyStreak();
     }
     
@@ -751,6 +754,177 @@ window.onload = async function() {
             } catch(e) { showToast("Fehler beim Upload"); }
             btn.innerText = "Anwenden"; btn.disabled = false;
         }, 'image/jpeg', 0.9);
+    });
+
+    // === UPLOAD LOGIC RESTRUCTURED ===
+    document.getElementById('up-file')?.addEventListener('change', function(e) {
+        const files = e.target.files; 
+        const prevContainer = document.getElementById('upload-media-preview-container');
+        const vidPrev = document.getElementById('upload-video-preview');
+        const imgPrev = document.getElementById('upload-image-preview');
+        const audioControls = document.getElementById('upload-audio-controls');
+        const mainUploadBox = document.getElementById('main-file-upload-wrapper');
+        const fileText = document.getElementById('up-file-text');
+        
+        if (!files || files.length === 0) return; 
+        
+        // 1. Vorschau & Controls ZWINGEND anzeigen, Upload-Box bleibt OBEN da
+        if(prevContainer) prevContainer.style.display = 'block';
+        if(audioControls) audioControls.style.display = 'block';
+        if(mainUploadBox) mainUploadBox.style.display = 'block'; 
+        
+        if (fileText) fileText.innerText = files.length === 1 ? files[0].name + " (Klicken zum Ändern)" : files.length + " Dateien ausgewählt";
+
+        const file = files[0];
+        const fileUrl = URL.createObjectURL(file);
+        
+        // 2. Video oder Bild in die Live-Vorschau laden
+        if (file.type.startsWith('video/')) { 
+            if(imgPrev) imgPrev.style.display = 'none';
+            if(vidPrev) {
+                vidPrev.style.display = 'block';
+                vidPrev.src = fileUrl;
+                
+                const volSlider = document.getElementById('up-volume-slider');
+                const muteToggle = document.getElementById('up-mute-original-toggle');
+                vidPrev.volume = volSlider ? parseFloat(volSlider.value) : 1;
+                vidPrev.muted = muteToggle ? muteToggle.checked : false;
+                
+                vidPrev.play().catch(err => {
+                    vidPrev.muted = true; 
+                    vidPrev.play();
+                });
+            }
+        } 
+        else { 
+            if(vidPrev) { vidPrev.style.display = 'none'; vidPrev.pause(); vidPrev.src = ''; }
+            if(imgPrev) { imgPrev.style.display = 'block'; imgPrev.src = fileUrl; }
+        }
+    });
+
+    document.getElementById('up-custom-audio-file')?.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if(file) {
+            window.customUploadAudioFile = file;
+            window.uploadCustomAudioPlayer.src = URL.createObjectURL(file);
+            window.uploadCustomAudioPlayer.loop = true;
+            window.uploadCustomAudioPlayer.volume = document.getElementById('up-volume-slider') ? parseFloat(document.getElementById('up-volume-slider').value) : 1;
+            
+            document.getElementById('custom-audio-name').style.display = 'block';
+            document.getElementById('custom-audio-name-text').innerText = file.name;
+            document.getElementById('up-remove-audio-btn').style.display = 'block';
+            
+            const vidPrev = document.getElementById('upload-video-preview');
+            if(vidPrev && vidPrev.style.display === 'block' && !vidPrev.paused) {
+                window.uploadCustomAudioPlayer.play().catch(e=>{});
+            } else if(document.getElementById('upload-image-preview')?.style.display === 'block') {
+                window.uploadCustomAudioPlayer.play().catch(e=>{});
+            }
+        }
+    });
+
+    document.getElementById('up-remove-audio-btn')?.addEventListener('click', () => {
+        window.customUploadAudioFile = null;
+        window.uploadCustomAudioPlayer.pause();
+        window.uploadCustomAudioPlayer.src = '';
+        document.getElementById('up-custom-audio-file').value = '';
+        document.getElementById('custom-audio-name').style.display = 'none';
+        document.getElementById('up-remove-audio-btn').style.display = 'none';
+    });
+
+    document.getElementById('up-volume-slider')?.addEventListener('input', (e) => {
+        const vol = parseFloat(e.target.value);
+        const vidPrev = document.getElementById('upload-video-preview');
+        if(vidPrev) vidPrev.volume = vol;
+        window.uploadCustomAudioPlayer.volume = vol;
+    });
+
+    document.getElementById('up-mute-original-toggle')?.addEventListener('change', (e) => {
+        const vidPrev = document.getElementById('upload-video-preview');
+        if(vidPrev) vidPrev.muted = e.target.checked;
+    });
+
+    const vPrev = document.getElementById('upload-video-preview');
+    if(vPrev) {
+        vPrev.addEventListener('play', () => { if(window.customUploadAudioFile) window.uploadCustomAudioPlayer.play().catch(e=>{}); });
+        vPrev.addEventListener('pause', () => { window.uploadCustomAudioPlayer.pause(); });
+        vPrev.addEventListener('seeked', () => { if(window.customUploadAudioFile && window.uploadCustomAudioPlayer.duration) window.uploadCustomAudioPlayer.currentTime = vPrev.currentTime % window.uploadCustomAudioPlayer.duration || 0; });
+    }
+
+    document.getElementById('close-upload')?.addEventListener('click', () => {
+        if(vPrev) { vPrev.pause(); vPrev.src = ''; }
+        window.uploadCustomAudioPlayer.pause(); window.uploadCustomAudioPlayer.src = '';
+        window.customUploadAudioFile = null;
+        document.getElementById('up-custom-audio-file').value = '';
+        document.getElementById('up-file').value = '';
+        
+        // Reset Visuals
+        document.getElementById('main-file-upload-wrapper').style.display = 'block';
+        document.getElementById('upload-media-preview-container').style.display = 'none';
+        document.getElementById('upload-audio-controls').style.display = 'none';
+        document.getElementById('custom-audio-name').style.display = 'none';
+        document.getElementById('up-remove-audio-btn').style.display = 'none';
+        document.getElementById('upload-modal').classList.remove('show');
+        
+        const fileText = document.getElementById('up-file-text');
+        if (fileText) fileText.innerText = "Video oder Bilder auswählen";
+    });
+
+    document.getElementById('submit-upload')?.addEventListener('click', async() => {
+        const files = document.getElementById('up-file').files; const titleInput = document.getElementById('up-title'); const descInput = document.getElementById('up-desc');
+        const titleVal = titleInput ? titleInput.value.trim() : ""; const desc = descInput ? descInput.value.trim() : "";
+        if (!files || files.length === 0) return showCustomAlert("Fehlende Daten", "Bitte wähle mindestens eine Datei aus.");
+        if (!titleVal || !desc) return showCustomAlert("Fehlende Daten", "Bitte gib einen Titel UND eine Beschreibung ein.");
+        
+        let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
+        for(let i=0; i<files.length; i++) { if(files[i].size > maxSize) return showCustomAlert("Zu groß", `Dateien dürfen maximal ${limitText} MB groß sein!`); }
+        
+        const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); 
+        btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
+        
+        const isSeries = document.getElementById('up-series-toggle') ? document.getElementById('up-series-toggle').checked : false;
+        const isMuted = document.getElementById('up-mute-original-toggle')?.checked || false;
+        const postVol = document.getElementById('up-volume-slider') ? parseFloat(document.getElementById('up-volume-slider').value) : 1;
+        
+        try {
+            const isVideo = files[0].type.startsWith('video/');
+            let uploadObj = { 
+                authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
+                title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now(),
+                muteOriginal: isMuted, postVolume: postVol
+            };
+
+            if(window.customUploadAudioFile) {
+                status.innerText = "Lade Audio hoch...";
+                const audioUrl = await uploadFileToFirebase(window.customUploadAudioFile, 'sounds');
+                uploadObj.soundId = "custom_" + Date.now();
+                uploadObj.soundName = "Originalton - " + currentUser.displayName;
+                uploadObj.soundUrl = audioUrl;
+            } else if(window.selectedUploadSound) {
+                uploadObj.soundId = window.selectedUploadSound.id;
+                uploadObj.soundName = window.selectedUploadSound.name;
+                uploadObj.soundUrl = window.selectedUploadSound.url;
+            }
+            
+            if(isSeries) uploadObj.seriesId = "series_" + currentUser.uid + "_" + Date.now();
+            awardXP(20);
+
+            status.innerText = "Lade Video hoch...";
+            if (isVideo) {
+                const finalUrl = await uploadFileToFirebase(files[0], 'videos');
+                await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, ...uploadObj });
+            } else {
+                let uploadedUrls = [];
+                for(let i=0; i<files.length; i++) { const secure_url = await uploadFileToFirebase(files[i], 'images'); uploadedUrls.push(secure_url); }
+                await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, ...uploadObj });
+            }
+            
+            showToast("Erfolgreich veröffentlicht! 🎉"); 
+            document.getElementById('close-upload').click(); 
+            if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
+            if(document.getElementById('up-series-toggle')) document.getElementById('up-series-toggle').checked = false;
+            window.removeSelectedSound();
+        } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
     });
 };
 
@@ -939,14 +1113,31 @@ window.updateGlobalVolumeUI = function() {
         const muteBtn = container.querySelector('.mute-btn');
         const volumeSlider = container.querySelector('.volume-slider');
         if (!v || !muteBtn || !volumeSlider) return;
-        v.volume = window.globalVolume;
-        v.muted = window.globalMuted;
-        if (window.globalMuted || window.globalVolume == 0) { muteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+        
+        const vidId = container.closest('.video').dataset.id;
+        const vData = allVideosData.find(x => x.id === vidId);
+        const postVol = vData && vData.postVolume !== undefined ? vData.postVolume : 1;
+        const origMuted = vData && vData.muteOriginal ? true : false;
+
+        v.volume = window.globalVolume * postVol; 
+        v.muted = window.globalMuted || origMuted;
+        
+        const audioEl = container.closest('.video').audioEl;
+        if(audioEl) { 
+            audioEl.volume = window.globalVolume * postVol; 
+            audioEl.muted = window.globalMuted; 
+        }
+
+        if (window.globalMuted || window.globalVolume == 0) { 
+            muteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
             volumeSlider.value = 0;
-            volumeSlider.style.background = `linear-gradient(to right, #fff 0%, rgba(255, 255, 255, 0.3) 0%)`; } else { if (window.globalVolume < 0.5) muteBtn.innerHTML = '<i class="fas fa-volume-down"></i>';
+            volumeSlider.style.background = `linear-gradient(to right, #fff 0%, rgba(255, 255, 255, 0.3) 0%)`; 
+        } else { 
+            if (window.globalVolume < 0.5) muteBtn.innerHTML = '<i class="fas fa-volume-down"></i>';
             else muteBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
             volumeSlider.value = window.globalVolume;
-            volumeSlider.style.background = `linear-gradient(to right, #fff ${window.globalVolume * 100}%, rgba(255, 255, 255, 0.3) ${window.globalVolume * 100}%)`; }
+            volumeSlider.style.background = `linear-gradient(to right, #fff ${window.globalVolume * 100}%, rgba(255, 255, 255, 0.3) ${window.globalVolume * 100}%)`; 
+        }
     });
 };
 window.scrollCarousel = function(vidId, dir, event) { if (event) event.stopPropagation(); const container = document.querySelector(`.carousel-container[data-vid="${vidId}"]`); if (container) { const scrollAmount = container.clientWidth;
@@ -992,7 +1183,7 @@ function createVideoElement(video) {
     const soundDataUrl = video.soundUrl || video.url;
     const soundDisc = `<div class="videoSidebar__button sound-disc-wrap" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')" style="margin-top:15px;"><img src="${authorData.pic}" class="sound-disc"><div class="sound-wave"></div><div class="sound-wave"></div></div>`;
 
-    const mutedAttr = window.globalMuted ? 'muted' : '';
+    const mutedAttr = (window.globalMuted || video.muteOriginal) ? 'muted' : '';
     let mediaHTML = '';
     let muteUIHtml = '';
     if (video.mediaType === 'images' && video.urls && video.urls.length > 0) {
@@ -1038,13 +1229,33 @@ function createVideoElement(video) {
             </div>
         </div>`;
     
+    let postVol = video.postVolume !== undefined ? video.postVolume : 1;
+    let origMuted = video.muteOriginal ? true : false;
+
     if(video.soundUrl) {
-        const audioEl = new Audio(video.soundUrl); audioEl.loop = true; const v = div.querySelector('.video__player');
+        const audioEl = new Audio(video.soundUrl); audioEl.loop = true; audioEl.muted = true; div.audioEl = audioEl;
+        const v = div.querySelector('.video__player');
         if(v) {
-            v.muted = true; v.addEventListener('play', () => { audioEl.volume = window.globalVolume; audioEl.play().catch(e=>{}); }); v.addEventListener('pause', () => audioEl.pause());
-            v.addEventListener('timeupdate', () => { if(Math.abs(audioEl.currentTime - v.currentTime) > 0.5) audioEl.currentTime = v.currentTime; });
-            const volSlider = div.querySelector('.volume-slider'); if(volSlider) volSlider.addEventListener('input', (e) => { audioEl.volume = e.target.value; });
-            const muteBtn = div.querySelector('.mute-btn'); if(muteBtn) muteBtn.addEventListener('click', () => { audioEl.muted = window.globalMuted; });
+            v.addEventListener('play', () => { 
+                audioEl.volume = window.globalVolume * postVol; 
+                audioEl.muted = window.globalMuted; 
+                audioEl.play().catch(e=>{}); 
+
+                v.volume = window.globalVolume * postVol;
+                v.muted = window.globalMuted || origMuted;
+            });
+            v.addEventListener('pause', () => audioEl.pause());
+            v.addEventListener('timeupdate', () => { if(Math.abs(audioEl.currentTime - v.currentTime) > 0.5 && audioEl.duration) audioEl.currentTime = v.currentTime % audioEl.duration; });
+            const volSlider = div.querySelector('.volume-slider'); if(volSlider) volSlider.addEventListener('input', (e) => { audioEl.volume = e.target.value * postVol; v.volume = e.target.value * postVol; });
+            const muteBtn = div.querySelector('.mute-btn'); if(muteBtn) muteBtn.addEventListener('click', () => { audioEl.muted = window.globalMuted; v.muted = window.globalMuted || origMuted; });
+        }
+    } else {
+        const v = div.querySelector('.video__player');
+        if(v) {
+            v.addEventListener('play', () => {
+                v.volume = window.globalVolume * postVol;
+                v.muted = window.globalMuted || origMuted;
+            });
         }
     }
 
@@ -2805,7 +3016,7 @@ document.getElementById('up-file')?.addEventListener('change', function(e) {
     const files = e.target.files; const txt = document.querySelector('#up-file-btn p'); const icon = document.querySelector('#up-file-btn i'); 
     if (!files || files.length === 0) { txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; return; }
     if (files.length === 1) { txt.innerText = files[0].name; icon.className = files[0].type.startsWith('video/') ? "fas fa-video" : "fas fa-image"; icon.style.color = "#00f2fe"; } 
-    else { txt.innerText = `${files.length} Dateien ausgewählt`; icon.className = "fas fa-images"; icon.style.color = "#ffd700"; }
+    else { txt.innerText = `${files.length}Dateien ausgewählt`; icon.className = "fas fa-images"; icon.style.color = "#ffd700"; }
 });
 
 document.getElementById('submit-upload')?.addEventListener('click', async() => {
@@ -2875,343 +3086,3 @@ function initResponsiveLayout() {
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
-/* =========================================================
-   NEUE FEATURES: SOUND-BIBLIOTHEK, SOUND-EDITOR & RENDERING
-   ========================================================= */
-
-// 1. Upload UI anpassen (Musik Button anzeigen bei Video-Auswahl)
-document.getElementById('up-file')?.addEventListener('change', function(e) {
-    const files = e.target.files;
-    if(files.length === 1 && files[0].type.startsWith('video/')) {
-        document.getElementById('open-sound-library-btn').style.display = 'block';
-    } else {
-        document.getElementById('open-sound-library-btn').style.display = 'none';
-    }
-});
-
-document.getElementById('open-sound-library-btn')?.addEventListener('click', () => {
-    document.getElementById('sound-library-modal').classList.add('show');
-    window.switchSoundTab('official');
-});
-
-document.getElementById('close-sound-library')?.addEventListener('click', () => {
-    document.getElementById('sound-library-modal').classList.remove('show');
-});
-
-// 2. Sound Tabs & Laden der Sounds
-window.switchSoundTab = function(tab) {
-    document.querySelectorAll('.sound-tab-content').forEach(t => t.style.display = 'none');
-    document.getElementById('lib-' + tab).style.display = 'block';
-    document.querySelectorAll('#sound-library-modal .shop-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector(`#sound-library-modal .shop-tab[onclick="switchSoundTab('${tab}')"]`).classList.add('active');
-
-    if(tab === 'official') loadOfficialSounds();
-    if(tab === 'community') loadCommunitySounds();
-};
-
-window.loadOfficialSounds = async function() {
-    const list = document.getElementById('official-sounds-list');
-    list.innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i></div>';
-    try {
-        const snap = await getDocs(collection(db, "official_sounds"));
-        list.innerHTML = '';
-        if(snap.empty) { list.innerHTML = '<p style="color:#aaa; text-align:center;">Keine offiziellen Sounds.</p>'; return; }
-        snap.forEach(docSnap => {
-            const s = docSnap.data();
-            list.innerHTML += createSoundCardHtml(docSnap.id, s.name, s.author, s.url, 'https://i.imgur.com/JDPRzCc.png');
-        });
-    } catch(e) { list.innerHTML = '<p style="color:red; text-align:center;">Fehler beim Laden.</p>'; }
-};
-
-window.loadCommunitySounds = function() {
-    const list = document.getElementById('community-sounds-list');
-    list.innerHTML = '';
-    let uniqueSounds = [];
-    allVideosData.forEach(v => {
-        if(v.soundId && v.soundUrl && !uniqueSounds.find(s => s.id === v.soundId)) {
-            uniqueSounds.push({id: v.soundId, name: v.soundName, author: v.authorUsername, url: v.soundUrl, pic: v.authorPic});
-        }
-    });
-    if(uniqueSounds.length === 0) { list.innerHTML = '<p style="color:#aaa; text-align:center;">Keine Community Sounds.</p>'; return; }
-    uniqueSounds.forEach(s => {
-        list.innerHTML += createSoundCardHtml(s.id, s.name, "@" + s.author, s.url, s.pic);
-    });
-};
-
-function createSoundCardHtml(id, name, author, url, pic) {
-    const safeName = name.replace(/'/g, "\\'");
-    const safeUrl = url.replace(/'/g, "\\'");
-    return `<div class="sound-lib-card">
-        <img src="${pic}">
-        <div class="sound-lib-info">
-            <div class="sound-lib-title">${name}</div>
-            <div class="sound-lib-author">${author}</div>
-        </div>
-        <div class="sound-lib-play" onclick="playLibSound('${safeUrl}', this)"><i class="fas fa-play"></i></div>
-        <button class="sound-lib-use" onclick="selectSoundForUpload('${id}', '${safeName}', '${safeUrl}')">Nutzen</button>
-    </div>`;
-}
-
-let libAudioPlayer = new Audio();
-window.playLibSound = function(url, btn) {
-    const icon = btn.querySelector('i');
-    if(libAudioPlayer.src.includes(url) && !libAudioPlayer.paused) {
-        libAudioPlayer.pause(); icon.className = 'fas fa-play';
-    } else {
-        document.querySelectorAll('.sound-lib-play i').forEach(i => i.className = 'fas fa-play');
-        libAudioPlayer.src = url; libAudioPlayer.play(); icon.className = 'fas fa-pause';
-    }
-};
-
-window.selectSoundForUpload = function(id, name, url) {
-    libAudioPlayer.pause();
-    window.selectedUploadSound = { id, name, url };
-    document.getElementById('sound-library-modal').classList.remove('show');
-    document.getElementById('upload-sound-editor').style.display = 'block';
-    document.getElementById('editor-sound-name').innerHTML = `<i class="fas fa-music"></i> ${name}`;
-};
-
-document.getElementById('remove-sound-editor-btn')?.addEventListener('click', () => {
-    window.selectedUploadSound = null;
-    document.getElementById('upload-sound-editor').style.display = 'none';
-});
-
-// 3. Sound Request einreichen (Community lädt hoch)
-document.getElementById('req-sound-file')?.addEventListener('change', e => {
-    if(e.target.files[0]) document.getElementById('req-sound-file-name').innerText = e.target.files[0].name;
-});
-
-document.getElementById('submit-sound-request-btn')?.addEventListener('click', async () => {
-    const file = document.getElementById('req-sound-file').files[0];
-    const name = document.getElementById('req-sound-name').value.trim();
-    if(!file || !name) return showCustomAlert("Fehler", "Bitte MP3 und Name angeben.");
-    
-    const btn = document.getElementById('submit-sound-request-btn');
-    btn.innerText = "Lädt hoch..."; btn.disabled = true;
-    try {
-        const url = await uploadFileToFirebase(file, 'sound_requests');
-        await addDoc(collection(db, "sound_requests"), {
-            uid: currentUser.uid, name: name, url: url, timestamp: Date.now()
-        });
-        showToast("Sound zur Prüfung eingereicht!");
-        document.getElementById('req-sound-file').value = '';
-        document.getElementById('req-sound-name').value = '';
-        document.getElementById('req-sound-file-name').innerText = '';
-    } catch(e) { showCustomAlert("Fehler", "Upload fehlgeschlagen."); }
-    btn.innerHTML = `<i class="fas fa-paper-plane"></i> Zur Prüfung einreichen`; btn.disabled = false;
-});
-
-// 4. Admin Dashboard Sound Freigabe (Admins prüfen die MP3s)
-const originalSwitchAdminTab = window.switchAdminTab || function(tab) {};
-window.switchAdminTab = function(tab) {
-    document.querySelectorAll('.admin-content-section').forEach(t => t.style.display = 'none');
-    document.getElementById(`admin-tab-${tab}`).style.display = 'block';
-    document.querySelectorAll('#view-admin .shop-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector(`#view-admin .shop-tab[onclick="switchAdminTab('${tab}')"]`)?.classList.add('active');
-    if(tab === 'sounds') loadAdminSoundRequests();
-    else originalSwitchAdminTab(tab);
-};
-
-window.loadAdminSoundRequests = async function() {
-    const list = document.getElementById('admin-sound-requests-list');
-    list.innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i></div>';
-    try {
-        const snap = await getDocs(collection(db, "sound_requests"));
-        list.innerHTML = '';
-        if(snap.empty) { list.innerHTML = '<p style="color:#aaa; text-align:center;">Keine offenen Anfragen.</p>'; return; }
-        snap.forEach(d => {
-            const s = d.data();
-            list.innerHTML += `<div class="admin-user-card">
-                <strong style="color:white;">${s.name}</strong>
-                <audio src="${s.url}" controls style="width:100%; height:30px; margin: 10px 0;"></audio>
-                <div class="admin-actions">
-                    <button class="admin-btn btn-green" onclick="approveSound('${d.id}', '${s.name.replace(/'/g,"\\'")}', '${s.url}')">Annehmen</button>
-                    <button class="admin-btn btn-red" onclick="rejectSound('${d.id}')">Ablehnen</button>
-                </div>
-            </div>`;
-        });
-    } catch(e) {}
-};
-
-window.approveSound = async function(docId, name, url) {
-    try {
-        await addDoc(collection(db, "official_sounds"), { name: name, author: "Phil Shorts Official", url: url, timestamp: Date.now() });
-        await deleteDoc(doc(db, "sound_requests", docId));
-        showToast("Sound hinzugefügt!"); loadAdminSoundRequests();
-    } catch(e) {}
-};
-window.rejectSound = async function(docId) {
-    try { await deleteDoc(doc(db, "sound_requests", docId)); showToast("Abgelehnt."); loadAdminSoundRequests(); } catch(e) {}
-};
-
-// Offset Anzeige updaten
-document.getElementById('sound-offset-slider')?.addEventListener('input', (e) => {
-    document.getElementById('sound-offset-display').innerText = parseFloat(e.target.value).toFixed(1) + "s";
-});
-
-// 5. Video Rendering Engine (Überschreibt den Original-Upload-Button sauber)
-const originalUploadBtn = document.getElementById('submit-upload');
-if (originalUploadBtn) {
-    const newUploadBtn = originalUploadBtn.cloneNode(true);
-    originalUploadBtn.parentNode.replaceChild(newUploadBtn, originalUploadBtn);
-    
-    newUploadBtn.addEventListener('click', async () => {
-        const files = document.getElementById('up-file').files; 
-        const titleVal = document.getElementById('up-title').value.trim(); 
-        const desc = document.getElementById('up-desc').value.trim();
-        
-        if (!files || files.length === 0) return showCustomAlert("Fehlende Daten", "Bitte wähle eine Datei aus.");
-        if (!titleVal || !desc) return showCustomAlert("Fehlende Daten", "Titel und Beschreibung erforderlich.");
-        
-        let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024;
-        for(let i=0; i<files.length; i++) { if(files[i].size > maxSize) return showCustomAlert("Zu groß", "Datei überschreitet Limit!"); }
-        
-        const isVideo = files[0].type.startsWith('video/');
-        const isSeries = document.getElementById('up-series-toggle') ? document.getElementById('up-series-toggle').checked : false;
-
-        let fileToUpload = files[0];
-
-        // WENN EIN SOUND GEWÄHLT IST -> RENDERN (Verschmelzen von Video & MP3)
-        if (isVideo && window.selectedUploadSound) {
-            const overlay = document.getElementById('video-processing-overlay');
-            overlay.classList.add('show');
-            const progBar = document.getElementById('render-progress-bar');
-            const progText = document.getElementById('render-progress-text');
-            
-            try {
-                fileToUpload = await renderVideoWithAudio(
-                    files[0], 
-                    window.selectedUploadSound.url, 
-                    parseFloat(document.getElementById('video-volume-slider').value),
-                    parseFloat(document.getElementById('music-volume-slider').value),
-                    parseFloat(document.getElementById('sound-offset-slider').value),
-                    (percent) => {
-                        progBar.style.width = percent + '%';
-                        progText.innerText = Math.round(percent) + '%';
-                    }
-                );
-            } catch(e) {
-                overlay.classList.remove('show');
-                return showCustomAlert("Rendering Fehler", "Das Video konnte nicht verarbeitet werden.");
-            }
-            overlay.classList.remove('show');
-        }
-
-        // Upload-Prozess ausführen
-        const btn = document.getElementById('submit-upload'); 
-        const status = document.getElementById('upload-status'); 
-        btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
-
-        try {
-            let uploadObj = { 
-                authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
-                title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() 
-            };
-
-            if(window.selectedUploadSound) {
-                uploadObj.soundId = window.selectedUploadSound.id;
-                uploadObj.soundName = window.selectedUploadSound.name;
-                uploadObj.soundUrl = window.selectedUploadSound.url;
-            }
-            if(isSeries) uploadObj.seriesId = "series_" + currentUser.uid + "_" + Date.now();
-
-            awardXP(20);
-
-            if (isVideo) {
-                const finalUrl = await uploadFileToFirebase(fileToUpload, 'videos');
-                await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, ...uploadObj });
-            } else {
-                let uploadedUrls = [];
-                for(let i=0; i<files.length; i++) { const url = await uploadFileToFirebase(files[i], 'images'); uploadedUrls.push(url); }
-                await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, ...uploadObj });
-            }
-            
-            showToast("Erfolgreich veröffentlicht! 🎉"); 
-            document.getElementById('upload-modal').classList.remove('show');
-            document.getElementById('up-file').value = ''; 
-            document.getElementById('up-title').value = ''; 
-            document.getElementById('up-desc').value = ''; 
-            if(document.getElementById('up-series-toggle')) document.getElementById('up-series-toggle').checked = false;
-            document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; 
-            document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; 
-            document.querySelector('#up-file-btn i').style.color = "#aaa"; 
-            window.selectedUploadSound = null;
-            document.getElementById('upload-sound-editor').style.display = 'none';
-        } catch (e) { 
-            showCustomAlert("Upload Fehler", "Fehler beim Upload."); 
-        } finally { 
-            btn.disabled = false; status.innerText = ""; 
-        }
-    });
-}
-
-// Rendering-Logik (Kombiniert AudioContext & MediaRecorder)
-async function renderVideoWithAudio(videoFile, audioUrl, vidVol, musVol, offsetSec, progressCallback) {
-    return new Promise((resolve, reject) => {
-        const video = document.createElement('video');
-        video.src = URL.createObjectURL(videoFile);
-        video.muted = true;
-        video.crossOrigin = "anonymous";
-        
-        const audio = new Audio(audioUrl);
-        audio.crossOrigin = "anonymous";
-
-        video.onloadeddata = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-
-            const canvasStream = canvas.captureStream(30); // Video Stream mit 30 FPS generieren
-            
-            const audioCtx = new AudioContext();
-            const dest = audioCtx.createMediaStreamDestination();
-
-            // Original Audio des Videos einbinden
-            const vidSource = audioCtx.createMediaElementSource(video);
-            const vidGain = audioCtx.createGain();
-            vidGain.gain.value = vidVol;
-            vidSource.connect(vidGain).connect(dest);
-
-            // Neue MP3 einbinden
-            const musSource = audioCtx.createMediaElementSource(audio);
-            const musGain = audioCtx.createGain();
-            musGain.gain.value = musVol;
-            musSource.connect(musGain).connect(dest);
-
-            // Abgemischte Audiospur an den Canvas Video-Stream heften
-            dest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
-
-            const recorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm' });
-            let chunks = [];
-            recorder.ondataavailable = e => { if(e.data.size > 0) chunks.push(e.data); };
-            
-            recorder.onstop = () => {
-                const blob = new Blob(chunks, { type: 'video/webm' });
-                const newFile = new File([blob], "rendered_video.webm", { type: 'video/webm' });
-                resolve(newFile);
-            };
-
-            recorder.start();
-            audio.currentTime = offsetSec; // Startpunkt der MP3
-            video.play();
-            audio.play();
-
-            // Frames auf das Canvas malen, solange das Video läuft
-            function draw() {
-                if (video.paused || video.ended) {
-                    recorder.stop();
-                    audio.pause();
-                    return;
-                }
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                let percent = (video.currentTime / video.duration) * 100;
-                progressCallback(percent);
-                requestAnimationFrame(draw);
-            }
-            draw();
-        };
-        
-        video.onerror = () => reject("Video Load Error");
-    });
-}
