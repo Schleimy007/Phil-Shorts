@@ -216,7 +216,7 @@ body.theme-neon-pink .glass-nav-bottom {
 }
 
 
-/* --- VERIFIZIERT FIX --- */
+/* --- VERIFIZIERT FIX (gradient entfernt) --- */
 
 .verified-badge {
     color: #00f2fe !important;
@@ -2345,7 +2345,6 @@ body.theme-neon-pink .glass-nav-bottom {
 
 .plus-box i {
     font-size: 16px;
-    color: black;
 }
 
 .loading-screen,
@@ -3584,35 +3583,4 @@ input:checked+.slider:before {
         -webkit-backdrop-filter: none !important;
         background: rgba(0, 0, 0, 0.95) !important;
     }
-}
-
-/* --- NEU: UPLOAD MEDIA PREVIEW & AUDIO SETTINGS --- */
-.upload-media-preview {
-    display: none; 
-    width: 100%; 
-    max-width: 220px; 
-    margin: 0 auto 15px auto; 
-    background: #111; 
-    border-radius: 15px; 
-    overflow: hidden; 
-    aspect-ratio: 9/16; 
-    position: relative;
-    border: 1px solid #333;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.6);
-}
-
-.upload-preview-el {
-    width: 100%; 
-    height: 100%; 
-    object-fit: cover; 
-    display: none;
-}
-
-.advanced-settings-box {
-    background: rgba(255,255,255,0.05); 
-    padding: 15px; 
-    border-radius: 15px; 
-    border: 1px solid #333; 
-    margin-bottom: 15px;
-    animation: fadeIn 0.3s ease;
 }
