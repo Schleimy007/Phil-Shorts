@@ -758,51 +758,48 @@ window.onload = async function() {
     });
 
     document.getElementById('up-file')?.addEventListener('change', function(e) {
-        const files = e.target.files; 
-        const prevContainer = document.getElementById('upload-media-preview-container');
-        const vidPrev = document.getElementById('upload-video-preview');
-        const imgPrev = document.getElementById('upload-image-preview');
-        const audioControls = document.getElementById('upload-audio-controls');
-        const mainUploadBox = document.getElementById('main-file-upload-wrapper');
-        const fileText = document.getElementById('up-file-text');
-        
-        if (!files || files.length === 0) return; 
-        
-        // 1. Vorschau & Controls ZWINGEND anzeigen, dicke Upload-Box bleibt auch da
-        if(prevContainer) prevContainer.style.display = 'block';
-        if(audioControls) audioControls.style.display = 'block';
-        if(mainUploadBox) mainUploadBox.style.display = 'block'; 
-        
-        if (fileText) fileText.innerText = files.length === 1 ? files[0].name + " (Klicken zum Ändern)" : files.length + " Dateien ausgewählt";
-
-        const file = files[0];
-        const fileUrl = URL.createObjectURL(file);
-        
-        // 2. Video oder Bild einladen
-        if (file.type.startsWith('video/')) { 
-            if(imgPrev) imgPrev.style.display = 'none';
-            if(vidPrev) {
-                vidPrev.style.display = 'block';
-                vidPrev.src = fileUrl;
-                
-                // Einstellungen anwenden
-                const volSlider = document.getElementById('up-volume-slider');
-                const muteToggle = document.getElementById('up-mute-original-toggle');
-                vidPrev.volume = volSlider ? parseFloat(volSlider.value) : 1;
-                vidPrev.muted = muteToggle ? muteToggle.checked : false;
-                
-                // Abspielen erzwingen (Muted falls Autoplay blockiert)
-                vidPrev.play().catch(err => {
-                    vidPrev.muted = true; 
-                    vidPrev.play();
-                });
-            }
-        } 
-        else { 
-            if(vidPrev) { vidPrev.style.display = 'none'; vidPrev.pause(); vidPrev.src = ''; }
-            if(imgPrev) { imgPrev.style.display = 'block'; imgPrev.src = fileUrl; }
+    const files = e.target.files; 
+    const prevContainer = document.getElementById('upload-media-preview-container');
+    const vidPrev = document.getElementById('upload-video-preview');
+    const imgPrev = document.getElementById('upload-image-preview');
+    const audioControls = document.getElementById('upload-audio-controls');
+    const mainUploadBox = document.getElementById('main-file-upload-wrapper');
+    
+    if (!files || files.length === 0) return; 
+    
+    // 1. Vorschau & Controls ZWINGEND anzeigen, dicke Upload-Box verstecken
+    if(prevContainer) prevContainer.style.display = 'block';
+    if(audioControls) audioControls.style.display = 'block';
+    if(mainUploadBox) mainUploadBox.style.display = 'none'; 
+    
+    const file = files[0];
+    const fileUrl = URL.createObjectURL(file);
+    
+    // 2. Video oder Bild einladen
+    if (file.type.startsWith('video/')) { 
+        if(imgPrev) imgPrev.style.display = 'none';
+        if(vidPrev) {
+            vidPrev.style.display = 'block';
+            vidPrev.src = fileUrl;
+            
+            // Einstellungen anwenden
+            const volSlider = document.getElementById('up-volume-slider');
+            const muteToggle = document.getElementById('up-mute-original-toggle');
+            vidPrev.volume = volSlider ? parseFloat(volSlider.value) : 1;
+            vidPrev.muted = muteToggle ? muteToggle.checked : false;
+            
+            // Abspielen erzwingen (Muted falls Autoplay blockiert)
+            vidPrev.play().catch(err => {
+                vidPrev.muted = true; 
+                vidPrev.play();
+            });
         }
-    });
+    } 
+    else { 
+        if(vidPrev) { vidPrev.style.display = 'none'; vidPrev.pause(); vidPrev.src = ''; }
+        if(imgPrev) { imgPrev.style.display = 'block'; imgPrev.src = fileUrl; }
+    }
+});
 
     document.getElementById('up-custom-audio-file')?.addEventListener('change', function(e) {
         const file = e.target.files[0];
@@ -864,9 +861,6 @@ window.onload = async function() {
         document.getElementById('upload-audio-controls').style.display = 'none';
         document.getElementById('custom-audio-name').style.display = 'none';
         document.getElementById('up-remove-audio-btn').style.display = 'none';
-        document.getElementById('upload-modal').classList.remove('show');
-        const fileText = document.getElementById('up-file-text');
-        if (fileText) fileText.innerText = "Video oder Bilder auswählen";
     });
 
     document.getElementById('submit-upload')?.addEventListener('click', async() => {
@@ -918,13 +912,11 @@ window.onload = async function() {
                 await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, ...uploadObj });
             }
             
-            showToast("Erfolgreich veröffentlicht! 🎉"); 
+            showToast("Erfolgreich veröffentlicht! 🎉"); document.getElementById('upload-modal').classList.remove('show');
             document.getElementById('close-upload').click(); 
             if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
             if(document.getElementById('up-series-toggle')) document.getElementById('up-series-toggle').checked = false;
-            window.removeSelectedSound();
-            const fileText = document.getElementById('up-file-text');
-            if (fileText) fileText.innerText = "Video oder Bilder auswählen";
+            removeSelectedSound();
         } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
     });
 };
@@ -2857,314 +2849,340 @@ class LiveManager {
 window.LiveManager = LiveManager;
 
 function formatLiveTime(sec) {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = (sec % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
 }
 
-window.toggleLiveCamera = function() {
-    if (!LiveManager.isBroadcaster || !LiveManager.localStream) return;
-    const videoTrack = LiveManager.localStream.getVideoTracks()[0];
-    if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        const btn = document.getElementById('live-toggle-cam-btn');
-        if (videoTrack.enabled) {
-            btn.innerHTML = '<i class="fas fa-video"></i> Kamera Aus';
-            btn.style.background = '#333';
-        } else {
-            btn.innerHTML = '<i class="fas fa-video-slash"></i> Kamera An';
-            btn.style.background = '#ff4444';
+window.initLiveStreamsList = () => LiveManager.init();
+window.selectLiveSource = (src) => {
+    window.currentLiveSource = src;
+    document.querySelectorAll('.live-source-card').forEach(c => c.classList.remove('active'));
+    document.getElementById('source-' + src).classList.add('active');
+};
+window.toggleLiveCamera = () => {
+    if (LiveManager.localStream) {
+        const videoTrack = LiveManager.localStream.getVideoTracks().find(t => t.kind === 'video');
+        if (videoTrack) {
+            videoTrack.enabled = !videoTrack.enabled;
+            const btn = document.getElementById('live-toggle-cam-btn');
+            if(btn) {
+                if (videoTrack.enabled) { btn.innerHTML = '<i class="fas fa-video"></i> Kamera Aus'; btn.style.background = '#333'; } 
+                else { btn.innerHTML = '<i class="fas fa-video-slash"></i> Kamera Ein'; btn.style.background = '#ff4444'; }
+            }
         }
     }
 };
-
-window.leaveLiveRoom = function() {
-    LiveManager.leave();
-};
-
-window.selectLiveSource = function(source) {
-    window.currentLiveSource = source;
-    document.querySelectorAll('.live-source-card').forEach(c => c.classList.remove('active'));
-    document.getElementById(`source-${source}`).classList.add('active');
-};
+window.leaveLiveRoom = () => LiveManager.leave();
 
 window.openLiveChatContext = function(msgId, senderUid, senderName) {
-    if (!currentUser) return;
-    if (!LiveManager.isBroadcaster && !LiveManager.amIMod) return;
-    if (senderUid === currentUser.uid || senderUid === LiveManager.streamId) return;
-
-    let html = `<p style="text-align:center; color:#aaa; margin-bottom:10px;">Optionen für <strong>${senderName}</strong></p>`;
-    
-    html += `<button class="profile-action-btn edit-btn" style="background:#ff4444; color:white; width:100%; margin-bottom:10px;" onclick="banUserFromLive('${senderUid}', '${senderName}')"><i class="fas fa-ban"></i> Aus Stream bannen</button>`;
-    
-    if (LiveManager.isBroadcaster) {
-        const isAlreadyMod = LiveManager.activeMods && LiveManager.activeMods.includes(senderUid);
-        if (isAlreadyMod) {
-            html += `<button class="profile-action-btn edit-btn" style="background:#333; color:white; width:100%;" onclick="toggleModStatus('${senderUid}', '${senderName}', false)"><i class="fas fa-user-minus"></i> Mod-Rechte entziehen</button>`;
-        } else {
-            html += `<button class="profile-action-btn edit-btn" style="background:#9b59b6; color:white; width:100%;" onclick="toggleModStatus('${senderUid}', '${senderName}', true)"><i class="fas fa-shield-alt"></i> Zum Moderator machen</button>`;
-        }
-    }
-
-    document.getElementById('live-chat-context-content').innerHTML = html;
+    if(senderUid === LiveManager.streamId || (!LiveManager.isBroadcaster && !LiveManager.amIMod)) return; 
+    document.getElementById('live-chat-context-title').innerText = `@${senderName}`;
+    let contentHtml = `<button class="profile-action-btn edit-btn" onclick="deleteLiveMsg('${msgId}')"><i class="fas fa-trash" style="color:#ff4444;"></i> Nachricht löschen</button>`;
+    contentHtml += `<button class="profile-action-btn edit-btn" onclick="banLiveUser('${senderUid}')"><i class="fas fa-ban" style="color:#ff4444;"></i> User Bannen</button>`;
+    if(LiveManager.isBroadcaster) { contentHtml += `<button class="profile-action-btn edit-btn" onclick="makeLiveMod('${senderUid}')"><i class="fas fa-shield-alt" style="color:#00f2fe;"></i> Zum Mod ernennen</button>`; }
+    document.getElementById('live-chat-context-content').innerHTML = contentHtml;
     document.getElementById('live-chat-context-modal').classList.add('show');
 };
 
-window.banUserFromLive = async function(uid, name) {
-    if (!LiveManager.streamId) return;
-    if (confirm(`Möchtest du ${name} wirklich aus diesem Stream bannen?`)) {
+window.deleteLiveMsg = async function(msgId) {
+    if(!LiveManager.isBroadcaster && !LiveManager.amIMod) return;
+    try { await deleteDoc(doc(db, `live_streams/${LiveManager.streamId}/chat`, msgId)); showToast("Nachricht gelöscht."); document.getElementById('live-chat-context-modal').classList.remove('show'); } catch(e) {}
+};
+
+window.banLiveUser = async function(targetUid) {
+    if(!LiveManager.isBroadcaster && !LiveManager.amIMod) return;
+    if(confirm("Diesen Nutzer wirklich bannen und aus dem Stream werfen?")) {
         try {
-            await setDoc(doc(db, `live_streams/${LiveManager.streamId}/banned`, uid), { name, timestamp: Date.now(), bannedBy: currentUser.uid });
-            showToast(`${name} wurde gebannt.`);
+            if(LiveManager.isBroadcaster) {
+                if(!currentUser.blockedUsers) currentUser.blockedUsers = [];
+                if(!currentUser.blockedUsers.includes(targetUid)) {
+                    currentUser.blockedUsers.push(targetUid);
+                    await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayUnion(targetUid) });
+                    localStorage.setItem('phil_session', JSON.stringify(currentUser));
+                }
+            } else if(LiveManager.amIMod) {
+                await updateDoc(doc(db, "users", LiveManager.streamId), { blockedUsers: arrayUnion(targetUid) });
+            }
+            showToast("Nutzer aus dem Stream gebannt.");
             document.getElementById('live-chat-context-modal').classList.remove('show');
-        } catch(e) { showCustomAlert("Fehler", "Bannen fehlgeschlagen."); }
+        } catch(e) {}
     }
 };
 
-window.toggleModStatus = async function(uid, name, makeMod) {
-    if (!LiveManager.isBroadcaster) return;
-    try {
-        if (makeMod) {
-            await setDoc(doc(db, `live_streams/${LiveManager.streamId}/mods`, uid), { name, timestamp: Date.now() });
-            showToast(`${name} ist jetzt Moderator.`);
-        } else {
-            await deleteDoc(doc(db, `live_streams/${LiveManager.streamId}/mods`, uid));
-            showToast(`${name} ist kein Moderator mehr.`);
-        }
-        document.getElementById('live-chat-context-modal').classList.remove('show');
-    } catch(e) { showCustomAlert("Fehler", "Aktion fehlgeschlagen."); }
+window.makeLiveMod = async function(targetUid) {
+    if(!LiveManager.isBroadcaster) return;
+    try { await setDoc(doc(db, `live_streams/${currentUser.uid}/mods`, targetUid), { uid: targetUid }); showToast("Nutzer zum Moderator ernannt!"); document.getElementById('live-chat-context-modal').classList.remove('show'); } catch(e) {}
 };
 
 window.switchModTab = function(tab) {
     document.querySelectorAll('#mod-dashboard-modal .shop-tab').forEach(t => t.classList.remove('active'));
-    event.target.classList.add('active');
-    document.getElementById('mod-tab-mods').style.display = tab === 'mods' ? 'block' : 'none';
-    document.getElementById('mod-tab-bans').style.display = tab === 'bans' ? 'block' : 'none';
+    document.querySelector(`#mod-dashboard-modal .shop-tab[onclick="switchModTab('${tab}')"]`).classList.add('active');
+    document.getElementById('mod-tab-mods').style.display = 'none'; document.getElementById('mod-tab-bans').style.display = 'none';
+    document.getElementById(`mod-tab-${tab}`).style.display = 'block';
 };
 
-let modDashUnsubs = [];
-document.getElementById('open-mod-dashboard-btn')?.addEventListener('click', () => {
+window.loadModDashboard = async function() {
+    if(!LiveManager.isBroadcaster) return;
     document.getElementById('mod-dashboard-modal').classList.add('show');
-    
-    modDashUnsubs.forEach(u => u()); modDashUnsubs = [];
-    
-    modDashUnsubs.push(onSnapshot(collection(db, `live_streams/${LiveManager.streamId}/mods`), (snap) => {
-        const list = document.getElementById('mod-dashboard-mods-list');
-        list.innerHTML = '';
-        if (snap.empty) { list.innerHTML = '<p style="text-align:center; color:#555;">Keine Moderatoren ernannt.</p>'; return; }
-        snap.forEach(d => {
-            const data = d.data();
-            let removeBtn = LiveManager.isBroadcaster ? `<button class="profile-action-btn edit-btn" style="min-height:30px; font-size:12px; padding:0 10px;" onclick="toggleModStatus('${d.id}', '${data.name}', false)">Entfernen</button>` : '';
-            list.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:#111; padding:10px; border-radius:8px; border:1px solid #333;"><span style="color:white;">${data.name}</span>${removeBtn}</div>`;
-        });
-    }));
+    const modsList = document.getElementById('mod-dashboard-mods-list'); const bansList = document.getElementById('mod-dashboard-banned-list');
+    modsList.innerHTML = ''; bansList.innerHTML = '';
 
-    modDashUnsubs.push(onSnapshot(collection(db, `live_streams/${LiveManager.streamId}/banned`), (snap) => {
-        const list = document.getElementById('mod-dashboard-banned-list');
-        list.innerHTML = '';
-        if (snap.empty) { list.innerHTML = '<p style="text-align:center; color:#555;">Keine User gebannt.</p>'; return; }
-        snap.forEach(d => {
-            const data = d.data();
-            list.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:#111; padding:10px; border-radius:8px; border:1px solid #333;"><span style="color:white;">${data.name}</span><button class="profile-action-btn" style="min-height:30px; font-size:12px; padding:0 10px; background:#39ff14; color:black;" onclick="unbanUserFromLive('${d.id}')">Entbannen</button></div>`;
-        });
-    }));
-});
-
-window.unbanUserFromLive = async function(uid) {
-    if(!LiveManager.streamId || (!LiveManager.isBroadcaster && !LiveManager.amIMod)) return;
-    try {
-        await deleteDoc(doc(db, `live_streams/${LiveManager.streamId}/banned`, uid));
-        showToast("User entbannt.");
-    } catch(e) {}
-};
-
-document.getElementById('send-live-chat-btn')?.addEventListener('click', async() => {
-    const input = document.getElementById('live-chat-input');
-    const text = input.value.trim();
-    if (!text || !LiveManager.streamId || !currentUser) return;
-    
-    input.value = '';
-    try {
-        await addDoc(collection(db, `live_streams/${LiveManager.streamId}/chat`), {
-            uid: currentUser.uid,
-            name: currentUser.displayName,
-            pic: currentUser.photoURL,
-            text: text,
-            timestamp: Date.now()
-        });
-    } catch(e) { showToast("Chat-Fehler"); }
-});
-
-document.getElementById('live-chat-input')?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') document.getElementById('send-live-chat-btn').click();
-});
-
-document.getElementById('live-gift-btn')?.addEventListener('click', () => {
-    window.openGiftModal(LiveManager.streamId);
-});
-
-LiveManager.init();
-
-// === SOUND SELECTION ===
-let soundsUnsubscribe = null;
-
-window.openSound = function(soundId, soundName, authorPic, soundUrl) {
-    if (window.currentSoundPreviewPlayer) window.currentSoundPreviewPlayer.pause();
-    switchView('sound');
-    document.getElementById('sound-name').innerText = soundName;
-    document.getElementById('sound-author').innerText = "Wird geladen...";
-    document.getElementById('sound-pic').src = authorPic || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback';
-    document.getElementById('sound-count').innerText = "0 Videos";
-    document.getElementById('sound-grid').innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
-
-    document.getElementById('sound-play-icon').className = 'fas fa-play';
-    document.getElementById('sound-play-btn').onclick = function() {
-        const icon = document.getElementById('sound-play-icon');
-        if (window.currentSoundPreviewPlayer.paused || window.currentSoundPreviewPlayer.src !== soundUrl) {
-            if (window.currentSoundPreviewPlayer.src !== soundUrl) window.currentSoundPreviewPlayer.src = soundUrl;
-            window.currentSoundPreviewPlayer.play().catch(e => console.error("Audio play error", e));
-            icon.className = 'fas fa-pause';
-            document.getElementById('sound-disc-anim-container').classList.add('is-playing');
-        } else {
-            window.currentSoundPreviewPlayer.pause();
-            icon.className = 'fas fa-play';
-            document.getElementById('sound-disc-anim-container').classList.remove('is-playing');
-        }
-    };
-
-    document.getElementById('use-sound-btn').onclick = function() {
-        window.selectedUploadSound = { id: soundId, name: soundName, url: soundUrl };
-        document.getElementById('upload-sound-preview').style.display = 'flex';
-        document.getElementById('upload-sound-name').innerText = soundName;
-        switchView('feed');
-        document.getElementById('open-upload').click();
-        document.getElementById('upload-modal').classList.add('show');
-    };
-
-    if (soundsUnsubscribe) soundsUnsubscribe();
-    soundsUnsubscribe = onSnapshot(query(collection(db, "videos"), where("soundId", "==", soundId), orderBy("timestamp", "desc")), (snapshot) => {
-        const grid = document.getElementById('sound-grid');
-        grid.innerHTML = '';
-        let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
-        let count = 0;
-        let firstAuthor = "";
-        snapshot.forEach(docSnap => {
-            const v = docSnap.data();
-            if (!blocked.includes(v.authorUid)) {
-                count++;
-                if (count === 1) firstAuthor = v.authorUsername || v.authorName;
-                const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`;
-                const mediaTag = v.mediaType === 'images' ? `<img src="${previewSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<video src="${previewSrc}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`;
-                const icon = v.mediaType === 'images' ? 'fa-images' : 'fa-play';
-                grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${docSnap.id}')">${mediaTag}<div class="grid-views"><i class="fas ${icon}"></i> ${v.likedBy ? v.likedBy.length : 0}</div></div>`;
-            }
-        });
-        document.getElementById('sound-count').innerText = `${count} Video${count !== 1 ? 's' : ''}`;
-        if (firstAuthor) document.getElementById('sound-author').innerText = `@${firstAuthor}`;
-        else document.getElementById('sound-author').innerText = `Sound existiert nicht mehr`;
-        
-        if (count === 0) grid.innerHTML = '<div style="grid-column: span 3; text-align: center; margin-top: 50px; color: #555;">Noch keine Videos mit diesem Sound</div>';
+    const snap = await getDocs(collection(db, `live_streams/${currentUser.uid}/mods`));
+    if(snap.empty) modsList.innerHTML = '<p style="text-align:center; color:#555;">Keine Mods vorhanden.</p>';
+    snap.forEach(d => {
+        const modUid = d.id; const u = allKnownUsers.find(x => x.uid === modUid); if(!u) return;
+        modsList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:10px;"><div style="display:flex; align-items:center; gap:10px;"><img src="${u.photoURL}" style="width:30px; height:30px; border-radius:50%;"><span>@${u.username}</span></div><button class="profile-action-btn edit-btn" style="min-height:30px; padding:0 10px; font-size:12px; background:#ff4444;" onclick="removeLiveMod('${modUid}')">Entfernen</button></div>`;
     });
+
+    if(!currentUser.blockedUsers || currentUser.blockedUsers.length === 0) bansList.innerHTML = '<p style="text-align:center; color:#555;">Keine gebannten User.</p>';
+    else {
+        currentUser.blockedUsers.forEach(uid => {
+            const u = allKnownUsers.find(x => x.uid === uid); if(!u) return;
+            bansList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:10px;"><div style="display:flex; align-items:center; gap:10px;"><img src="${u.photoURL}" style="width:30px; height:30px; border-radius:50%;"><span>@${u.username}</span></div><button class="profile-action-btn edit-btn" style="min-height:30px; padding:0 10px; font-size:12px; background:#39ff14; color:black;" onclick="toggleBlockUser('${uid}')">Entbannen</button></div>`;
+        });
+    }
 };
 
-window.removeSelectedSound = function() {
-    window.selectedUploadSound = null;
-    document.getElementById('upload-sound-preview').style.display = 'none';
-    document.getElementById('upload-sound-name').innerText = '';
+window.removeLiveMod = async function(uid) {
+    if(!LiveManager.isBroadcaster) return;
+    await deleteDoc(doc(db, `live_streams/${currentUser.uid}/mods`, uid)); showToast("Mod entfernt."); loadModDashboard();
 };
 
-// === INITIATE APP START ===
-initLiveDatabase();
+document.getElementById('start-stream-action-btn')?.addEventListener('click', () => LiveManager.start());
+document.getElementById('open-mod-dashboard-btn')?.addEventListener('click', () => loadModDashboard());
+document.getElementById('send-live-chat-btn')?.addEventListener('click', async () => {
+    const input = document.getElementById('live-chat-input'); const text = input.value.trim(); if(!text || !LiveManager.streamId) return;
+    input.value = ''; await addDoc(collection(db, `live_streams/${LiveManager.streamId}/chat`), { uid: currentUser.uid, name: currentUser.displayName, pic: currentUser.photoURL, text: text, timestamp: Date.now() });
+});
+document.getElementById('live-chat-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-live-chat-btn').click(); });
 
-// Make PC Layout switch smoothly
-let currentMode = 'handy';
-let originalNav = document.querySelector('.app__bottom-nav');
-let appContainer = document.querySelector('.app');
-let pcSidebar = null;
-
-function createPCContainers() {
-    if(!document.getElementById('pc-nav-sidebar')) {
-        pcSidebar = document.createElement('div');
-        pcSidebar.id = 'pc-nav-sidebar';
-        pcSidebar.innerHTML = `<div class="logo-area"><img src="https://i.imgur.com/l1luc1q.png" class="app-logo" style="width:40px;height:40px;"> Phil Shorts</div>`;
-        appContainer.parentNode.insertBefore(pcSidebar, appContainer);
+window.selectedUploadSound = null;
+window.openSound = function(id, name, pic, url) {
+    switchView('sound');
+    document.getElementById('sound-name').innerText = name;
+    document.getElementById('sound-author').innerText = name.includes('-') ? "@" + name.split(' - ')[1].trim() : "@Originalton";
+    document.getElementById('sound-pic').src = pic;
+    
+    const grid = document.getElementById('sound-grid'); grid.innerHTML = '';
+    let vids = allVideosData.filter(v => v.soundId === id || v.id === id);
+    document.getElementById('sound-count').innerText = vids.length + " Videos";
+    
+    vids.forEach(v => {
+        const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`;
+        const mediaTag = v.mediaType === 'images' ? `<img src="${previewSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<video src="${previewSrc}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`;
+        grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')">${mediaTag}</div>`;
+    });
+    
+    if(url) {
+        window.currentSoundPreviewPlayer.src = url;
+        window.currentSoundPreviewPlayer.loop = true;
     }
+
+    const useBtn = document.getElementById('use-sound-btn');
+    useBtn.onclick = () => {
+        if(!currentUser) return showCustomAlert("Fehler", "Bitte einloggen.");
+        window.currentSoundPreviewPlayer.pause();
+        const icon = document.getElementById('sound-play-icon'); if(icon) icon.className = 'fas fa-play';
+        window.selectedUploadSound = { id: id, name: name, url: url };
+        document.getElementById('upload-sound-name').innerText = name;
+        document.getElementById('upload-sound-preview').style.display = 'flex';
+        switchView('feed'); document.getElementById('upload-modal').classList.add('show');
+    };
 }
 
-function restructureVideoForPC(videoEl) {
-    if(window.innerWidth <= 768) return;
-    const inner = videoEl.querySelector('.video-inner');
-    if(!inner || inner.classList.contains('pc-structured')) return;
-    
-    const videoWrapper = videoEl.querySelector('.video-wrapper');
-    const videoFooter = videoEl.querySelector('.video__footer');
-    const videoSidebar = videoEl.querySelector('.video__sidebar');
-    
-    const infoPanel = document.createElement('div');
-    infoPanel.className = 'pc-info-panel-container';
-    
-    if (videoFooter) infoPanel.appendChild(videoFooter);
-    if (videoSidebar) infoPanel.appendChild(videoSidebar);
-    
-    inner.appendChild(infoPanel);
-    inner.classList.add('pc-structured');
-}
-
-function rollBackVideoForHandy(videoEl) {
-    const inner = videoEl.querySelector('.video-inner');
-    if(!inner || !inner.classList.contains('pc-structured')) return;
-    inner.classList.remove('pc-structured');
-    
-    const infoPanel = inner.querySelector('.pc-info-panel-container');
-    if (infoPanel) {
-        const videoFooter = infoPanel.querySelector('.video__footer');
-        const videoSidebar = infoPanel.querySelector('.video__sidebar');
-        if (videoFooter) inner.appendChild(videoFooter);
-        if (videoSidebar) inner.appendChild(videoSidebar);
-        infoPanel.remove();
+document.getElementById('sound-play-btn')?.addEventListener('click', () => {
+    const icon = document.getElementById('sound-play-icon');
+    if(!window.currentSoundPreviewPlayer.src) return;
+    if(window.currentSoundPreviewPlayer.paused) {
+        window.currentSoundPreviewPlayer.play().catch(e=>{});
+        icon.className = 'fas fa-pause';
+    } else {
+        window.currentSoundPreviewPlayer.pause();
+        icon.className = 'fas fa-play';
     }
-}
+});
 
-function checkResponsiveMode() {
-    const isPC = window.innerWidth > 768;
-    if (isPC && currentMode !== 'pc') {
-        currentMode = 'pc';
-        createPCContainers();
-        if (originalNav) pcSidebar.appendChild(originalNav);
-        document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC);
-    } else if (!isPC && currentMode !== 'handy') {
-        currentMode = 'handy';
-        if (originalNav) appContainer.appendChild(originalNav);
-        if (pcSidebar) { pcSidebar.remove(); pcSidebar = null; }
-        document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy);
-    }
-}
+window.removeSelectedSound = function() { window.selectedUploadSound = null; document.getElementById('upload-sound-preview').style.display = 'none'; }
 
-checkResponsiveMode();
-window.addEventListener('resize', checkResponsiveMode);
-
-if (window.innerWidth > 768) {
-    const videoObserver2 = new MutationObserver(function(mutations) {
-        if (currentMode === 'pc') {
-            mutations.forEach(mutation => {
-                mutation.addedNodes.forEach(node => {
-                    if (node.classList && node.classList.contains('video')) {
-                        restructureVideoForPC(node);
-                    }
-                });
+document.getElementById('up-file')?.addEventListener('change', function(e) {
+    const files = e.target.files; 
+    const prevContainer = document.getElementById('upload-media-preview-container');
+    const vidPrev = document.getElementById('upload-video-preview');
+    const imgPrev = document.getElementById('upload-image-preview');
+    const audioControls = document.getElementById('upload-audio-controls');
+    const mainUploadBox = document.getElementById('main-file-upload-wrapper');
+    
+    if (!files || files.length === 0) return; 
+    
+    // 1. Vorschau & Controls ZWINGEND anzeigen, dicke Upload-Box verstecken
+    if(prevContainer) prevContainer.style.display = 'block';
+    if(audioControls) audioControls.style.display = 'block';
+    if(mainUploadBox) mainUploadBox.style.display = 'none'; 
+    
+    const file = files[0];
+    const fileUrl = URL.createObjectURL(file);
+    
+    // 2. Video oder Bild einladen
+    if (file.type.startsWith('video/')) { 
+        if(imgPrev) imgPrev.style.display = 'none';
+        if(vidPrev) {
+            vidPrev.style.display = 'block';
+            vidPrev.src = fileUrl;
+            
+            // Einstellungen anwenden
+            const volSlider = document.getElementById('up-volume-slider');
+            const muteToggle = document.getElementById('up-mute-original-toggle');
+            vidPrev.volume = volSlider ? parseFloat(volSlider.value) : 1;
+            vidPrev.muted = muteToggle ? muteToggle.checked : false;
+            
+            // Abspielen erzwingen (Muted falls Autoplay blockiert)
+            vidPrev.play().catch(err => {
+                vidPrev.muted = true; 
+                vidPrev.play();
             });
         }
-    });
-    const videoContainer = document.getElementById('video-container');
-    if (videoContainer) videoObserver2.observe(videoContainer, { childList: true });
+    } 
+    else { 
+        if(vidPrev) { vidPrev.style.display = 'none'; vidPrev.pause(); vidPrev.src = ''; }
+        if(imgPrev) { imgPrev.style.display = 'block'; imgPrev.src = fileUrl; }
+    }
+});
+
+document.getElementById('up-custom-audio-file')?.addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if(file) {
+        window.customUploadAudioFile = file;
+        window.uploadCustomAudioPlayer.src = URL.createObjectURL(file);
+        window.uploadCustomAudioPlayer.loop = true;
+        window.uploadCustomAudioPlayer.volume = document.getElementById('up-volume-slider') ? parseFloat(document.getElementById('up-volume-slider').value) : 1;
+        
+        document.getElementById('custom-audio-name').style.display = 'block';
+        document.getElementById('custom-audio-name-text').innerText = file.name;
+        document.getElementById('up-remove-audio-btn').style.display = 'block';
+        
+        const vidPrev = document.getElementById('upload-video-preview');
+        if(vidPrev && vidPrev.style.display === 'block' && !vidPrev.paused) {
+            window.uploadCustomAudioPlayer.play().catch(e=>{});
+        } else if(document.getElementById('upload-image-preview')?.style.display === 'block') {
+            window.uploadCustomAudioPlayer.play().catch(e=>{});
+        }
+    }
+});
+
+document.getElementById('up-remove-audio-btn')?.addEventListener('click', () => {
+    window.customUploadAudioFile = null;
+    window.uploadCustomAudioPlayer.pause();
+    window.uploadCustomAudioPlayer.src = '';
+    document.getElementById('up-custom-audio-file').value = '';
+    document.getElementById('custom-audio-name').style.display = 'none';
+    document.getElementById('up-remove-audio-btn').style.display = 'none';
+});
+
+document.getElementById('up-volume-slider')?.addEventListener('input', (e) => {
+    const vol = parseFloat(e.target.value);
+    const vidPrev = document.getElementById('upload-video-preview');
+    if(vidPrev) vidPrev.volume = vol;
+    window.uploadCustomAudioPlayer.volume = vol;
+});
+
+document.getElementById('up-mute-original-toggle')?.addEventListener('change', (e) => {
+    const vidPrev = document.getElementById('upload-video-preview');
+    if(vidPrev) vidPrev.muted = e.target.checked;
+});
+
+const vPrev = document.getElementById('upload-video-preview');
+if(vPrev) {
+    vPrev.addEventListener('play', () => { if(window.customUploadAudioFile) window.uploadCustomAudioPlayer.play().catch(e=>{}); });
+    vPrev.addEventListener('pause', () => { window.uploadCustomAudioPlayer.pause(); });
+    vPrev.addEventListener('seeked', () => { if(window.customUploadAudioFile && window.uploadCustomAudioPlayer.duration) window.uploadCustomAudioPlayer.currentTime = vPrev.currentTime % window.uploadCustomAudioPlayer.duration || 0; });
 }
 
+document.getElementById('close-upload')?.addEventListener('click', () => {
+    if(vPrev) { vPrev.pause(); vPrev.src = ''; }
+    window.uploadCustomAudioPlayer.pause(); window.uploadCustomAudioPlayer.src = '';
+    window.customUploadAudioFile = null;
+    document.getElementById('up-custom-audio-file').value = '';
+    document.getElementById('up-file').value = '';
+    document.getElementById('main-file-upload-wrapper').style.display = 'block';
+    document.getElementById('upload-media-preview-container').style.display = 'none';
+    document.getElementById('upload-audio-controls').style.display = 'none';
+    document.getElementById('custom-audio-name').style.display = 'none';
+    document.getElementById('up-remove-audio-btn').style.display = 'none';
+    document.getElementById('upload-modal').classList.remove('show');
+});
+
+document.getElementById('submit-upload')?.addEventListener('click', async() => {
+    const files = document.getElementById('up-file').files; const titleInput = document.getElementById('up-title'); const descInput = document.getElementById('up-desc');
+    const titleVal = titleInput ? titleInput.value.trim() : ""; const desc = descInput ? descInput.value.trim() : "";
+    if (!files || files.length === 0) return showCustomAlert("Fehlende Daten", "Bitte wähle mindestens eine Datei aus.");
+    if (!titleVal || !desc) return showCustomAlert("Fehlende Daten", "Bitte gib einen Titel UND eine Beschreibung ein.");
+    
+    let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
+    for(let i=0; i<files.length; i++) { if(files[i].size > maxSize) return showCustomAlert("Zu groß", `Dateien dürfen maximal ${limitText} MB groß sein!`); }
+    
+    const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); 
+    btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
+    
+    const isSeries = document.getElementById('up-series-toggle') ? document.getElementById('up-series-toggle').checked : false;
+    const isMuted = document.getElementById('up-mute-original-toggle')?.checked || false;
+    const postVol = document.getElementById('up-volume-slider') ? parseFloat(document.getElementById('up-volume-slider').value) : 1;
+    
+    try {
+        const isVideo = files[0].type.startsWith('video/');
+        let uploadObj = { 
+            authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
+            title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now(),
+            muteOriginal: isMuted, postVolume: postVol
+        };
+
+        if(window.customUploadAudioFile) {
+            status.innerText = "Lade Audio hoch...";
+            const audioUrl = await uploadFileToFirebase(window.customUploadAudioFile, 'sounds');
+            uploadObj.soundId = "custom_" + Date.now();
+            uploadObj.soundName = "Originalton - " + currentUser.displayName;
+            uploadObj.soundUrl = audioUrl;
+        } else if(window.selectedUploadSound) {
+            uploadObj.soundId = window.selectedUploadSound.id;
+            uploadObj.soundName = window.selectedUploadSound.name;
+            uploadObj.soundUrl = window.selectedUploadSound.url;
+        }
+        
+        if(isSeries) uploadObj.seriesId = "series_" + currentUser.uid + "_" + Date.now();
+        awardXP(20);
+
+        status.innerText = "Lade Video hoch...";
+        if (isVideo) {
+            const finalUrl = await uploadFileToFirebase(files[0], 'videos');
+            await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, ...uploadObj });
+        } else {
+            let uploadedUrls = [];
+            for(let i=0; i<files.length; i++) { const secure_url = await uploadFileToFirebase(files[i], 'images'); uploadedUrls.push(secure_url); }
+            await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, ...uploadObj });
+        }
+        
+        showToast("Erfolgreich veröffentlicht! 🎉"); 
+        document.getElementById('close-upload').click(); 
+        if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
+        if(document.getElementById('up-series-toggle')) document.getElementById('up-series-toggle').checked = false;
+        window.removeSelectedSound();
+    } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
+});
+
+document.getElementById('open-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
+document.getElementById('close-comments')?.addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
+
+// =======================================================
+// HIER BEGINNT DEIN ALTER CODE WIEDER:
 function initResponsiveLayout() {
-    checkResponsiveMode();
+    const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;
+    function createPCContainers() { if (!pcSidebar) { pcSidebar = document.createElement('div'); pcSidebar.id = 'pc-nav-sidebar'; pcSidebar.innerHTML = `<div class="logo-area"><img src="https://i.imgur.com/JDPRzCc.png" class="app-logo" alt="Logo">Phil Shorts</div>`; appContainer.prepend(pcSidebar); } }
+    function restructureVideoForPC(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; let infoPanel = inner.querySelector('.pc-info-panel-container'); if (!infoPanel) { infoPanel = document.createElement('div'); infoPanel.className = 'pc-info-panel-container'; inner.appendChild(infoPanel); const videoFooter = inner.querySelector('.video__footer'); const videoSidebar = inner.querySelector('.video__sidebar'); if (videoFooter) infoPanel.appendChild(videoFooter); if (videoSidebar) infoPanel.appendChild(videoSidebar);
+        } }
+    function rollBackVideoForHandy(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; const infoPanel = inner.querySelector('.pc-info-panel-container'); if (infoPanel) { const videoFooter = infoPanel.querySelector('.video__footer'); const videoSidebar = infoPanel.querySelector('.video__sidebar'); if (videoFooter) inner.appendChild(videoFooter); if (videoSidebar) inner.appendChild(videoSidebar); infoPanel.remove(); } }
+    function checkResponsiveMode() { const isPC = window.innerWidth > 768; if (isPC && currentMode !== 'pc') { currentMode = 'pc'; createPCContainers(); if (originalNav) pcSidebar.appendChild(originalNav); document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC); } else if (!isPC && currentMode !== 'handy') { currentMode = 'handy'; if (originalNav) appContainer.appendChild(originalNav); if (pcSidebar) { pcSidebar.remove(); pcSidebar = null; } document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy); } }
+    checkResponsiveMode(); window.addEventListener('resize', checkResponsiveMode);
+    if (window.innerWidth > 768) { const videoObserver2 = new MutationObserver(function(mutations) { if (currentMode === 'pc') mutations.forEach(mutation => mutation.addedNodes.forEach(node => { if (node.classList && node.classList.contains('video')) restructureVideoForPC(node); })); }); const videoContainer = document.getElementById('video-container'); if (videoContainer) videoObserver2.observe(videoContainer, { childList: true }); }
 }
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initResponsiveLayout);
-} else {
-    initResponsiveLayout();
-}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
