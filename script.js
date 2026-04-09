@@ -757,38 +757,43 @@ window.onload = async function() {
         }, 'image/jpeg', 0.9);
     });
 
-    // === NEU: MEDIA UPLOAD & AUDIO LOGIK (verbessert) ===
+    // === NEU: MEDIA UPLOAD & AUDIO LOGIK (erzwungene Vorschau + Fallback) ===
     document.getElementById('up-file')?.addEventListener('change', function(e) {
         const files = e.target.files; 
         const prevContainer = document.getElementById('upload-media-preview-container');
         const vidPrev = document.getElementById('upload-video-preview');
         const imgPrev = document.getElementById('upload-image-preview');
         const audioControls = document.getElementById('upload-audio-controls');
+        const mainUploadBox = document.getElementById('main-file-upload-wrapper');
         
         if (!files || files.length === 0) return; 
         
-        // 1. Vorschau & Controls zwingend anzeigen, Upload-Box verstecken
+        // 1. Vorschau & Controls ZWINGEND anzeigen, dicke Upload-Box verstecken
         if(prevContainer) prevContainer.style.display = 'block';
         if(audioControls) audioControls.style.display = 'block';
-        document.getElementById('main-file-upload-wrapper').style.display = 'none'; 
+        if(mainUploadBox) mainUploadBox.style.display = 'none'; 
         
         const file = files[0];
         const fileUrl = URL.createObjectURL(file);
         
-        // 2. Video oder Bild in die Vorschau laden
+        // 2. Video oder Bild einladen
         if (file.type.startsWith('video/')) { 
             if(imgPrev) imgPrev.style.display = 'none';
             if(vidPrev) {
                 vidPrev.style.display = 'block';
                 vidPrev.src = fileUrl;
                 
-                // Sound-Einstellungen anwenden
+                // Einstellungen anwenden
                 const volSlider = document.getElementById('up-volume-slider');
                 const muteToggle = document.getElementById('up-mute-original-toggle');
                 vidPrev.volume = volSlider ? parseFloat(volSlider.value) : 1;
                 vidPrev.muted = muteToggle ? muteToggle.checked : false;
                 
-                vidPrev.play().catch(e=>{ console.log("Autoplay blockiert"); });
+                // Abspielen erzwingen (Muted falls Autoplay blockiert)
+                vidPrev.play().catch(err => {
+                    vidPrev.muted = true; 
+                    vidPrev.play().catch(()=>{});
+                });
             }
         } 
         else { 
