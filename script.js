@@ -1025,6 +1025,40 @@ window.onload = async function() {
     });
 };
 
+window.updateAccountSecurity = async function() {
+    const newEmail = document.getElementById('settings-email-input').value.trim();
+    const pass = document.getElementById('settings-pass-input').value;
+    const confirmPass = document.getElementById('settings-pass-confirm').value;
+
+    if (!newEmail && !pass) return showToast("Keine Änderungen eingetragen.");
+
+    let updates = {};
+
+    if (newEmail) {
+        if (!newEmail.includes('@')) return showCustomAlert("Fehler", "Ungültige E-Mail Adresse.");
+        updates.email = newEmail;
+    }
+
+    if (pass) {
+        if (pass.length < 6) return showCustomAlert("Fehler", "Passwort muss mind. 6 Zeichen haben.");
+        if (pass !== confirmPass) return showCustomAlert("Fehler", "Passwörter stimmen nicht überein.");
+        updates.appPassword = pass;
+    }
+
+    try {
+        await updateDoc(doc(db, "users", currentUser.uid), updates);
+        currentUser = { ...currentUser, ...updates };
+        localStorage.setItem('phil_session', JSON.stringify(currentUser));
+        showToast("Sicherheitsdaten aktualisiert! 🛡️");
+        
+        document.getElementById('settings-email-input').value = "";
+        document.getElementById('settings-pass-input').value = "";
+        document.getElementById('settings-pass-confirm').value = "";
+    } catch (e) {
+        showCustomAlert("Fehler", "Daten konnten nicht gespeichert werden.");
+    }
+};
+
 document.getElementById('logout-btn')?.addEventListener('click', () => { localStorage.removeItem('phil_session');
     window.location.reload(); });
 
@@ -1161,7 +1195,17 @@ function initLiveDatabase() {
                 }
                 if (change.type === "removed") { const vidEl = document.querySelector(`.video[data-id="${vData.id}"]`); if (vidEl) vidEl.remove(); }
             });
-            if (document.getElementById('view-profile').classList.contains('active')) { const currentProfileUid = document.getElementById('profile-action-btn').dataset.uid; if (currentProfileUid) window.renderProfileGrid(currentProfileUid); }
+            // HIER IST DER FLICKER-FIX:
+            if (document.getElementById('view-profile').classList.contains('active')) { 
+                const currentProfileUid = document.getElementById('profile-action-btn').dataset.uid; 
+                if (currentProfileUid) {
+                    const grid = document.getElementById('profile-grid');
+                    if (grid.dataset.lastUid !== currentProfileUid || grid.innerHTML === "" || grid.innerHTML.includes('loading-screen')) {
+                        grid.dataset.lastUid = currentProfileUid;
+                        window.renderProfileGrid(currentProfileUid);
+                    }
+                }
+            }
         }
     }, (error) => { document.getElementById('video-container').innerHTML = '<div class="empty-state"><h3>Netzwerkfehler</h3></div>'; });
 }
@@ -1209,12 +1253,11 @@ window.updateGlobalVolumeUI = function() {
         const v = container.querySelector('.video__player');
         const muteBtn = container.querySelector('.mute-btn');
         const volumeSlider = container.querySelector('.volume-slider');
-        if (!muteBtn || !volumeSlider) return; // Fotomodus hat vllt keinen muteBtn etc
+        if (!muteBtn || !volumeSlider) return; 
         
         const vidId = container.closest('.video').dataset.id;
         const vData = allVideosData.find(x => x.id === vidId);
         
-        // --- ANPASSUNG FÜR BILDER/VIDEOS SYNC ---
         const audioEl = container.closest('.video').audioEl;
         
         if (v) {
@@ -1354,7 +1397,6 @@ function createVideoElement(video) {
             </div>
         </div>`;
 
-    // --- PERSISTENTER SOUND SYNC ---
     if (video.soundUrl) {
         const audioEl = new Audio(video.soundUrl);
         audioEl.loop = true;
@@ -1377,9 +1419,7 @@ function createVideoElement(video) {
             v.addEventListener('play', startSyncPlayback);
             v.addEventListener('pause', () => audioEl.pause());
             v.addEventListener('seeking', () => audioEl.currentTime = (video.soundOffset || 0) + v.currentTime);
-        } else {
-            // Fotomodus: Musik startet bei Sichtbarkeit (über Observer angesteuert)
-        }
+        } 
     } else {
         const v = div.querySelector('.video__player');
         if(v) {
@@ -1483,7 +1523,7 @@ const videoObserver = new IntersectionObserver(entries => {
             } else if (el.audioEl) {
                 // FOTO MODUS SOUND
                 el.audioEl.currentTime = el.audioEl.dataset.offset || 0;
-                el.audioEl.play().catch(e=>{});
+                el.audioEl.play().catch(err=>{});
                 const soundWrap = el.querySelector('.sound-disc-wrap');
                 if(soundWrap) soundWrap.classList.add('is-playing');
             }
@@ -1937,7 +1977,13 @@ window.openProfile = async function(targetUid) {
         profileUserStories = (targetUser.stories || []).filter(s => (Date.now() - s.timestamp) < storyDuration); 
         const picContainer = document.getElementById('profile-pic-container'); const storyBadge = document.getElementById('story-badge');
         if(profileUserStories.length > 0) { picContainer.classList.add('story-ring'); storyBadge.style.display = 'none'; } else { picContainer.classList.remove('story-ring'); if(currentUser && targetUid === currentUser.uid) storyBadge.style.display = 'flex'; else storyBadge.style.display = 'none'; }
-        window.renderProfileGrid(targetUid);
+        
+        // FIX: Nur neu rendern wenn sich der Tab geändert hat (verhindert Flackern)
+        const grid = document.getElementById('profile-grid');
+        if (grid.dataset.lastUid !== targetUid || grid.innerHTML === "" || grid.innerHTML.includes('loading-screen')) {
+            grid.dataset.lastUid = targetUid;
+            window.renderProfileGrid(targetUid);
+        }
         updateProfileGamificationUI();
     });
     if (currentUser && targetUid !== currentUser.uid && !checkPhilPlusStatus(3)) updateDoc(doc(db, "users", targetUid), { profileViews: increment(1) }).catch(e => {}); 
@@ -2179,7 +2225,7 @@ window.loadAdminDashboard = async function() {
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <div><strong style="color:white; font-size:14px;">${r.title}</strong><p style="font-size:11px; color:#888;">Von: ${r.senderName}</p></div>
                         <div style="display:flex; gap:8px;">
-                            <button class="admin-btn btn-blue" onclick="previewSound('${r.url}', this)"><i class="fas fa-play"></i></button>
+                            <button class="admin-btn btn-blue" onclick="previewLibSound('${r.url}', this)"><i class="fas fa-play"></i></button>
                             <button class="admin-btn btn-green" onclick="approveSound('${d.id}')">Freigeben</button>
                         </div>
                     </div></div>`;

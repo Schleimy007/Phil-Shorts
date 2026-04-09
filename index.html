@@ -949,6 +949,20 @@
                 <h4>Einstellungen</h4><i class="fas fa-times close-modal" id="close-app-settings"></i>
             </div>
             <div class="modal-body">
+                
+                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
+                    <h5 style="margin-bottom: 15px; color: #ffd700;"><i class="fas fa-user-shield"></i> Konto & Sicherheit</h5>
+                    
+                    <label style="color:#888; font-size:12px; margin-left:5px;">E-Mail Adresse ändern</label>
+                    <input type="email" id="settings-email-input" class="comment-input" style="width: 100%; margin-bottom: 15px;" placeholder="neue-email@beispiel.de">
+
+                    <label style="color:#888; font-size:12px; margin-left:5px;">App-Passwort / PIN vergeben</label>
+                    <input type="password" id="settings-pass-input" class="comment-input" style="width: 100%; margin-bottom: 10px;" placeholder="Neues Passwort">
+                    <input type="password" id="settings-pass-confirm" class="comment-input" style="width: 100%; margin-bottom: 15px;" placeholder="Passwort bestätigen">
+                    
+                    <button class="profile-action-btn" onclick="updateAccountSecurity()" style="width: 100%; background: #222; border: 1px solid #ffd700; color: #ffd700; min-height: 40px; font-size: 13px;">Konto-Daten aktualisieren</button>
+                </div>
+
                 <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
                     <h5 style="margin-bottom: 15px; color: #ff0050;"><i class="fas fa-lock"></i> Privatsphäre</h5>
                     <label style="color:#888; font-size:12px; margin-left:5px;">Wer darf dir Nachrichten (DMs) senden?</label>
@@ -1070,14 +1084,17 @@
                     </div>
                     <label style="color:#888; font-size:12px;">Farbe 1</label>
                     <input type="color" id="cb-color1" value="#ff0050" style="width: 100%; height: 40px; border-radius: 10px; margin-bottom: 15px; cursor: pointer; border:none;">
+
                     <div class="setting-toggle-row" style="margin-bottom: 15px;">
                         <span>Gradient (Verlauf) aktivieren</span>
                         <label class="switch"><input type="checkbox" id="cb-grad-toggle"><span class="slider round"></span></label>
                     </div>
+
                     <div id="cb-color2-container" style="display:none;">
                         <label style="color:#888; font-size:12px;">Farbe 2</label>
                         <input type="color" id="cb-color2" value="#00f2fe" style="width: 100%; height: 40px; border-radius: 10px; margin-bottom: 15px; cursor: pointer; border:none;">
                     </div>
+
                     <button class="profile-action-btn" onclick="saveCustomBorder()" style="width: 100%; background: #ffd700; color: black; margin-top: 10px;">Speichern & Ausrüsten</button>
                 </div>
             </div>
@@ -1170,5 +1187,4 @@
     </div>
     <script type="module" src="script.js"></script>
 </body>
-
 </html>
