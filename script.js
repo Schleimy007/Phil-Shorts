@@ -28,29 +28,22 @@ let currentUser = JSON.parse(localStorage.getItem('phil_session'));
 if (currentUser) currentUser.verified = false;
 let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || { master: false, comments: true, likes: true, dms: true, follows: true };
 
-window.currentSoundPreviewPlayer = new Audio();
 window.editingProfileUid = null;
 window.globalMuted = false;
 window.globalVolume = 1;
 
-// NEU: Globale Cache-Variable für Embeds (gegen Lags)
+// Globale Cache-Variable für Embeds (gegen Lags)
 window.linkPreviewCache = window.linkPreviewCache || {};
 let cropperInstance = null;
-
-// NEU: Globale Variablen für Audio Upload
-window.uploadCustomAudioPlayer = new Audio();
-window.customUploadAudioFile = null;
 
 // Algorithmus Live-Session Tracker
 let sessionInterests = {};
 let creatorAffinities = {};
 
 // === GLOBALE SOUND-VARIABLEN ===
-let selectedLibrarySound = null; // Speichert den gewählten Song
-let soundPreviewPlayer = new Audio(); // Player für die Bibliotheks-Vorschau
-let soundRequestFile = null; // Die hochgeladene MP3 für Admins
-let adminSoundsUnsub = null;
-let officialSoundsCache = [];
+window.selectedLibrarySound = null; 
+window.soundPreviewPlayer = new Audio();
+window.soundRequestFile = null;
 
 if (!document.getElementById('dynamic-live-styles')) {
     const style = document.createElement('style');
@@ -70,12 +63,13 @@ window.switchSoundTab = function(tabId) {
     document.querySelectorAll('.sound-tab-content').forEach(c => c.style.display = 'none');
     document.querySelectorAll('#sound-library-modal .shop-tab').forEach(t => t.classList.remove('active'));
     document.getElementById(tabId).style.display = 'block';
-    event.target.classList.add('active');
-    if (tabId === 'lib-discover') loadOfficialLibrary();
-    if (tabId === 'lib-trends') loadCommunityTrends();
+    if(event) event.target.classList.add('active');
+    
+    if (tabId === 'lib-discover') window.loadOfficialSounds();
+    if (tabId === 'lib-trends') window.loadCommunitySounds();
 };
 
-async function loadOfficialLibrary() {
+window.loadOfficialSounds = async function() {
     const list = document.getElementById('official-sounds-list');
     list.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
     const snap = await getDocs(query(collection(db, "official_sounds"), orderBy("timestamp", "desc")));
@@ -85,39 +79,69 @@ async function loadOfficialLibrary() {
         const s = docSnap.data();
         list.innerHTML += createSoundItemHTML(docSnap.id, s.title, s.url, "Phil Shorts Music", "https://i.imgur.com/JDPRzCc.png");
     });
-}
+};
 
-function loadCommunityTrends() {
+window.loadCommunitySounds = function() {
     const list = document.getElementById('community-sounds-list');
     list.innerHTML = '';
     const trends = [];
     allVideosData.forEach(v => {
         if (v.soundUrl && !trends.find(t => t.url === v.soundUrl)) {
-            trends.push({ id: v.id, title: v.soundName || "Originalton", url: v.url, author: v.authorName, pic: v.authorPic });
+            trends.push({ id: v.id, title: v.soundName || "Originalton", url: v.soundUrl, author: v.authorName, pic: v.authorPic });
         }
     });
-    if (trends.length === 0) list.innerHTML = '<p style="color:#555; text-align:center;">Noch keine Trends.</p>';
+    if (trends.length === 0) { list.innerHTML = '<p style="color:#555; text-align:center;">Noch keine Trends.</p>'; return; }
     trends.forEach(t => { list.innerHTML += createSoundItemHTML(t.id, t.title, t.url, t.author, t.pic); });
-}
+};
 
 function createSoundItemHTML(id, title, url, author, pic) {
     const safeTitle = title.replace(/'/g, "\\'");
-    return `<div class="sound-item"><img src="${pic}"><div class="sound-info"><strong>${title}</strong><span>${author}</span></div>
-            <div style="display:flex; gap:10px;">
-                <button class="chat-send-btn" style="background:#222; width:35px; height:35px;" onclick="previewSound('${url}', this)"><i class="fas fa-play"></i></button>
-                <button class="chat-send-btn" style="width:35px; height:35px;" onclick="selectSoundForUpload('${id}', '${safeTitle}', '${url}')"><i class="fas fa-check"></i></button>
-            </div></div>`;
+    return `<div class="sound-item-card">
+                <img src="${pic || 'https://i.imgur.com/JDPRzCc.png'}">
+                <div class="sound-item-info"><strong>${title}</strong><span>${author}</span></div>
+                <div class="sound-item-btns">
+                    <button class="sound-lib-play" onclick="previewLibSound('${url}', this)"><i class="fas fa-play"></i></button>
+                    <button class="sound-lib-use" onclick="selectSoundForUpload('${id}', '${safeTitle}', '${url}')">Wählen</button>
+                </div>
+            </div>`;
 }
 
-window.previewSound = function(url, btn) {
-    if (!soundPreviewPlayer.paused && soundPreviewPlayer.src === url) {
-        soundPreviewPlayer.pause();
+window.previewLibSound = function(url, btn) {
+    if (!window.soundPreviewPlayer.paused && window.soundPreviewPlayer.src === url) {
+        window.soundPreviewPlayer.pause();
         btn.innerHTML = '<i class="fas fa-play"></i>';
     } else {
-        soundPreviewPlayer.src = url;
-        soundPreviewPlayer.play();
+        document.querySelectorAll('.sound-lib-play').forEach(b => b.innerHTML = '<i class="fas fa-play"></i>');
+        window.soundPreviewPlayer.src = url;
+        window.soundPreviewPlayer.play();
         btn.innerHTML = '<i class="fas fa-pause"></i>';
     }
+};
+
+window.selectSoundForUpload = function(id, name, url) {
+    window.selectedLibrarySound = { id, name, url, offset: 0 };
+    window.soundPreviewPlayer.pause();
+    document.getElementById('sound-library-modal').classList.remove('show');
+    
+    // UI Update im Upload Modal
+    document.getElementById('upload-music-system').style.display = 'block';
+    document.getElementById('selected-sound-editor').style.display = 'block';
+    document.getElementById('active-sound-name').innerText = name;
+    document.getElementById('open-sound-library-btn').innerHTML = '<i class="fas fa-search"></i> Sound ändern';
+    
+    // Standard Audio Balance (Musik Fokus)
+    const vidVol = document.getElementById('up-video-vol');
+    if(vidVol) vidVol.value = 0.2; 
+    
+    showToast("Musik hinzugefügt! 🎵");
+};
+
+window.removeSelectedMusic = function() {
+    window.selectedLibrarySound = null;
+    document.getElementById('selected-sound-editor').style.display = 'none';
+    document.getElementById('open-sound-library-btn').innerHTML = '<i class="fas fa-search"></i> Sound aus Bibliothek wählen';
+    const muteToggle = document.getElementById('up-mute-original-toggle');
+    if(muteToggle) muteToggle.checked = false;
 };
 
 // === MICRO-INTERACTIONS & GAMIFICATION ===
@@ -278,10 +302,8 @@ let isInitialLoad = true;
 let sortedFeed = [];
 const viewedVideos = new Set();
 
-// BLACKSCREEN BUGFIX: Die initLiveStreamsList() Funktion gibt es hier nicht mehr direkt als Funktionsobjekt,
-// daher binden wir sie so ein, dass sie keinen Error mehr wirft.
 window.switchView = function(viewId) {
-    if (viewId !== 'sound' && window.currentSoundPreviewPlayer) { window.currentSoundPreviewPlayer.pause(); const icon = document.getElementById('sound-play-icon'); if (icon) icon.className = 'fas fa-play'; }
+    if (viewId !== 'sound' && window.soundPreviewPlayer) { window.soundPreviewPlayer.pause(); const icon = document.getElementById('sound-play-icon'); if (icon) icon.className = 'fas fa-play'; }
     
     document.querySelectorAll('.view').forEach(v => {
         v.classList.remove('active');
@@ -335,7 +357,7 @@ function getVerifiedBadge(isVerif) { return isVerif ? '<i class="fas fa-check-ci
 
 function timeAgo(timestamp) { const now = Date.now(); const diff = now - Number(timestamp); const minutes = Math.floor(diff / 60000); const hours = Math.floor(minutes / 60); const days = Math.floor(hours / 24); if (minutes < 1) return 'gerade eben'; if (minutes < 60) return `vor ${minutes} Min.`; if (hours < 24) return `vor ${hours} Std.`; if (days < 7) return `vor ${days} T.`; return new Date(Number(timestamp)).toLocaleDateString('de-DE'); }
 
-// === NEU: OPTIMIERTE DISCORD STYLE EMBEDS OHNE LAGS ===
+// === OPTIMIERTE DISCORD STYLE EMBEDS OHNE LAGS ===
 
 window.processEmbeds = async function() {
     const placeholders = document.querySelectorAll('.embed-placeholder[data-url]');
@@ -824,30 +846,26 @@ window.onload = async function() {
         const prevContainer = document.getElementById('upload-media-preview-container');
         const vidPrev = document.getElementById('upload-video-preview');
         const imgPrev = document.getElementById('upload-image-preview');
-        const audioControls = document.getElementById('upload-audio-controls');
-        const mainUploadBox = document.getElementById('main-file-upload-wrapper');
+        const musicSystem = document.getElementById('upload-music-system');
         const fileText = document.getElementById('up-file-text');
         
         if (!files || files.length === 0) return; 
         
-        // 1. Vorschau & Controls ZWINGEND anzeigen, Upload-Box bleibt OBEN da
-        if(prevContainer) prevContainer.style.display = 'block';
-        if(audioControls) audioControls.style.display = 'block';
-        if(mainUploadBox) mainUploadBox.style.display = 'block'; 
+        if(prevContainer) prevContainer.style.display = 'flex';
+        if(musicSystem) musicSystem.style.display = 'block'; 
         
         if (fileText) fileText.innerText = files.length === 1 ? files[0].name + " (Klicken zum Ändern)" : files.length + " Dateien ausgewählt";
 
         const file = files[0];
         const fileUrl = URL.createObjectURL(file);
         
-        // 2. Video oder Bild in die Live-Vorschau laden
         if (file.type.startsWith('video/')) { 
             if(imgPrev) imgPrev.style.display = 'none';
             if(vidPrev) {
                 vidPrev.style.display = 'block';
                 vidPrev.src = fileUrl;
                 
-                const volSlider = document.getElementById('up-volume-slider');
+                const volSlider = document.getElementById('up-video-vol');
                 const muteToggle = document.getElementById('up-mute-original-toggle');
                 vidPrev.volume = volSlider ? parseFloat(volSlider.value) : 1;
                 vidPrev.muted = muteToggle ? muteToggle.checked : false;
@@ -864,41 +882,10 @@ window.onload = async function() {
         }
     });
 
-    document.getElementById('up-custom-audio-file')?.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if(file) {
-            window.customUploadAudioFile = file;
-            window.uploadCustomAudioPlayer.src = URL.createObjectURL(file);
-            window.uploadCustomAudioPlayer.loop = true;
-            window.uploadCustomAudioPlayer.volume = document.getElementById('up-volume-slider') ? parseFloat(document.getElementById('up-volume-slider').value) : 1;
-            
-            document.getElementById('custom-audio-name').style.display = 'block';
-            document.getElementById('custom-audio-name-text').innerText = file.name;
-            document.getElementById('up-remove-audio-btn').style.display = 'block';
-            
-            const vidPrev = document.getElementById('upload-video-preview');
-            if(vidPrev && vidPrev.style.display === 'block' && !vidPrev.paused) {
-                window.uploadCustomAudioPlayer.play().catch(e=>{});
-            } else if(document.getElementById('upload-image-preview')?.style.display === 'block') {
-                window.uploadCustomAudioPlayer.play().catch(e=>{});
-            }
-        }
-    });
-
-    document.getElementById('up-remove-audio-btn')?.addEventListener('click', () => {
-        window.customUploadAudioFile = null;
-        window.uploadCustomAudioPlayer.pause();
-        window.uploadCustomAudioPlayer.src = '';
-        document.getElementById('up-custom-audio-file').value = '';
-        document.getElementById('custom-audio-name').style.display = 'none';
-        document.getElementById('up-remove-audio-btn').style.display = 'none';
-    });
-
-    document.getElementById('up-volume-slider')?.addEventListener('input', (e) => {
+    document.getElementById('up-video-vol')?.addEventListener('input', (e) => {
         const vol = parseFloat(e.target.value);
         const vidPrev = document.getElementById('upload-video-preview');
         if(vidPrev) vidPrev.volume = vol;
-        window.uploadCustomAudioPlayer.volume = vol;
     });
 
     document.getElementById('up-mute-original-toggle')?.addEventListener('change', (e) => {
@@ -908,24 +895,19 @@ window.onload = async function() {
 
     const vPrev = document.getElementById('upload-video-preview');
     if(vPrev) {
-        vPrev.addEventListener('play', () => { if(window.customUploadAudioFile) window.uploadCustomAudioPlayer.play().catch(e=>{}); });
-        vPrev.addEventListener('pause', () => { window.uploadCustomAudioPlayer.pause(); });
-        vPrev.addEventListener('seeked', () => { if(window.customUploadAudioFile && window.uploadCustomAudioPlayer.duration) window.uploadCustomAudioPlayer.currentTime = vPrev.currentTime % window.uploadCustomAudioPlayer.duration || 0; });
+        vPrev.addEventListener('play', () => { if(window.selectedLibrarySound) window.soundPreviewPlayer.play().catch(e=>{}); });
+        vPrev.addEventListener('pause', () => { window.soundPreviewPlayer.pause(); });
+        vPrev.addEventListener('seeking', () => { if(window.selectedLibrarySound && window.soundPreviewPlayer.duration) window.soundPreviewPlayer.currentTime = (window.selectedLibrarySound.offset || 0) + vPrev.currentTime; });
     }
 
     document.getElementById('close-upload')?.addEventListener('click', () => {
         if(vPrev) { vPrev.pause(); vPrev.src = ''; }
-        window.uploadCustomAudioPlayer.pause(); window.uploadCustomAudioPlayer.src = '';
-        window.customUploadAudioFile = null;
-        document.getElementById('up-custom-audio-file').value = '';
+        window.soundPreviewPlayer.pause(); window.soundPreviewPlayer.src = '';
+        window.removeSelectedMusic();
         document.getElementById('up-file').value = '';
         
-        // Reset Visuals
-        document.getElementById('main-file-upload-wrapper').style.display = 'block';
         document.getElementById('upload-media-preview-container').style.display = 'none';
-        document.getElementById('upload-audio-controls').style.display = 'none';
-        document.getElementById('custom-audio-name').style.display = 'none';
-        document.getElementById('up-remove-audio-btn').style.display = 'none';
+        document.getElementById('upload-music-system').style.display = 'none';
         document.getElementById('upload-modal').classList.remove('show');
         
         const fileText = document.getElementById('up-file-text');
@@ -946,37 +928,25 @@ window.onload = async function() {
         
         const isSeries = document.getElementById('up-series-toggle') ? document.getElementById('up-series-toggle').checked : false;
         const isMuted = document.getElementById('up-mute-original-toggle')?.checked || false;
-        const postVol = document.getElementById('up-volume-slider') ? parseFloat(document.getElementById('up-volume-slider').value) : 1;
         
         try {
             const isVideo = files[0].type.startsWith('video/');
             let uploadObj = { 
-                soundUrl: selectedLibrarySound ? selectedLibrarySound.url : null,
-                soundOffset: selectedLibrarySound ? selectedLibrarySound.offset : 0,
-                videoVolume: parseFloat(document.getElementById('video-volume-slider').value),
-                musicVolume: parseFloat(document.getElementById('music-volume-slider').value),
-                muteOriginal: document.getElementById('up-mute-original-toggle').checked,
+                soundUrl: window.selectedLibrarySound ? window.selectedLibrarySound.url : null,
+                soundOffset: window.selectedLibrarySound ? window.selectedLibrarySound.offset : 0,
+                videoVolume: parseFloat(document.getElementById('up-video-vol')?.value || 1),
+                musicVolume: parseFloat(document.getElementById('up-music-vol')?.value || 1),
+                muteOriginal: isMuted,
+                soundId: window.selectedLibrarySound ? window.selectedLibrarySound.id : "original",
+                soundName: window.selectedLibrarySound ? window.selectedLibrarySound.name : `Originalton - ${currentUser.displayName}`,
                 authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
-                title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now(),
-                muteOriginal: isMuted, postVolume: postVol
+                title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() 
             };
 
-            if(window.customUploadAudioFile) {
-                status.innerText = "Lade Audio hoch...";
-                const audioUrl = await uploadFileToFirebase(window.customUploadAudioFile, 'sounds');
-                uploadObj.soundId = "custom_" + Date.now();
-                uploadObj.soundName = "Originalton - " + currentUser.displayName;
-                uploadObj.soundUrl = audioUrl;
-            } else if(window.selectedUploadSound) {
-                uploadObj.soundId = window.selectedUploadSound.id;
-                uploadObj.soundName = window.selectedUploadSound.name;
-                uploadObj.soundUrl = window.selectedUploadSound.url;
-            }
-            
             if(isSeries) uploadObj.seriesId = "series_" + currentUser.uid + "_" + Date.now();
             awardXP(20);
 
-            status.innerText = "Lade Video hoch...";
+            status.innerText = "Verarbeite Media...";
             if (isVideo) {
                 const finalUrl = await uploadFileToFirebase(files[0], 'videos');
                 await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, ...uploadObj });
@@ -990,8 +960,46 @@ window.onload = async function() {
             document.getElementById('close-upload').click(); 
             if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
             if(document.getElementById('up-series-toggle')) document.getElementById('up-series-toggle').checked = false;
-            window.removeSelectedSound();
         } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
+    });
+
+    document.getElementById('open-sound-library-btn')?.addEventListener('click', () => {
+        document.getElementById('sound-library-modal').classList.add('show');
+        window.loadOfficialSounds();
+    });
+
+    document.getElementById('sound-offset-slider')?.addEventListener('input', (e) => {
+        const val = e.target.value;
+        document.getElementById('sound-start-time-display').innerText = val + ".0s";
+        if (window.selectedLibrarySound) window.selectedLibrarySound.offset = parseInt(val);
+        
+        window.soundPreviewPlayer.src = window.selectedLibrarySound.url;
+        window.soundPreviewPlayer.currentTime = parseInt(val);
+        window.soundPreviewPlayer.play().catch(e=>{});
+        setTimeout(() => window.soundPreviewPlayer.pause(), 1500);
+    });
+
+    document.getElementById('req-song-file')?.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if(file) {
+            window.soundRequestFile = file;
+            document.getElementById('req-file-status').innerText = "Datei: " + file.name;
+        }
+    });
+
+    document.getElementById('submit-sound-request')?.addEventListener('click', async () => {
+        const title = document.getElementById('req-song-title').value.trim();
+        if(!title || !window.soundRequestFile) return showToast("Bitte Titel und Datei angeben!");
+        const btn = document.getElementById('submit-sound-request'); btn.disabled = true; btn.innerText = "Lade hoch...";
+        try {
+            const url = await uploadFileToFirebase(window.soundRequestFile, 'sound_requests');
+            await addDoc(collection(db, "sound_requests"), { title, url, senderName: currentUser.displayName, senderUid: currentUser.uid, timestamp: Date.now() });
+            showToast("Anfrage gesendet! 👍");
+            document.getElementById('sound-library-modal').classList.remove('show');
+            window.soundRequestFile = null;
+            document.getElementById('req-file-status').innerText = "Keine Datei gewählt";
+            document.getElementById('req-song-title').value = '';
+        } catch(e) { showToast("Fehler!"); } finally { btn.disabled = false; btn.innerText = "Absenden"; }
     });
 };
 
@@ -1183,7 +1191,7 @@ window.updateGlobalVolumeUI = function() {
         
         const vidId = container.closest('.video').dataset.id;
         const vData = allVideosData.find(x => x.id === vidId);
-        const postVol = vData && vData.postVolume !== undefined ? vData.postVolume : 1;
+        const postVol = vData && vData.videoVolume !== undefined ? vData.videoVolume : 1;
         const origMuted = vData && vData.muteOriginal ? true : false;
 
         v.volume = window.globalVolume * postVol; 
@@ -1191,7 +1199,8 @@ window.updateGlobalVolumeUI = function() {
         
         const audioEl = container.closest('.video').audioEl;
         if(audioEl) { 
-            audioEl.volume = window.globalVolume * postVol; 
+            const musicVol = vData && vData.musicVolume !== undefined ? vData.musicVolume : 1;
+            audioEl.volume = window.globalVolume * musicVol; 
             audioEl.muted = window.globalMuted; 
         }
 
@@ -1296,31 +1305,35 @@ function createVideoElement(video) {
             </div>
         </div>`;
     
-    let postVol = video.postVolume !== undefined ? video.postVolume : 1;
-    let origMuted = video.muteOriginal ? true : false;
-
-if (video.soundUrl) {
+    // --- NEU: SYNCHRONES AUDIO PLAYBACK ---
+    if (video.soundUrl) {
         const audioEl = new Audio(video.soundUrl);
         audioEl.loop = true;
         div.audioEl = audioEl;
+
         const v = div.querySelector('.video__player');
         if (v) {
             v.addEventListener('play', () => {
                 audioEl.currentTime = (video.soundOffset || 0) + v.currentTime;
                 audioEl.volume = video.musicVolume !== undefined ? (window.globalVolume * video.musicVolume) : window.globalVolume;
                 audioEl.play().catch(e => {});
+                
                 v.volume = video.videoVolume !== undefined ? (window.globalVolume * video.videoVolume) : window.globalVolume;
                 if (video.muteOriginal) v.muted = true;
             });
+            
             v.addEventListener('pause', () => audioEl.pause());
-            v.addEventListener('seeking', () => { audioEl.currentTime = (video.soundOffset || 0) + v.currentTime; });
+            
+            v.addEventListener('seeking', () => {
+                audioEl.currentTime = (video.soundOffset || 0) + v.currentTime;
+            });
         }
     } else {
         const v = div.querySelector('.video__player');
         if(v) {
             v.addEventListener('play', () => {
-                v.volume = window.globalVolume * postVol;
-                v.muted = window.globalMuted || origMuted;
+                v.volume = window.globalVolume * (video.videoVolume !== undefined ? video.videoVolume : 1);
+                v.muted = window.globalMuted || (video.muteOriginal ? true : false);
             });
         }
     }
@@ -1483,7 +1496,6 @@ window.sendSpecificGift = async function(giftId, price, emoji, name) {
     }
 };
 
-// Lokaler Tracker für Loops pro Video in dieser Session
 let sessionViewData = {};
 
 function attachInteractionsToVideo(videoContainerEl) {
@@ -1541,7 +1553,6 @@ function attachInteractionsToVideo(videoContainerEl) {
             const prog = container.querySelector('.player-progress-filled'); 
             if(prog) prog.style.width = (v.currentTime / v.duration * 100) + '%'; 
 
-            // RETENTION TRACKING: 90% geschaut
             if(v.currentTime >= v.duration * 0.9 && !hasCompleted) {
                 hasCompleted = true;
                 if(targetVidData && targetVidData.authorUid) {
@@ -1549,7 +1560,6 @@ function attachInteractionsToVideo(videoContainerEl) {
                 }
                 updateDoc(doc(db, "videos", vidId), { completions: increment(1) }).catch(()=>{});
             }
-            // REWATCH TRACKING: Wieder am Anfang
             if(v.currentTime < v.duration * 0.5 && hasCompleted) {
                 hasCompleted = false;
                 updateDoc(doc(db, "videos", vidId), { rewatches: increment(1) }).catch(()=>{});
@@ -1594,7 +1604,6 @@ function attachInteractionsToVideo(videoContainerEl) {
             createParticles(rect.left + rect.width/2, rect.top + rect.height/2, document.body);
             btn.classList.add('micro-pop'); setTimeout(()=>btn.classList.remove('micro-pop'),300); awardXP(1); 
             
-            // SESSION INTERESTS TRACKING (Lernen aus Likes)
             if(targetVidData && targetVidData.description) {
                 let tags = targetVidData.description.toLowerCase().match(/#\w+/g) || [];
                 tags.forEach(tag => { sessionInterests[tag] = (sessionInterests[tag] || 0) + 1; });
@@ -2078,6 +2087,13 @@ window.adminEditProfile = function(uid) {
     document.getElementById('settings-modal').classList.add('show');
 };
 
+window.switchAdminTab = function(tabId) {
+    document.querySelectorAll('#view-admin .shop-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('#view-admin .admin-content-section').forEach(s => s.style.display = 'none');
+    document.querySelector(`#view-admin .shop-tab[onclick="switchAdminTab('${tabId}')"]`).classList.add('active');
+    document.getElementById(`admin-tab-${tabId}`).style.display = 'block';
+};
+
 window.loadAdminDashboard = async function() {
     if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return;
     const userList = document.getElementById('admin-user-list'); userList.innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i></div>';
@@ -2088,26 +2104,27 @@ window.loadAdminDashboard = async function() {
             if (u.email !== "schleimyverteilung@gmail.com") { actionsHtml = `<div class="admin-actions"><button class="admin-btn btn-gold" onclick="adminEditProfile('${u.uid}')">Profil Editieren</button><button class="admin-btn btn-blue" onclick="toggleVerifyAdmin('${u.uid}', ${u.verified || false})">${u.verified ? 'Haken weg' : 'Haken'}</button><button class="admin-btn btn-gold" onclick="giveCoins('${u.uid}')">+1000 Coins</button></div><div class="admin-actions" style="margin-top: 8px;"><button class="admin-btn ${u.isAdmin ? 'btn-red' : 'btn-green'}" onclick="toggleAdminRole('${u.uid}', ${u.isAdmin || false})">${u.isAdmin ? 'Admin weg' : 'Admin machen'}</button><button class="admin-btn ${u.banned ? 'btn-green' : 'btn-red'}" onclick="toggleBanStatus('${u.uid}', ${u.banned || false})">${u.banned ? 'Entbannen' : 'Bannen'}</button></div>`; }
             userList.innerHTML += `<div class="admin-user-card ${u.banned ? 'banned-card' : ''}"><div class="admin-user-header" onclick="openProfile('${u.uid}')" style="cursor:pointer;"><img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}"><div style="flex:1; min-width:0;"><strong style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;">@${u.displayName} ${isVerif}${isAdminBadge}${isBannedBadge}</strong><div style="font-size:11px; color:#888;">${u.email} | Coins: ${u.coins || 0}</div></div></div>${actionsHtml}</div>`;
         });
+
+        // Admin Sound Requests Laden
+        const soundList = document.getElementById('admin-sound-requests-list');
+        onSnapshot(collection(db, "sound_requests"), (snap) => {
+            soundList.innerHTML = '';
+            if (snap.empty) { soundList.innerHTML = '<p style="color:#555; text-align:center;">Keine neuen Anfragen.</p>'; return; }
+            snap.forEach(d => {
+                const r = d.data();
+                soundList.innerHTML += `<div class="admin-sound-card" style="margin-bottom:10px; padding:10px; background:#1a1a1a; border-radius:10px; border:1px solid #333;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div><strong style="color:white; font-size:14px;">${r.title}</strong><p style="font-size:11px; color:#888;">Von: ${r.senderName}</p></div>
+                        <div style="display:flex; gap:8px;">
+                            <button class="admin-btn btn-blue" onclick="previewSound('${r.url}', this)"><i class="fas fa-play"></i></button>
+                            <button class="admin-btn btn-green" onclick="approveSound('${d.id}')">Freigeben</button>
+                        </div>
+                    </div></div>`;
+            });
+        });
+
     } catch (e) {}
 }
-
-// NEU: Sound Requests im Admin Dashboard
-    const soundList = document.getElementById('admin-sound-requests-list');
-    onSnapshot(collection(db, "sound_requests"), (snap) => {
-        soundList.innerHTML = '';
-        if (snap.empty) { soundList.innerHTML = '<p style="color:#555; text-align:center;">Keine neuen Anfragen.</p>'; return; }
-        snap.forEach(d => {
-            const r = d.data();
-            soundList.innerHTML += `<div class="admin-sound-card" style="margin-bottom:10px; padding:10px; background:#1a1a1a; border-radius:10px; border:1px solid #333;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div><strong>${r.title}</strong><p style="font-size:11px; color:#888;">Von: ${r.senderName}</p></div>
-                    <div style="display:flex; gap:8px;">
-                        <button class="admin-btn btn-blue" onclick="previewSound('${r.url}', this)"><i class="fas fa-play"></i></button>
-                        <button class="admin-btn btn-green" onclick="approveSound('${d.id}')">Freigeben</button>
-                    </div>
-                </div></div>`;
-        });
-    });
 
 window.toggleVerifyAdmin = async function(targetUid, currentStatus) { if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return; await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus }); loadAdminDashboard(); };
 window.toggleAdminRole = async function(targetUid, currentStatus) { if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return; await updateDoc(doc(db, "users", targetUid), { isAdmin: !currentStatus }); loadAdminDashboard(); };
@@ -2251,8 +2268,7 @@ document.getElementById('send-ticket-btn')?.addEventListener('click', async() =>
 document.getElementById('ticket-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-ticket-btn').click(); });
 document.getElementById('admin-close-ticket-btn')?.addEventListener('click', async() => { if(!window.currentActiveTicketId) return; if(confirm("Ticket schließen?")) { await updateDoc(doc(db, "reports", window.currentActiveTicketId), { status: 'closed' }); showToast("Ticket geschlossen."); } });
 
-
-// === NEU: DM KONTEXT MENÜ LOKIK ===
+// === DM KONTEXT MENÜ LOKIK ===
 window.dmPressTimer = null;
 window.dmReplyTarget = null;
 window.currentEditDMId = null;
@@ -2309,7 +2325,6 @@ window.deleteDM = async function(msgId) {
 
 window.reportDM = async function(msgId, senderUid, text) {
     if (!currentUser) return;
-    
     try {
         const ticketRef = await addDoc(collection(db, "reports"), { 
             uid: currentUser.uid, 
@@ -2355,12 +2370,11 @@ document.getElementById('save-dm-edit-btn')?.addEventListener('click', async () 
     } catch(e) { showCustomAlert("Fehler", "Konnte nicht bearbeitet werden."); }
 });
 
-
 let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
 window.openDM = async function(targetUid, targetName, targetPic) {
     if (!currentUser) return; 
 
-    // === DM PRIVACY CHECK ===
+    // DM PRIVACY CHECK
     const tUser = allKnownUsers.find(u => u.uid === targetUid);
     if(tUser) {
         const privacy = tUser.dmPrivacy || 'everyone';
@@ -2410,7 +2424,6 @@ window.openDM = async function(targetUid, targetName, targetPic) {
                     readReceipt = msg.read ? `<span style="font-size:10px; color:#00f2fe; margin-left:5px; font-weight:bold; letter-spacing:-2px;">✓✓</span>` : `<span style="font-size:10px; color:#888; margin-left:5px; font-weight:bold;">✓</span>`;
                 }
 
-                // REPLIES IN BUBBLE
                 let replyHtml = '';
                 if (msg.replyTo) {
                     replyHtml = `<div class="chat-reply-quote" onclick="document.getElementById('dm-reply-preview').style.display='none';"><strong>${msg.replyTo.name}</strong><br>${formatText(msg.replyTo.text)}</div>`;
@@ -2418,24 +2431,17 @@ window.openDM = async function(targetUid, targetName, targetPic) {
 
                 let editedHtml = msg.edited ? `<span style="font-size:10px; color:#888; margin-left:5px;">(bearbeitet)</span>` : '';
                 let extraClass = isMe && checkPhilPlusStatus(2) ? 'gold-bubble' : ''; 
-                
-                // EMBEDS RENDERN
                 let bubbleContent = formatDMText(msg.text);
 
-                // INTERAKTIVES KONTEXT MENÜ
                 let safeText = msg.text.replace(/'/g, "\\'").replace(/"/g, '&quot;');
                 let interactions = `oncontextmenu="event.preventDefault(); window.openDMContextMenu('${docSnap.id}', '${msg.senderUid}', '${safeText}');"`;
                 interactions += ` onmousedown="window.dmPressTimer = setTimeout(() => { window.openDMContextMenu('${docSnap.id}', '${msg.senderUid}', '${safeText}'); }, 500);" onmouseup="clearTimeout(window.dmPressTimer)" onmouseleave="clearTimeout(window.dmPressTimer)" ontouchstart="window.dmPressTimer = setTimeout(() => { window.openDMContextMenu('${docSnap.id}', '${msg.senderUid}', '${safeText}'); }, 500);" ontouchend="clearTimeout(window.dmPressTimer)"`;
-
 
                 dmBox.innerHTML += `<div class="chat-msg ${isMe}"><img src="${pic}" class="chat-avatar" style="flex-shrink:0;"><div style="min-width:0; max-width: 100%;"><div class="chat-bubble ${extraClass}" ${interactions} style="cursor:pointer;">${replyHtml}${bubbleContent}${editedHtml}</div><div class="chat-time" style="font-size: 10px; color: #666; margin-top: 4px; text-align: ${isMe ? 'right' : 'left'};">${timeAgo(msg.timestamp)}${readReceipt}</div></div></div>`; 
             }); 
         }
         dmBox.scrollTop = dmBox.scrollHeight;
-        
-        // NEU: Lädt Embeds nach dem der Chat gerendert wurde
         window.processEmbeds();
-
         if (unreadIds.length > 0) {
             unreadIds.forEach(id => updateDoc(doc(db, `chats/${window.currentChatId}/messages`, id), { read: true }));
             updateDoc(doc(db, "chats", window.currentChatId), { lastMessageRead: true });
@@ -2449,7 +2455,6 @@ document.getElementById('send-dm-btn')?.addEventListener('click', async() => {
     if (!text || !window.currentChatId || !currentUser) return; 
     input.value = ''; 
 
-    // ReplyTo mitsenden
     let msgObj = { senderUid: currentUser.uid, text: text, timestamp: Date.now(), read: false };
     if(window.dmReplyTarget) {
         msgObj.replyTo = window.dmReplyTarget;
@@ -2597,10 +2602,7 @@ class LiveManager {
             snapshot.forEach(docSnap => {
                 const stream = docSnap.data();
                 if (blocked.includes(stream.broadcasterUid)) return;
-                
-                if (stream.lastHeartbeat && (now - stream.lastHeartbeat > 15000)) {
-                    return; 
-                }
+                if (stream.lastHeartbeat && (now - stream.lastHeartbeat > 15000)) return; 
 
                 hasStreams = true;
                 const titleHtml = stream.title ? `<span style="display:block; font-size:12px; color:#ddd; margin-top:2px;">${stream.title}</span>` : '';
@@ -2692,9 +2694,7 @@ class LiveManager {
             this.peer.on('call', (call) => { 
                 call.answer(this.localStream); 
                 this.activeCalls.push(call);
-                call.on('close', () => {
-                    this.activeCalls = this.activeCalls.filter(c => c !== call);
-                });
+                call.on('close', () => { this.activeCalls = this.activeCalls.filter(c => c !== call); });
             });
 
         } catch(e) { 
@@ -2749,7 +2749,6 @@ class LiveManager {
             if (!videoEl.srcObject || videoEl.paused) {
                 this.connectionAttempts++;
                 if (this.connectionAttempts <= 3) {
-                    console.log("Retry WebRTC Connection...", this.connectionAttempts);
                     this.connectToPeer(streamId);
                 } else {
                     showCustomAlert("Verbindungsfehler", "Der Stream konnte nicht geladen werden (Blackscreen). Versuche es später erneut.");
@@ -3048,166 +3047,15 @@ document.getElementById('send-live-chat-btn')?.addEventListener('click', async (
 });
 document.getElementById('live-chat-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-live-chat-btn').click(); });
 
-window.selectedUploadSound = null;
-window.openSound = function(id, name, pic, url) {
-    switchView('sound');
-    document.getElementById('sound-name').innerText = name;
-    document.getElementById('sound-author').innerText = name.includes('-') ? "@" + name.split(' - ')[1].trim() : "@Originalton";
-    document.getElementById('sound-pic').src = pic;
-    
-    const grid = document.getElementById('sound-grid'); grid.innerHTML = '';
-    let vids = allVideosData.filter(v => v.soundId === id || v.id === id);
-    document.getElementById('sound-count').innerText = vids.length + " Videos";
-    
-    vids.forEach(v => {
-        const previewSrc = v.mediaType === 'images' && v.urls ? v.urls[0] : `${v.url}#t=0.5`;
-        const mediaTag = v.mediaType === 'images' ? `<img src="${previewSrc}" style="width:100%; height:100%; object-fit:cover;">` : `<video src="${previewSrc}" muted playsinline style="width:100%; height:100%; object-fit:cover;"></video>`;
-        grid.innerHTML += `<div class="grid-item" onclick="jumpToVideo('${v.id}')">${mediaTag}</div>`;
+window.searchUsers = function(query) {
+    let results = [];
+    allKnownUsers.forEach(u => {
+        if (u.username.toLowerCase().includes(query.toLowerCase()) || u.displayName.toLowerCase().includes(query.toLowerCase())) {
+            results.push(u);
+        }
     });
-    
-    if(url) {
-        window.currentSoundPreviewPlayer.src = url;
-        window.currentSoundPreviewPlayer.loop = true;
-    }
-
-    const useBtn = document.getElementById('use-sound-btn');
-    useBtn.onclick = () => {
-        if(!currentUser) return showCustomAlert("Fehler", "Bitte einloggen.");
-        window.currentSoundPreviewPlayer.pause();
-        const icon = document.getElementById('sound-play-icon'); if(icon) icon.className = 'fas fa-play';
-        window.selectedUploadSound = { id: id, name: name, url: url };
-        document.getElementById('upload-sound-name').innerText = name;
-        document.getElementById('upload-sound-preview').style.display = 'flex';
-        switchView('feed'); document.getElementById('upload-modal').classList.add('show');
-    };
-}
-
-document.getElementById('sound-play-btn')?.addEventListener('click', () => {
-    const icon = document.getElementById('sound-play-icon');
-    if(!window.currentSoundPreviewPlayer.src) return;
-    if(window.currentSoundPreviewPlayer.paused) {
-        window.currentSoundPreviewPlayer.play().catch(e=>{});
-        icon.className = 'fas fa-pause';
-    } else {
-        window.currentSoundPreviewPlayer.pause();
-        icon.className = 'fas fa-play';
-    }
-});
-
-window.selectSoundForUpload = function(id, name, url) {
-    selectedLibrarySound = { id, name, url, offset: 0 };
-    soundPreviewPlayer.pause();
-    document.getElementById('sound-library-modal').classList.remove('show');
-    document.getElementById('selected-sound-editor').style.display = 'block';
-    document.getElementById('active-sound-name').innerText = name;
-    document.getElementById('open-sound-library-btn').innerText = "Sound ändern";
-    document.getElementById('video-volume-slider').value = 0.2;
-    showToast("Musik hinzugefügt! 🎵");
+    return results;
 };
-
-window.removeSelectedMusic = function() {
-    selectedLibrarySound = null;
-    document.getElementById('selected-sound-editor').style.display = 'none';
-    document.getElementById('open-sound-library-btn').innerText = "Sound auswählen";
-    document.getElementById('up-mute-original-toggle').checked = false;
-};
-
-document.getElementById('up-file')?.addEventListener('change', function(e) {
-    const files = e.target.files; const txt = document.querySelector('#up-file-btn p'); const icon = document.querySelector('#up-file-btn i'); 
-    if (!files || files.length === 0) { txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; return; }
-    if (files.length === 1) { txt.innerText = files[0].name; icon.className = files[0].type.startsWith('video/') ? "fas fa-video" : "fas fa-image"; icon.style.color = "#00f2fe"; } 
-    else { txt.innerText = `${files.length}Dateien ausgewählt`; icon.className = "fas fa-images"; icon.style.color = "#ffd700"; }
-});
-
-document.getElementById('submit-upload')?.addEventListener('click', async() => {
-    const files = document.getElementById('up-file').files; const titleInput = document.getElementById('up-title'); const descInput = document.getElementById('up-desc');
-    const titleVal = titleInput ? titleInput.value.trim() : ""; const desc = descInput ? descInput.value.trim() : "";
-    if (!files || files.length === 0) return showCustomAlert("Fehlende Daten", "Bitte wähle mindestens eine Datei aus.");
-    if (!titleVal || !desc) return showCustomAlert("Fehlende Daten", "Bitte gib einen Titel UND eine Beschreibung ein.");
-    
-    let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
-    for(let i=0; i<files.length; i++) { if(files[i].size > maxSize) return showCustomAlert("Zu groß", `Dateien dürfen maximal ${limitText} MB groß sein!`); }
-    
-    const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); 
-    btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
-    
-    const isSeries = document.getElementById('up-series-toggle') ? document.getElementById('up-series-toggle').checked : false;
-    
-    try {
-        const isVideo = files[0].type.startsWith('video/');
-        let uploadObj = { 
-            soundUrl: selectedLibrarySound ? selectedLibrarySound.url : null,
-            soundOffset: selectedLibrarySound ? selectedLibrarySound.offset : 0,
-            videoVolume: parseFloat(document.getElementById('video-volume-slider').value),
-            musicVolume: parseFloat(document.getElementById('music-volume-slider').value),
-            muteOriginal: document.getElementById('up-mute-original-toggle').checked,
-            authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
-            title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() 
-        };
-
-        if(window.selectedUploadSound) {
-            uploadObj.soundId = window.selectedUploadSound.id;
-            uploadObj.soundName = window.selectedUploadSound.name;
-            uploadObj.soundUrl = window.selectedUploadSound.url;
-        }
-        
-        if(isSeries) {
-            uploadObj.seriesId = "series_" + currentUser.uid + "_" + Date.now();
-        }
-
-        awardXP(20);
-
-        if (isVideo) {
-            const finalUrl = await uploadFileToFirebase(files[0], 'videos');
-            await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, ...uploadObj });
-        } else {
-            let uploadedUrls = [];
-            for(let i=0; i<files.length; i++) { const secure_url = await uploadFileToFirebase(files[i], 'images'); uploadedUrls.push(secure_url); }
-            await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, ...uploadObj });
-        }
-        
-        showToast("Erfolgreich veröffentlicht! 🎉"); document.getElementById('upload-modal').classList.remove('show');
-        document.getElementById('up-file').value = ''; if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
-        if(document.getElementById('up-series-toggle')) document.getElementById('up-series-toggle').checked = false;
-        document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; document.querySelector('#up-file-btn i').style.color = "#aaa"; 
-        removeSelectedSound();
-    } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
-});
-
-document.getElementById('open-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
-document.getElementById('close-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.remove('show'));
-document.getElementById('close-comments')?.addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
-
-document.getElementById('open-sound-library-btn')?.addEventListener('click', () => {
-    document.getElementById('sound-library-modal').classList.add('show');
-    loadOfficialLibrary();
-});
-
-document.getElementById('sound-offset-slider')?.addEventListener('input', (e) => {
-    const val = e.target.value;
-    document.getElementById('sound-offset-display').innerText = val + ".0s";
-    if (selectedLibrarySound) selectedLibrarySound.offset = parseInt(val);
-});
-
-document.getElementById('req-song-file')?.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if(file) {
-        soundRequestFile = file;
-        document.getElementById('req-file-status').innerText = "Datei: " + file.name;
-    }
-});
-
-document.getElementById('submit-sound-request')?.addEventListener('click', async () => {
-    const title = document.getElementById('req-song-title').value.trim();
-    if(!title || !soundRequestFile) return showToast("Bitte Titel und Datei angeben!");
-    const btn = document.getElementById('submit-sound-request'); btn.disabled = true; btn.innerText = "Lade hoch...";
-    try {
-        const url = await uploadFileToFirebase(soundRequestFile, 'sound_requests');
-        await addDoc(collection(db, "sound_requests"), { title, url, senderName: currentUser.displayName, senderUid: currentUser.uid, timestamp: Date.now() });
-        showToast("Anfrage gesendet! 👍");
-        document.getElementById('sound-library-modal').classList.remove('show');
-    } catch(e) { showToast("Fehler!"); } finally { btn.disabled = false; btn.innerText = "Absenden"; }
-});
 
 function initResponsiveLayout() {
     const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;

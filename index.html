@@ -504,8 +504,7 @@
                 <h4>Optionen</h4>
                 <i class="fas fa-times close-modal" id="close-more-options"></i>
             </div>
-            <div class="modal-body" style="display: flex; flex-direction: column; gap: 15px;" id="more-options-content">
-            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 15px;" id="more-options-content"></div>
         </div>
 
         <div id="giphy-modal" class="modal" style="height: 60%; z-index: 300;">
@@ -515,8 +514,7 @@
             </div>
             <div class="modal-body" style="display: flex; flex-direction: column;">
                 <input type="text" id="giphy-search-input" class="comment-input" placeholder="GIF Suchen (Giphy)..." style="width: 100%; margin-bottom: 15px;">
-                <div id="giphy-results" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
-                </div>
+                <div id="giphy-results" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;"></div>
             </div>
         </div>
 
@@ -527,8 +525,7 @@
                 <i class="fas fa-times close-modal" id="close-gift-modal"></i>
             </div>
             <div class="modal-body" style="background: rgba(0,0,0,0.5);">
-                <div class="gift-grid" id="gift-grid">
-                </div>
+                <div class="gift-grid" id="gift-grid"></div>
             </div>
         </div>
 
@@ -572,12 +569,10 @@
                 <div class="shop-tab" data-tab="shop-plus">Abonnements</div>
             </div>
             <div class="modal-body" style="background: rgba(0,0,0,0.5); padding: 15px;">
-
                 <div id="shop-borders" class="shop-content-section active">
                     <h4 style="margin-bottom: 15px; color: #aaa; font-size: 14px; text-transform: uppercase;">Profilrahmen</h4>
                     <div class="shop-items-grid" id="shop-borders-grid"></div>
                 </div>
-
                 <div id="shop-stories" class="shop-content-section" style="display: none; text-align: center;">
                     <div class="story-shop-card">
                         <i class="fas fa-camera-retro" style="font-size: 50px; color: #00f2fe; margin-bottom: 15px;"></i>
@@ -586,18 +581,13 @@
                         <button class="profile-action-btn" onclick="openStoryUpload()" style="width: 100%; font-size: 16px;"><i class="fas fa-coins" style="color: #ffd700;"></i> 1000 Coins</button>
                     </div>
                 </div>
-
                 <div id="shop-plus" class="shop-content-section" style="display: none;">
-                    <div class="phil-plus-banner">
-                        <i class="fas fa-star"></i> Phil Shorts+
-                    </div>
-
+                    <div class="phil-plus-banner"><i class="fas fa-star"></i> Phil Shorts+</div>
                     <div class="plus-tier-tabs">
                         <div class="plus-tier-tab active" onclick="switchPlusTier(1)">Plus</div>
                         <div class="plus-tier-tab" onclick="switchPlusTier(2)">Plus++</div>
                         <div class="plus-tier-tab" onclick="switchPlusTier(3)">Plus+++</div>
                     </div>
-
                     <div id="plus-tier-1" class="plus-tier-content active">
                         <p style="text-align:center; color:#888; font-size:13px; margin-bottom:10px;">Der perfekte Einstieg (5 Features)</p>
                         <ul class="plus-features-list">
@@ -607,30 +597,10 @@
                             <li><i class="fas fa-check"></i> 48h Stories (statt 24h)</li>
                             <li><i class="fas fa-check"></i> Priority VIP Support Tickets</li>
                         </ul>
-                        <div class="plus-plan-card" onclick="buyPhilPlus(5, 1)">
-                            <div>
-                                <h4>5 Tage</h4>
-                                <p>Plus Stufe 1</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 5.000</div>
-                        </div>
-                        <div class="plus-plan-card popular" onclick="buyPhilPlus(14, 1)">
-                            <div class="popular-badge">Beliebt</div>
-                            <div>
-                                <h4>14 Tage</h4>
-                                <p>Plus Stufe 1</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 12.000</div>
-                        </div>
-                        <div class="plus-plan-card" onclick="buyPhilPlus(30, 1)">
-                            <div>
-                                <h4>1 Monat</h4>
-                                <p>Plus Stufe 1</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 25.000</div>
-                        </div>
+                        <div class="plus-plan-card" onclick="buyPhilPlus(5, 1)"><div><h4>5 Tage</h4><p>Plus Stufe 1</p></div><div class="plus-price"><i class="fas fa-coins"></i> 5.000</div></div>
+                        <div class="plus-plan-card popular" onclick="buyPhilPlus(14, 1)"><div class="popular-badge">Beliebt</div><div><h4>14 Tage</h4><p>Plus Stufe 1</p></div><div class="plus-price"><i class="fas fa-coins"></i> 12.000</div></div>
+                        <div class="plus-plan-card" onclick="buyPhilPlus(30, 1)"><div><h4>1 Monat</h4><p>Plus Stufe 1</p></div><div class="plus-price"><i class="fas fa-coins"></i> 25.000</div></div>
                     </div>
-
                     <div id="plus-tier-2" class="plus-tier-content" style="display:none;">
                         <p style="text-align:center; color:#888; font-size:13px; margin-bottom:10px;">Für echte Creator (15 Features)</p>
                         <ul class="plus-features-list">
@@ -647,30 +617,10 @@
                             <li><i class="fas fa-check"></i> Spezielle "Plus++"-Geschenke im Shop</li>
                             <li style="color:#00f2fe; font-weight:bold;"><i class="fas fa-broadcast-tower"></i> Live-Streaming Freischaltung</li>
                         </ul>
-                        <div class="plus-plan-card" onclick="buyPhilPlus(5, 2)">
-                            <div>
-                                <h4>5 Tage</h4>
-                                <p>Plus Stufe 2</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 15.000</div>
-                        </div>
-                        <div class="plus-plan-card popular" onclick="buyPhilPlus(14, 2)">
-                            <div class="popular-badge">Beliebt</div>
-                            <div>
-                                <h4>14 Tage</h4>
-                                <p>Plus Stufe 2</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 35.000</div>
-                        </div>
-                        <div class="plus-plan-card" onclick="buyPhilPlus(30, 2)">
-                            <div>
-                                <h4>1 Monat</h4>
-                                <p>Plus Stufe 2</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 70.000</div>
-                        </div>
+                        <div class="plus-plan-card" onclick="buyPhilPlus(5, 2)"><div><h4>5 Tage</h4><p>Plus Stufe 2</p></div><div class="plus-price"><i class="fas fa-coins"></i> 15.000</div></div>
+                        <div class="plus-plan-card popular" onclick="buyPhilPlus(14, 2)"><div class="popular-badge">Beliebt</div><div><h4>14 Tage</h4><p>Plus Stufe 2</p></div><div class="plus-price"><i class="fas fa-coins"></i> 35.000</div></div>
+                        <div class="plus-plan-card" onclick="buyPhilPlus(30, 2)"><div><h4>1 Monat</h4><p>Plus Stufe 2</p></div><div class="plus-price"><i class="fas fa-coins"></i> 70.000</div></div>
                     </div>
-
                     <div id="plus-tier-3" class="plus-tier-content" style="display:none;">
                         <p style="text-align:center; color:#888; font-size:13px; margin-bottom:10px;">Werde zur Legende (30 Features)</p>
                         <ul class="plus-features-list">
@@ -691,31 +641,11 @@
                             <li><i class="fas fa-check"></i> Geheime Profil-Badges</li>
                             <li><i class="fas fa-check"></i> Custom Creator Rahmen (Farbe & Gradient wählbar)</li>
                         </ul>
-                        <div class="plus-plan-card" onclick="buyPhilPlus(5, 3)">
-                            <div>
-                                <h4>5 Tage</h4>
-                                <p>Plus Stufe 3</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 40.000</div>
-                        </div>
-                        <div class="plus-plan-card popular" onclick="buyPhilPlus(14, 3)">
-                            <div class="popular-badge">Legende</div>
-                            <div>
-                                <h4>14 Tage</h4>
-                                <p>Plus Stufe 3</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 90.000</div>
-                        </div>
-                        <div class="plus-plan-card" onclick="buyPhilPlus(30, 3)">
-                            <div>
-                                <h4>1 Monat</h4>
-                                <p>Plus Stufe 3</p>
-                            </div>
-                            <div class="plus-price"><i class="fas fa-coins"></i> 180.000</div>
-                        </div>
+                        <div class="plus-plan-card" onclick="buyPhilPlus(5, 3)"><div><h4>5 Tage</h4><p>Plus Stufe 3</p></div><div class="plus-price"><i class="fas fa-coins"></i> 40.000</div></div>
+                        <div class="plus-plan-card popular" onclick="buyPhilPlus(14, 3)"><div class="popular-badge">Legende</div><div><h4>14 Tage</h4><p>Plus Stufe 3</p></div><div class="plus-price"><i class="fas fa-coins"></i> 90.000</div></div>
+                        <div class="plus-plan-card" onclick="buyPhilPlus(30, 3)"><div><h4>1 Monat</h4><p>Plus Stufe 3</p></div><div class="plus-price"><i class="fas fa-coins"></i> 180.000</div></div>
                     </div>
                 </div>
-
             </div>
         </div>
 
@@ -724,11 +654,9 @@
                 <i class="fas fa-chevron-left back-btn" id="close-crop-modal" style="color: white;"></i>
                 <h3 style="flex:1; margin-left: 10px; font-size: 18px;">Foto bearbeiten</h3>
             </div>
-            
             <div style="width: 100%; flex: 1; position: relative; display: flex; align-items: center; justify-content: center; background: #000; overflow: hidden;">
                 <img id="crop-image-target" src="" style="max-width: 100%; max-height: 100%; display:none;">
             </div>
-
             <div style="width: 100%; background: #0a0a0a; border-top: 1px solid #111; padding: 20px; padding-bottom: calc(20px + env(safe-area-inset-bottom));">
                 <div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 25px;">
                     <span style="font-size: 14px; color: white;">Zoom</span>
@@ -755,7 +683,6 @@
                     </div>
                 </div>
                 <input type="text" id="up-story-link" class="comment-input" placeholder="Link hinzufügen (nur Plus+++)..." style="width: 100%; margin-top: 10px; display: none;">
-
                 <img id="story-preview-img" style="width: 100%; height: 200px; object-fit: contain; border-radius: 10px; display: none; margin-bottom: 15px; border: 1px solid #333; margin-top: 15px;">
                 <p id="story-upload-status" style="text-align: center; font-size: 14px; font-weight: bold; color: #ff0050;"></p>
                 <button id="submit-story-upload" class="profile-action-btn" style="width:100%; min-height: 56px; font-size:16px;">Story posten</button>
@@ -776,14 +703,11 @@
                     <i class="fas fa-times" style="color: white; font-size: 26px; cursor: pointer; filter: drop-shadow(0 2px 4px black);" onclick="closeStoryViewer()"></i>
                 </div>
             </div>
-            
             <div style="position: absolute; top: 0; left: 0; width: 30%; height: 100%; z-index: 4002;" onclick="prevStory()"></div>
             <div style="position: absolute; top: 0; right: 0; width: 70%; height: 100%; z-index: 4002;" onclick="nextStory()"></div>
             <img id="sv-img" src="" style="width: 100%; height: 80%; object-fit: contain; margin-top: 60px; position: relative; z-index: 4001;">
-
             <a id="sv-link-btn" href="#" target="_blank" class="profile-action-btn" style="position: absolute; bottom: 30px; z-index: 4006; display: none; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); color: white; border: 1px solid white;"><i class="fas fa-link"></i> Link öffnen</a>
         </div>
-
 
         <div id="video-details-modal" class="modal">
             <div class="modal-header">
@@ -805,13 +729,11 @@
                 <h4 style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Kommentare</h4><i class="fas fa-times close-modal" id="close-comments"></i>
             </div>
             <div class="modal-body" id="comment-list" style="padding-bottom: 0;"></div>
-
             <div class="modal-footer" style="flex-direction: column; align-items: stretch; padding-top: 5px;">
                 <div id="pending-gif-preview" style="display:none; position: relative; max-width: 120px; margin-bottom: 10px;">
                     <img id="pending-gif-img" src="" style="width: 100%; border-radius: 8px; border: 1px solid #444;">
                     <i class="fas fa-times-circle" id="remove-pending-gif" style="position: absolute; top: -5px; right: -5px; color: #ff4444; font-size: 20px; cursor: pointer; background: black; border-radius: 50%;"></i>
                 </div>
-
                 <div style="display: flex; gap: 10px; align-items: center; width: 100%;">
                     <input type="text" id="new-comment-input" placeholder="Sag etwas Nettes... (@mention)" class="comment-input">
                     <button id="btn-super-comment" class="comment-submit" style="background:#ffd700; color: black; margin-right:5px; font-size:14px;" title="Super Comment (50 Coins)"><i class="fas fa-star"></i></button>
@@ -838,7 +760,6 @@
                 <h4>Post Erstellen</h4><i class="fas fa-times close-modal" id="close-upload"></i>
             </div>
             <div class="modal-body upload-body">
-
                 <div class="file-upload-wrapper">
                     <input type="file" id="up-file" class="file-input-hidden" accept="video/*, image/*" multiple required>
                     <div class="file-upload-design" id="up-file-btn" onclick="document.getElementById('up-file').click()">
@@ -853,58 +774,44 @@
                     <img id="upload-image-preview" class="upload-preview-el">
                 </div>
 
-                <div id="upload-music-selector-box" class="advanced-settings-box" style="border-color: #ffd700; margin-top: 10px;">
+                <div id="upload-music-system" class="advanced-settings-box" style="border-color: #ffd700; margin-top: 10px;">
                     <h5 style="margin-bottom: 12px; color: #ffd700;"><i class="fas fa-music"></i> Hintergrundmusik</h5>
                     
-                    <button id="open-sound-library-btn" type="button" class="profile-action-btn edit-btn" style="width: 100%; margin-bottom: 10px;">
-                        <i class="fas fa-search"></i> Sound auswählen
+                    <button id="open-sound-library-btn" type="button" class="profile-action-btn edit-btn" style="width: 100%; gap: 10px; margin-bottom: 10px;">
+                        <i class="fas fa-search"></i> Sound aus Bibliothek wählen
                     </button>
 
                     <div id="selected-sound-editor" style="display: none; background: rgba(0,242,254,0.1); padding: 12px; border-radius: 12px; border: 1px solid #00f2fe;">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <i class="fas fa-music fa-beat" style="color: #00f2fe;"></i>
+                                <i class="fas fa-compact-disc fa-spin" style="color: #00f2fe;"></i>
                                 <strong id="active-sound-name" style="font-size: 13px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Song Name</strong>
                             </div>
                             <i class="fas fa-times-circle" style="color: #ff4444; cursor: pointer; font-size: 18px;" onclick="removeSelectedMusic()"></i>
                         </div>
                         
-                        <label style="font-size: 11px; color: #888; display: block; margin-bottom: 5px;">Startpunkt im Song (Trimmen):</label>
+                        <label style="font-size: 11px; color: #888; display: block; margin-bottom: 5px;">Startpunkt wählen (Offset):</label>
                         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
                             <span id="sound-start-time-display" style="font-size: 12px; color: #00f2fe; min-width: 35px;">0:00</span>
                             <input type="range" id="sound-offset-slider" class="trim-slider slider-blue" min="0" max="120" value="0" style="flex: 1;">
                         </div>
 
-                        <div class="setting-toggle-row">
+                        <div style="display: flex; justify-content: space-between; gap: 10px;">
+                            <div style="flex: 1;">
+                                <label style="font-size: 10px; color: #888;">Lautstärke Video</label>
+                                <input type="range" id="up-video-vol" class="trim-slider slider-red" min="0" max="1" step="0.05" value="1" style="width:100%;">
+                            </div>
+                            <div style="flex: 1;">
+                                <label style="font-size: 10px; color: #888;">Lautstärke Musik</label>
+                                <input type="range" id="up-music-vol" class="trim-slider slider-blue" min="0" max="1" step="0.05" value="1" style="width:100%;">
+                            </div>
+                        </div>
+                        
+                        <div class="setting-toggle-row" style="margin-top:10px;">
                             <span style="font-size: 12px;">Originalton stummschalten</span>
                             <label class="switch"><input type="checkbox" id="up-mute-original-toggle"><span class="slider round"></span></label>
                         </div>
                     </div>
-                </div>
-
-                <button id="open-sound-library-btn" class="profile-action-btn edit-btn" style="width: 100%; margin-top: 10px; display: none;"><i class="fas fa-music"></i> Musik hinzufügen / bearbeiten</button>
-                
-                <div id="upload-sound-editor" style="display:none; background: rgba(0, 0, 0, 0.3); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-top: 10px;">
-                    <h5 style="color: #00f2fe; margin-bottom: 10px;"><i class="fas fa-sliders-h"></i> Sound Editor</h5>
-                    <strong id="editor-sound-name" style="display:block; font-size:14px; margin-bottom:15px; color: #ffd700;">Ausgewählter Sound</strong>
-                    
-                    <label style="font-size:12px; color:#aaa;">Musik Startpunkt (Offset)</label>
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                        <input type="range" id="sound-offset-slider" class="trim-slider slider-blue" min="0" max="100" value="0" style="flex: 1;">
-                        <span id="sound-offset-display" style="font-size:12px; color:white; width: 40px; text-align: right;">0.0s</span>
-                    </div>
-
-                    <div style="display: flex; justify-content: space-between; margin-top: 10px;">
-                        <div style="width: 48%;">
-                            <label style="font-size:12px; color:#aaa;">Original Audio (Video)</label>
-                            <input type="range" id="video-volume-slider" class="trim-slider slider-red" min="0" max="1" step="0.05" value="1" style="width: 100%; margin-top: 5px;">
-                        </div>
-                        <div style="width: 48%;">
-                            <label style="font-size:12px; color:#aaa;">Hinzugefügte Musik</label>
-                            <input type="range" id="music-volume-slider" class="trim-slider slider-blue" min="0" max="1" step="0.05" value="1" style="width: 100%; margin-top: 5px;">
-                        </div>
-                    </div>
-                    <button id="remove-sound-editor-btn" class="profile-action-btn" style="width:100%; background:transparent; border: 1px solid #ff4444; color: #ff4444; margin-top: 15px; min-height: 40px;"><i class="fas fa-trash"></i> Sound entfernen</button>
                 </div>
 
                 <div class="setting-toggle-row" style="margin-top: 15px; background: rgba(255,255,255,0.05); padding: 10px 15px; border-radius: 15px;">
@@ -914,57 +821,10 @@
 
                 <hr style="border:0; border-top:1px solid #333; margin: 15px 0;">
                 <input type="text" id="up-title" class="comment-input" placeholder="Titel..." maxlength="60" style="border-radius:15px; margin-bottom:10px; width: 100%;">
-                <textarea id="up-desc" class="comment-input" placeholder="Beschreibe deinen Post... (@mention, #hashtag)" rows="4" style="resize:none; border-radius:15px; width:100%;"></textarea>
+                <textarea id="up-desc" class="comment-input" placeholder="Beschreibung..." rows="4" style="resize:none; border-radius:15px; width:100%;"></textarea>
                 <p id="upload-status" style="text-align: center; font-size: 14px; font-weight: bold; color: #ff0050;"></p>
                 <button id="submit-upload" class="profile-action-btn" style="width:100%; min-height: 56px; font-size:16px;">Veröffentlichen</button>
             </div>
-        </div>
-
-        <div id="sound-library-modal" class="modal" style="height: 80%; z-index: 5000;">
-            <div class="modal-header">
-                <h4><i class="fas fa-music" style="color:#00f2fe;"></i> Sound Bibliothek</h4>
-                <i class="fas fa-times close-modal" id="close-sound-library"></i>
-            </div>
-            <div class="shop-tabs">
-                <div class="shop-tab active" onclick="switchSoundTab('official')">Offiziell</div>
-                <div class="shop-tab" onclick="switchSoundTab('community')">Community</div>
-                <div class="shop-tab" onclick="switchSoundTab('upload')">Einreichen</div>
-            </div>
-            <div class="modal-body" style="padding: 15px; background: #0a0a0a;">
-                <div id="lib-official" class="sound-tab-content active" style="display:block;">
-                    <div id="official-sounds-list" style="display:flex; flex-direction:column; gap:10px;">
-                        <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>
-                    </div>
-                </div>
-                <div id="lib-community" class="sound-tab-content" style="display:none;">
-                    <p style="font-size:12px; color:#888; margin-bottom:10px; text-align:center;">Audiospuren aus Videos der Community</p>
-                    <div id="community-sounds-list" style="display:flex; flex-direction:column; gap:10px;">
-                        <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>
-                    </div>
-                </div>
-                <div id="lib-upload" class="sound-tab-content" style="display:none;">
-                    <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; border: 1px dashed #444; text-align:center;">
-                        <i class="fas fa-cloud-upload-alt" style="font-size:40px; color:#00f2fe; margin-bottom:15px;"></i>
-                        <h4 style="margin-bottom: 10px;">Sound Einreichen</h4>
-                        <p style="color:#aaa; font-size:13px; margin-bottom:20px;">Lade eine MP3 hoch. Ein Admin wird sie prüfen und der offiziellen Bibliothek hinzufügen.</p>
-                        <input type="text" id="req-sound-name" class="comment-input" placeholder="Name des Sounds (z.B. Künstler - Titel)" style="width:100%; margin-bottom:15px;">
-                        <input type="file" id="req-sound-file" accept="audio/mp3, audio/wav, audio/mpeg" style="display:none;">
-                        <button class="profile-action-btn edit-btn" onclick="document.getElementById('req-sound-file').click()" style="width:100%; margin-bottom:10px; background:#222;"><i class="fas fa-file-audio"></i> MP3 Auswählen</button>
-                        <p id="req-sound-file-name" style="text-align:center; font-size:12px; color:#00f2fe; margin-bottom:15px; font-weight:bold;"></p>
-                        <button id="submit-sound-request-btn" class="profile-action-btn" style="width:100%; background:#ffd700; color:black;"><i class="fas fa-paper-plane"></i> Zur Prüfung einreichen</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="video-processing-overlay" class="full-screen-overlay" style="z-index: 9999; background: rgba(0,0,0,0.95); flex-direction: column;">
-            <i class="fas fa-cog fa-spin" style="font-size: 50px; color: #00f2fe; margin-bottom: 20px;"></i>
-            <h3 style="color: white; margin-bottom: 10px;">Video wird gerendert...</h3>
-            <p style="color: #aaa; font-size: 14px; text-align: center; max-width: 80%;">Die Audiospuren werden live im Browser zusammengefügt. Bitte wechsle nicht den Tab und schließe die App nicht.</p>
-            <div style="width: 60%; height: 6px; background: #333; border-radius: 3px; margin-top: 30px; overflow: hidden; box-shadow: inset 0 0 5px rgba(0,0,0,0.5);">
-                <div id="render-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ff0050, #00f2fe); transition: width 0.2s;"></div>
-            </div>
-            <p id="render-progress-text" style="color: #00f2fe; font-size: 12px; margin-top: 10px; font-weight: bold;">0%</p>
         </div>
 
         <div id="settings-modal" class="modal">
@@ -978,14 +838,12 @@
                     <input type="file" id="edit-pic-file" accept="image/*" style="display: none;">
                     <button id="edit-pic-upload-btn" class="profile-action-btn edit-btn" style="border-radius: 15px; padding: 0 15px; height: 46px; min-width: 50px;"><i class="fas fa-upload"></i></button>
                 </div>
-
                 <label style="color:#888; font-size:12px; margin-left:5px;">Anzeigename</label>
                 <input type="text" id="edit-displayname-input" class="comment-input" placeholder="Dein Name" maxlength="30" style="border-radius:15px; margin-bottom:10px; width: 100%;">
                 <label style="color:#888; font-size:12px; margin-left:5px;">Benutzername</label>
                 <input type="text" id="edit-username-input" class="comment-input" placeholder="benutzername" maxlength="20" style="border-radius:15px; margin-bottom:10px; width: 100%;">
                 <label style="color:#888; font-size:12px; margin-left:5px;">Bio</label>
                 <textarea id="edit-bio-input" class="comment-input" placeholder="Etwas über dich..." rows="4" style="resize:none; border-radius:15px; width:100%; margin-bottom: 10px;"></textarea>
-
                 <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 15px;">
                     <h5 style="margin-bottom: 10px; color: #00f2fe;"><i class="fas fa-link"></i> Social Media Links</h5>
                     <input type="text" id="edit-social-ig" class="comment-input" placeholder="Instagram Username" style="border-radius:10px; margin-bottom:10px; width: 100%; padding: 10px;">
@@ -993,7 +851,6 @@
                     <input type="text" id="edit-social-tt" class="comment-input" placeholder="TikTok Username" style="border-radius:10px; margin-bottom:10px; width: 100%; padding: 10px;">
                     <input type="text" id="edit-social-tw" class="comment-input" placeholder="Twitch Username" style="border-radius:10px; width: 100%; padding: 10px;">
                 </div>
-
                 <div id="tier3-settings-area" style="display:none; background: rgba(255,215,0,0.05); padding: 15px; border-radius: 15px; border: 1px solid #ffd700;">
                     <h5 style="color: #ffd700; margin-bottom: 10px;"><i class="fas fa-crown"></i> Plus+++ Einstellungen</h5>
                     <label style="color:#888; font-size:12px; margin-left:5px;">Profil Song (MP3/WAV URL)</label>
@@ -1001,7 +858,6 @@
                     <label style="color:#888; font-size:12px; margin-left:5px;">Custom Profile Color (Hex)</label>
                     <input type="color" id="edit-color-input" style="width: 100%; height: 40px; border-radius: 10px; border: 1px solid #ffd700; background: none; margin-bottom: 10px; cursor: pointer;">
                 </div>
-
                 <button id="save-settings-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; min-height: 56px; font-size:16px;">Profil Speichern</button>
             </div>
         </div>
@@ -1020,7 +876,6 @@
                         <option value="off">Niemand (Ausgeschaltet)</option>
                     </select>
                 </div>
-
                 <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
                     <h5 style="margin-bottom: 15px; color: #00f2fe;"><i class="fas fa-palette"></i> App Design (Plus++)</h5>
                     <select id="app-theme-select" class="comment-input" style="width: 100%; background: #111; color: white; margin-bottom: 15px;">
@@ -1028,7 +883,6 @@
                         <option value="deep-blue">Deep Blue</option>
                         <option value="neon-pink">Neon Pink</option>
                     </select>
-
                     <h5 style="margin-bottom: 15px; color: #ffd700;"><i class="fas fa-icons"></i> App Icon (Plus+++)</h5>
                     <select id="app-icon-select" class="comment-input" style="width: 100%; background: #111; color: white;">
                         <option value="default">Standard Icon</option>
@@ -1036,51 +890,31 @@
                         <option value="dark">Dark Mode Icon</option>
                     </select>
                 </div>
-
                 <div class="setting-toggle-row" style="margin-bottom: 5px;">
                     <span style="font-weight: bold; font-size: 16px;">Desktop Benachrichtigungen</span>
                     <label class="switch"><input type="checkbox" id="notif-master"><span class="slider round"></span></label>
                 </div>
                 <p style="font-size: 11px; color: #888; margin-bottom: 15px;">Erlaube Benachrichtigungen in deinem Browser.</p>
-
                 <div id="notif-sub-settings" class="sub-settings-box">
-                    <div class="setting-toggle-row">
-                        <span>Kommentare</span>
-                        <label class="switch"><input type="checkbox" id="notif-comments"><span class="slider round"></span></label>
-                    </div>
-                    <div class="setting-toggle-row">
-                        <span>Likes & Geschenke</span>
-                        <label class="switch"><input type="checkbox" id="notif-likes"><span class="slider round"></span></label>
-                    </div>
-                    <div class="setting-toggle-row">
-                        <span>Nachrichten (DMs)</span>
-                        <label class="switch"><input type="checkbox" id="notif-dms"><span class="slider round"></span></label>
-                    </div>
-                    <div class="setting-toggle-row">
-                        <span>Neue Follower</span>
-                        <label class="switch"><input type="checkbox" id="notif-follows"><span class="slider round"></span></label>
-                    </div>
+                    <div class="setting-toggle-row"><span>Kommentare</span><label class="switch"><input type="checkbox" id="notif-comments"><span class="slider round"></span></label></div>
+                    <div class="setting-toggle-row"><span>Likes & Geschenke</span><label class="switch"><input type="checkbox" id="notif-likes"><span class="slider round"></span></label></div>
+                    <div class="setting-toggle-row"><span>Nachrichten (DMs)</span><label class="switch"><input type="checkbox" id="notif-dms"><span class="slider round"></span></label></div>
+                    <div class="setting-toggle-row"><span>Neue Follower</span><label class="switch"><input type="checkbox" id="notif-follows"><span class="slider round"></span></label></div>
                 </div>
-
                 <hr style="border:0; border-top:1px solid #222; margin: 25px 0;">
-
                 <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
                     <h5 style="margin-bottom: 10px; color: #ff4444;"><i class="fas fa-user-slash"></i> Blockierte Nutzer</h5>
-                    <div id="blocked-users-list" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;">
-                    </div>
+                    <div id="blocked-users-list" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;"></div>
                 </div>
-
                 <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
                     <h5 style="margin-bottom: 10px; color: #888;">Support-Ticket eröffnen</h5>
                     <textarea id="support-msg" class="comment-input" placeholder="Beschreibe dein Problem..." rows="3" style="resize:none; width:100%; margin-bottom:10px; border-color: #ffd700;"></textarea>
                     <button class="profile-action-btn" onclick="sendSupport()" style="width:100%; background: #ffd700; color: black;"><i class="fas fa-ticket-alt"></i> Ticket erstellen</button>
                 </div>
-
                 <div id="account-switcher-area" style="display:none; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
                     <h5 style="margin-bottom: 10px; color: #ffd700;"><i class="fas fa-users"></i> Multi-Account Fast Switch (Plus+++)</h5>
                     <button class="profile-action-btn edit-btn" onclick="document.getElementById('logout-btn').click()" style="width: 100%; margin-bottom: 10px;">Anderen Account hinzufügen</button>
                 </div>
-
                 <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050; min-height: 56px; font-size: 17px;">Abmelden</button>
             </div>
         </div>
@@ -1132,17 +966,14 @@
                     </div>
                     <label style="color:#888; font-size:12px;">Farbe 1</label>
                     <input type="color" id="cb-color1" value="#ff0050" style="width: 100%; height: 40px; border-radius: 10px; margin-bottom: 15px; cursor: pointer; border:none;">
-
                     <div class="setting-toggle-row" style="margin-bottom: 15px;">
                         <span>Gradient (Verlauf) aktivieren</span>
                         <label class="switch"><input type="checkbox" id="cb-grad-toggle"><span class="slider round"></span></label>
                     </div>
-
                     <div id="cb-color2-container" style="display:none;">
                         <label style="color:#888; font-size:12px;">Farbe 2</label>
                         <input type="color" id="cb-color2" value="#00f2fe" style="width: 100%; height: 40px; border-radius: 10px; margin-bottom: 15px; cursor: pointer; border:none;">
                     </div>
-
                     <button class="profile-action-btn" onclick="saveCustomBorder()" style="width: 100%; background: #ffd700; color: black; margin-top: 10px;">Speichern & Ausrüsten</button>
                 </div>
             </div>
@@ -1153,8 +984,7 @@
                 <h4 id="live-chat-context-title">Nachricht anpassen</h4>
                 <i class="fas fa-times close-modal" onclick="document.getElementById('live-chat-context-modal').classList.remove('show')"></i>
             </div>
-            <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;" id="live-chat-context-content">
-            </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;" id="live-chat-context-content"></div>
         </div>
 
         <div id="dm-context-modal" class="modal" style="height: auto; max-height: 60%; z-index: 6000;">
@@ -1162,8 +992,7 @@
                 <h4 id="dm-context-title">Nachricht Optionen</h4>
                 <i class="fas fa-times close-modal" onclick="document.getElementById('dm-context-modal').classList.remove('show')"></i>
             </div>
-            <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;" id="dm-context-content">
-                </div>
+            <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;" id="dm-context-content"></div>
         </div>
 
         <div id="dm-edit-modal" class="modal" style="height: auto; z-index: 6100;">
@@ -1223,6 +1052,7 @@
                     <div class="advanced-settings-box" style="text-align:center;">
                         <i class="fas fa-file-upload" style="font-size: 30px; color: #ffd700; margin-bottom: 10px;"></i>
                         <h5>Eigene MP3 an Admins senden</h5>
+                        <p style="font-size: 12px; color: #888; margin-bottom: 15px;">Wird nach Prüfung für alle freigeschaltet.</p>
                         <input type="text" id="req-song-title" class="comment-input" placeholder="Song Name / Artist" style="margin-bottom: 10px;">
                         <input type="file" id="req-song-file" accept="audio/mp3" style="display: none;">
                         <button class="profile-action-btn edit-btn" style="width: 100%;" onclick="document.getElementById('req-song-file').click()">MP3 Datei wählen</button>

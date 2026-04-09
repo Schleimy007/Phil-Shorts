@@ -3804,3 +3804,53 @@ input:checked+.slider:before {
 #lib-sound-search:focus {
     border-color: #00f2fe !important;
 }
+/* --- SOUND SYSTEM & LIBRARY --- */
+.sound-tab-content { display: none; animation: fadeIn 0.3s ease; }
+.sound-tab-content.active { display: block; }
+
+.sound-item-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid #222;
+    margin-bottom: 8px;
+    transition: transform 0.1s;
+}
+
+.sound-item-card:active { transform: scale(0.98); background: rgba(255, 255, 255, 0.1); }
+
+.sound-item-card img {
+    width: 45px; height: 45px;
+    border-radius: 8px; object-fit: cover;
+}
+
+.sound-item-info { flex: 1; min-width: 0; }
+.sound-item-info strong { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sound-item-info span { font-size: 11px; color: #888; }
+
+.sound-item-btns { display: flex; gap: 8px; }
+
+/* Admin Sound Request Style */
+.admin-sound-card {
+    background: rgba(255, 215, 0, 0.05);
+    border: 1px solid rgba(255, 215, 0, 0.2);
+    border-radius: 15px;
+    padding: 15px;
+}
+
+.upload-media-preview {
+    width: 100%;
+    aspect-ratio: 9/16;
+    max-height: 350px;
+    background: #000;
+    border-radius: 15px;
+    overflow: hidden;
+    margin: 10px auto;
+    border: 1px solid #333;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
