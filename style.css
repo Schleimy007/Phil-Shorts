@@ -842,7 +842,9 @@ body.theme-neon-pink .glass-nav-bottom {
     transition: background-color 0.3s ease;
 }
 
+/* ---> BLACKSCREEN FIX <--- */
 .view {
+    display: none; /* WICHTIG: Verhindert das unsichtbare Überlagern aller Tabs */
     position: absolute;
     top: 0;
     left: 0;
@@ -859,10 +861,20 @@ body.theme-neon-pink .glass-nav-bottom {
 }
 
 .view.active {
+    display: block; /* WICHTIG: Macht den Tab sichtbar */
     opacity: 1;
     pointer-events: auto;
     z-index: 5;
 }
+
+/* Spezifische Views die Flexbox brauchen */
+#view-inbox.active,
+#view-dm.active,
+#view-ticket.active,
+#view-live-dashboard.active {
+    display: flex;
+}
+/* ------------------------- */
 
 .full-screen-overlay {
     position: absolute;
@@ -1618,18 +1630,7 @@ body.theme-neon-pink .glass-nav-bottom {
     gap: 5px;
 }
 
-#view-inbox,
-#view-dm,
-#view-ticket {
-    display: flex;
-    flex-direction: column;
-    height: calc(100% - 60px - env(safe-area-inset-bottom));
-}
-
-
-/* --- CHAT/INBOX CONTAINERS (REPARIERT) --- */
-
-/* Für Posteingang: Nachrichten starten ganz normal oben */
+/* CHAT/INBOX CONTAINERS */
 .inbox-list-container {
     flex: 1;
     display: flex;
@@ -1640,10 +1641,9 @@ body.theme-neon-pink .glass-nav-bottom {
     gap: 15px;
     width: 100%;
     position: relative;
-    z-index: 1; /* Tabs nicht blockieren */
+    z-index: 1;
 }
 
-/* Für DMs und Tickets (WhatsApp Style: Starten unten) */
 .chat-container {
     flex: 1;
     display: flex;
@@ -1651,19 +1651,17 @@ body.theme-neon-pink .glass-nav-bottom {
     min-height: 0;
     overflow-y: auto;
     padding: 15px;
-    padding-bottom: 25px; /* Erhöht für den Fix */
+    padding-bottom: 25px;
     gap: 15px;
     width: 100%;
 }
 
-/* Drückt die Nachrichten bei leerem Chat nach unten (Fix für Flex-Scroll-Bug) */
 #dm-box::before,
 #ticket-box::before {
     content: "";
     margin-top: auto; 
 }
 
-/* Fix: Sorgt dafür, dass die letzte Nachricht nicht unter dem Input Feld hängt */
 #dm-box::after,
 #ticket-box::after {
     content: "";
@@ -1744,7 +1742,6 @@ body.theme-neon-pink .glass-nav-bottom {
     border: 1px solid #ffe066;
 }
 
-/* NEU: Discord-Style Embeds in DMs */
 .embed-placeholder {
     margin-top: 5px;
 }
@@ -1788,7 +1785,6 @@ body.theme-neon-pink .glass-nav-bottom {
     object-fit: cover;
 }
 
-/* Reply Quote UI in DMs */
 .chat-reply-quote {
     background: rgba(0, 0, 0, 0.2);
     border-left: 3px solid #00f2fe;
@@ -1823,7 +1819,6 @@ body.theme-neon-pink .glass-nav-bottom {
     flex-shrink: 0;
 }
 
-/* Fix for overlapping input areas in live room / other cases where it needs absolute */
 #live-input-area {
     position: absolute;
     bottom: 0;
