@@ -2623,6 +2623,17 @@ body.theme-neon-pink .glass-nav-bottom {
         pointer-events: auto;
         visibility: visible;
     }
+
+    /* FIX FÜR TIKTOK-STYLE PROFIL-GRID AUF PC */
+    .grid-container {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 15px;
+        padding: 20px;
+    }
+    
+    .grid-item {
+        border-radius: 8px;
+    }
 }
 
 
