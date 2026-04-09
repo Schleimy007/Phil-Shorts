@@ -37,10 +37,6 @@ window.globalVolume = 1;
 window.linkPreviewCache = window.linkPreviewCache || {};
 let cropperInstance = null;
 
-// NEU: Globale Variablen für Audio Upload
-window.uploadCustomAudioPlayer = new Audio();
-window.customUploadAudioFile = null;
-
 // Algorithmus Live-Session Tracker
 let sessionInterests = {};
 let creatorAffinities = {};
@@ -756,165 +752,6 @@ window.onload = async function() {
             btn.innerText = "Anwenden"; btn.disabled = false;
         }, 'image/jpeg', 0.9);
     });
-
-    // === NEU: MEDIA UPLOAD & AUDIO LOGIK ===
-    document.getElementById('up-file')?.addEventListener('change', function(e) {
-        const files = e.target.files; const txt = document.querySelector('#up-file-btn p'); const icon = document.querySelector('#up-file-btn i'); 
-        
-        const prevContainer = document.getElementById('upload-media-preview-container');
-        const vidPrev = document.getElementById('upload-video-preview');
-        const imgPrev = document.getElementById('upload-image-preview');
-        const audioControls = document.getElementById('upload-audio-controls');
-        
-        if (!files || files.length === 0) { 
-            txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; 
-            if(prevContainer) prevContainer.style.display = 'none';
-            if(audioControls) audioControls.style.display = 'none';
-            if(vidPrev) { vidPrev.pause(); vidPrev.src = ''; }
-            return; 
-        }
-        
-        if(prevContainer) prevContainer.style.display = 'block';
-        if(audioControls) audioControls.style.display = 'block';
-        document.getElementById('main-file-upload-wrapper').style.display = 'none'; // Versteckt große Box nach Upload
-        
-        const file = files[0];
-        const fileUrl = URL.createObjectURL(file);
-        
-        if (file.type.startsWith('video/')) { 
-            if(imgPrev) imgPrev.style.display = 'none';
-            if(vidPrev) {
-                vidPrev.style.display = 'block';
-                vidPrev.src = fileUrl;
-                vidPrev.volume = document.getElementById('up-volume-slider') ? parseFloat(document.getElementById('up-volume-slider').value) : 1;
-                vidPrev.muted = document.getElementById('up-mute-original-toggle') ? document.getElementById('up-mute-original-toggle').checked : false;
-                vidPrev.play().catch(e=>{});
-            }
-        } 
-        else { 
-            if(vidPrev) { vidPrev.style.display = 'none'; vidPrev.pause(); }
-            if(imgPrev) { imgPrev.style.display = 'block'; imgPrev.src = fileUrl; }
-        }
-    });
-
-    document.getElementById('up-custom-audio-file')?.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if(file) {
-            window.customUploadAudioFile = file;
-            window.uploadCustomAudioPlayer.src = URL.createObjectURL(file);
-            window.uploadCustomAudioPlayer.loop = true;
-            window.uploadCustomAudioPlayer.volume = document.getElementById('up-volume-slider') ? parseFloat(document.getElementById('up-volume-slider').value) : 1;
-            
-            document.getElementById('custom-audio-name').style.display = 'block';
-            document.getElementById('custom-audio-name-text').innerText = file.name;
-            document.getElementById('up-remove-audio-btn').style.display = 'block';
-            
-            const vidPrev = document.getElementById('upload-video-preview');
-            if(vidPrev && vidPrev.style.display === 'block' && !vidPrev.paused) {
-                window.uploadCustomAudioPlayer.play().catch(e=>{});
-            } else if(document.getElementById('upload-image-preview')?.style.display === 'block') {
-                window.uploadCustomAudioPlayer.play().catch(e=>{});
-            }
-        }
-    });
-
-    document.getElementById('up-remove-audio-btn')?.addEventListener('click', () => {
-        window.customUploadAudioFile = null;
-        window.uploadCustomAudioPlayer.pause();
-        window.uploadCustomAudioPlayer.src = '';
-        document.getElementById('up-custom-audio-file').value = '';
-        document.getElementById('custom-audio-name').style.display = 'none';
-        document.getElementById('up-remove-audio-btn').style.display = 'none';
-    });
-
-    document.getElementById('up-volume-slider')?.addEventListener('input', (e) => {
-        const vol = parseFloat(e.target.value);
-        const vidPrev = document.getElementById('upload-video-preview');
-        if(vidPrev) vidPrev.volume = vol;
-        window.uploadCustomAudioPlayer.volume = vol;
-    });
-
-    document.getElementById('up-mute-original-toggle')?.addEventListener('change', (e) => {
-        const vidPrev = document.getElementById('upload-video-preview');
-        if(vidPrev) vidPrev.muted = e.target.checked;
-    });
-
-    const vPrev = document.getElementById('upload-video-preview');
-    if(vPrev) {
-        vPrev.addEventListener('play', () => { if(window.customUploadAudioFile) window.uploadCustomAudioPlayer.play().catch(e=>{}); });
-        vPrev.addEventListener('pause', () => { window.uploadCustomAudioPlayer.pause(); });
-        vPrev.addEventListener('seeked', () => { if(window.customUploadAudioFile && window.uploadCustomAudioPlayer.duration) window.uploadCustomAudioPlayer.currentTime = vPrev.currentTime % window.uploadCustomAudioPlayer.duration || 0; });
-    }
-
-    document.getElementById('close-upload')?.addEventListener('click', () => {
-        if(vPrev) { vPrev.pause(); vPrev.src = ''; }
-        window.uploadCustomAudioPlayer.pause(); window.uploadCustomAudioPlayer.src = '';
-        window.customUploadAudioFile = null;
-        document.getElementById('up-custom-audio-file').value = '';
-        document.getElementById('up-file').value = '';
-        document.getElementById('main-file-upload-wrapper').style.display = 'block';
-        document.getElementById('upload-media-preview-container').style.display = 'none';
-        document.getElementById('upload-audio-controls').style.display = 'none';
-        document.getElementById('custom-audio-name').style.display = 'none';
-        document.getElementById('up-remove-audio-btn').style.display = 'none';
-    });
-
-    document.getElementById('submit-upload')?.addEventListener('click', async() => {
-        const files = document.getElementById('up-file').files; const titleInput = document.getElementById('up-title'); const descInput = document.getElementById('up-desc');
-        const titleVal = titleInput ? titleInput.value.trim() : ""; const desc = descInput ? descInput.value.trim() : "";
-        if (!files || files.length === 0) return showCustomAlert("Fehlende Daten", "Bitte wähle mindestens eine Datei aus.");
-        if (!titleVal || !desc) return showCustomAlert("Fehlende Daten", "Bitte gib einen Titel UND eine Beschreibung ein.");
-        
-        let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
-        for(let i=0; i<files.length; i++) { if(files[i].size > maxSize) return showCustomAlert("Zu groß", `Dateien dürfen maximal ${limitText} MB groß sein!`); }
-        
-        const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); 
-        btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
-        
-        const isSeries = document.getElementById('up-series-toggle') ? document.getElementById('up-series-toggle').checked : false;
-        const isMuted = document.getElementById('up-mute-original-toggle')?.checked || false;
-        const postVol = document.getElementById('up-volume-slider') ? parseFloat(document.getElementById('up-volume-slider').value) : 1;
-        
-        try {
-            const isVideo = files[0].type.startsWith('video/');
-            let uploadObj = { 
-                authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
-                title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now(),
-                muteOriginal: isMuted, postVolume: postVol
-            };
-
-            if(window.customUploadAudioFile) {
-                status.innerText = "Lade Audio hoch...";
-                const audioUrl = await uploadFileToFirebase(window.customUploadAudioFile, 'sounds');
-                uploadObj.soundId = "custom_" + Date.now();
-                uploadObj.soundName = "Originalton - " + currentUser.displayName;
-                uploadObj.soundUrl = audioUrl;
-            } else if(window.selectedUploadSound) {
-                uploadObj.soundId = window.selectedUploadSound.id;
-                uploadObj.soundName = window.selectedUploadSound.name;
-                uploadObj.soundUrl = window.selectedUploadSound.url;
-            }
-            
-            if(isSeries) uploadObj.seriesId = "series_" + currentUser.uid + "_" + Date.now();
-            awardXP(20);
-
-            status.innerText = "Lade Video hoch...";
-            if (isVideo) {
-                const finalUrl = await uploadFileToFirebase(files[0], 'videos');
-                await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, ...uploadObj });
-            } else {
-                let uploadedUrls = [];
-                for(let i=0; i<files.length; i++) { const secure_url = await uploadFileToFirebase(files[i], 'images'); uploadedUrls.push(secure_url); }
-                await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, ...uploadObj });
-            }
-            
-            showToast("Erfolgreich veröffentlicht! 🎉"); document.getElementById('upload-modal').classList.remove('show');
-            document.getElementById('close-upload').click(); 
-            if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
-            if(document.getElementById('up-series-toggle')) document.getElementById('up-series-toggle').checked = false;
-            removeSelectedSound();
-        } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
-    });
 };
 
 document.getElementById('logout-btn')?.addEventListener('click', () => { localStorage.removeItem('phil_session');
@@ -1102,31 +939,14 @@ window.updateGlobalVolumeUI = function() {
         const muteBtn = container.querySelector('.mute-btn');
         const volumeSlider = container.querySelector('.volume-slider');
         if (!v || !muteBtn || !volumeSlider) return;
-        
-        const vidId = container.closest('.video').dataset.id;
-        const vData = allVideosData.find(x => x.id === vidId);
-        const postVol = vData && vData.postVolume !== undefined ? vData.postVolume : 1;
-        const origMuted = vData && vData.muteOriginal ? true : false;
-
-        v.volume = window.globalVolume * postVol; 
-        v.muted = window.globalMuted || origMuted;
-        
-        const audioEl = container.closest('.video').audioEl;
-        if(audioEl) { 
-            audioEl.volume = window.globalVolume * postVol; 
-            audioEl.muted = window.globalMuted; 
-        }
-
-        if (window.globalMuted || window.globalVolume == 0) { 
-            muteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
+        v.volume = window.globalVolume;
+        v.muted = window.globalMuted;
+        if (window.globalMuted || window.globalVolume == 0) { muteBtn.innerHTML = '<i class="fas fa-volume-mute"></i>';
             volumeSlider.value = 0;
-            volumeSlider.style.background = `linear-gradient(to right, #fff 0%, rgba(255, 255, 255, 0.3) 0%)`; 
-        } else { 
-            if (window.globalVolume < 0.5) muteBtn.innerHTML = '<i class="fas fa-volume-down"></i>';
+            volumeSlider.style.background = `linear-gradient(to right, #fff 0%, rgba(255, 255, 255, 0.3) 0%)`; } else { if (window.globalVolume < 0.5) muteBtn.innerHTML = '<i class="fas fa-volume-down"></i>';
             else muteBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
             volumeSlider.value = window.globalVolume;
-            volumeSlider.style.background = `linear-gradient(to right, #fff ${window.globalVolume * 100}%, rgba(255, 255, 255, 0.3) ${window.globalVolume * 100}%)`; 
-        }
+            volumeSlider.style.background = `linear-gradient(to right, #fff ${window.globalVolume * 100}%, rgba(255, 255, 255, 0.3) ${window.globalVolume * 100}%)`; }
     });
 };
 window.scrollCarousel = function(vidId, dir, event) { if (event) event.stopPropagation(); const container = document.querySelector(`.carousel-container[data-vid="${vidId}"]`); if (container) { const scrollAmount = container.clientWidth;
@@ -1172,7 +992,7 @@ function createVideoElement(video) {
     const soundDataUrl = video.soundUrl || video.url;
     const soundDisc = `<div class="videoSidebar__button sound-disc-wrap" onclick="openSound('${soundDataId}', '${soundDataName.replace(/'/g, "\\'")}', '${authorData.pic}', '${soundDataUrl}')" style="margin-top:15px;"><img src="${authorData.pic}" class="sound-disc"><div class="sound-wave"></div><div class="sound-wave"></div></div>`;
 
-    const mutedAttr = (window.globalMuted || video.muteOriginal) ? 'muted' : '';
+    const mutedAttr = window.globalMuted ? 'muted' : '';
     let mediaHTML = '';
     let muteUIHtml = '';
     if (video.mediaType === 'images' && video.urls && video.urls.length > 0) {
@@ -1218,33 +1038,13 @@ function createVideoElement(video) {
             </div>
         </div>`;
     
-    let postVol = video.postVolume !== undefined ? video.postVolume : 1;
-    let origMuted = video.muteOriginal ? true : false;
-
     if(video.soundUrl) {
-        const audioEl = new Audio(video.soundUrl); audioEl.loop = true; audioEl.muted = true; div.audioEl = audioEl;
-        const v = div.querySelector('.video__player');
+        const audioEl = new Audio(video.soundUrl); audioEl.loop = true; const v = div.querySelector('.video__player');
         if(v) {
-            v.addEventListener('play', () => { 
-                audioEl.volume = window.globalVolume * postVol; 
-                audioEl.muted = window.globalMuted; 
-                audioEl.play().catch(e=>{}); 
-
-                v.volume = window.globalVolume * postVol;
-                v.muted = window.globalMuted || origMuted;
-            });
-            v.addEventListener('pause', () => audioEl.pause());
-            v.addEventListener('timeupdate', () => { if(Math.abs(audioEl.currentTime - v.currentTime) > 0.5 && audioEl.duration) audioEl.currentTime = v.currentTime % audioEl.duration; });
-            const volSlider = div.querySelector('.volume-slider'); if(volSlider) volSlider.addEventListener('input', (e) => { audioEl.volume = e.target.value * postVol; v.volume = e.target.value * postVol; });
-            const muteBtn = div.querySelector('.mute-btn'); if(muteBtn) muteBtn.addEventListener('click', () => { audioEl.muted = window.globalMuted; v.muted = window.globalMuted || origMuted; });
-        }
-    } else {
-        const v = div.querySelector('.video__player');
-        if(v) {
-            v.addEventListener('play', () => {
-                v.volume = window.globalVolume * postVol;
-                v.muted = window.globalMuted || origMuted;
-            });
+            v.muted = true; v.addEventListener('play', () => { audioEl.volume = window.globalVolume; audioEl.play().catch(e=>{}); }); v.addEventListener('pause', () => audioEl.pause());
+            v.addEventListener('timeupdate', () => { if(Math.abs(audioEl.currentTime - v.currentTime) > 0.5) audioEl.currentTime = v.currentTime; });
+            const volSlider = div.querySelector('.volume-slider'); if(volSlider) volSlider.addEventListener('input', (e) => { audioEl.volume = e.target.value; });
+            const muteBtn = div.querySelector('.mute-btn'); if(muteBtn) muteBtn.addEventListener('click', () => { audioEl.muted = window.globalMuted; });
         }
     }
 
@@ -3001,15 +2801,77 @@ document.getElementById('sound-play-btn')?.addEventListener('click', () => {
 
 window.removeSelectedSound = function() { window.selectedUploadSound = null; document.getElementById('upload-sound-preview').style.display = 'none'; }
 
+document.getElementById('up-file')?.addEventListener('change', function(e) {
+    const files = e.target.files; const txt = document.querySelector('#up-file-btn p'); const icon = document.querySelector('#up-file-btn i'); 
+    if (!files || files.length === 0) { txt.innerText = "Video oder Bilder auswählen"; icon.className = "fas fa-cloud-upload-alt"; icon.style.color = "#aaa"; return; }
+    if (files.length === 1) { txt.innerText = files[0].name; icon.className = files[0].type.startsWith('video/') ? "fas fa-video" : "fas fa-image"; icon.style.color = "#00f2fe"; } 
+    else { txt.innerText = `${files.length} Dateien ausgewählt`; icon.className = "fas fa-images"; icon.style.color = "#ffd700"; }
+});
+
+document.getElementById('submit-upload')?.addEventListener('click', async() => {
+    const files = document.getElementById('up-file').files; const titleInput = document.getElementById('up-title'); const descInput = document.getElementById('up-desc');
+    const titleVal = titleInput ? titleInput.value.trim() : ""; const desc = descInput ? descInput.value.trim() : "";
+    if (!files || files.length === 0) return showCustomAlert("Fehlende Daten", "Bitte wähle mindestens eine Datei aus.");
+    if (!titleVal || !desc) return showCustomAlert("Fehlende Daten", "Bitte gib einen Titel UND eine Beschreibung ein.");
+    
+    let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
+    for(let i=0; i<files.length; i++) { if(files[i].size > maxSize) return showCustomAlert("Zu groß", `Dateien dürfen maximal ${limitText} MB groß sein!`); }
+    
+    const btn = document.getElementById('submit-upload'); const status = document.getElementById('upload-status'); 
+    btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
+    
+    const isSeries = document.getElementById('up-series-toggle') ? document.getElementById('up-series-toggle').checked : false;
+    
+    try {
+        const isVideo = files[0].type.startsWith('video/');
+        let uploadObj = { 
+            authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
+            title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() 
+        };
+
+        if(window.selectedUploadSound) {
+            uploadObj.soundId = window.selectedUploadSound.id;
+            uploadObj.soundName = window.selectedUploadSound.name;
+            uploadObj.soundUrl = window.selectedUploadSound.url;
+        }
+        
+        if(isSeries) {
+            uploadObj.seriesId = "series_" + currentUser.uid + "_" + Date.now();
+        }
+
+        awardXP(20);
+
+        if (isVideo) {
+            const finalUrl = await uploadFileToFirebase(files[0], 'videos');
+            await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, ...uploadObj });
+        } else {
+            let uploadedUrls = [];
+            for(let i=0; i<files.length; i++) { const secure_url = await uploadFileToFirebase(files[i], 'images'); uploadedUrls.push(secure_url); }
+            await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, ...uploadObj });
+        }
+        
+        showToast("Erfolgreich veröffentlicht! 🎉"); document.getElementById('upload-modal').classList.remove('show');
+        document.getElementById('up-file').value = ''; if(titleInput) titleInput.value = ''; if(descInput) descInput.value = ''; 
+        if(document.getElementById('up-series-toggle')) document.getElementById('up-series-toggle').checked = false;
+        document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; document.querySelector('#up-file-btn i').style.color = "#aaa"; 
+        removeSelectedSound();
+    } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
+});
+
+document.getElementById('open-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
+document.getElementById('close-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.remove('show'));
+document.getElementById('close-comments')?.addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
+
 function initResponsiveLayout() {
     const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;
     function createPCContainers() { if (!pcSidebar) { pcSidebar = document.createElement('div'); pcSidebar.id = 'pc-nav-sidebar'; pcSidebar.innerHTML = `<div class="logo-area"><img src="https://i.imgur.com/JDPRzCc.png" class="app-logo" alt="Logo">Phil Shorts</div>`; appContainer.prepend(pcSidebar); } }
-    function restructureVideoForPC(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; let infoPanel = inner.querySelector('.pc-info-panel-container'); if (!infoPanel) { infoPanel = document.createElement('div'); infoPanel.className = 'pc-info-panel-container'; inner.appendChild(infoPanel); const videoFooter = inner.querySelector('.video__footer'); const videoSidebar = inner.querySelector('.video__sidebar'); if (videoFooter) infoPanel.appendChild(videoFooter); if (videoSidebar) infoPanel.appendChild(videoSidebar);
-        } }
+    function restructureVideoForPC(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; let infoPanel = inner.querySelector('.pc-info-panel-container'); if (!infoPanel) { infoPanel = document.createElement('div'); infoPanel.className = 'pc-info-panel-container'; inner.appendChild(infoPanel); const videoFooter = inner.querySelector('.video__footer'); const videoSidebar = inner.querySelector('.video__sidebar'); if (videoFooter) infoPanel.appendChild(videoFooter); if (videoSidebar) infoPanel.appendChild(videoSidebar); } }
     function rollBackVideoForHandy(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; const infoPanel = inner.querySelector('.pc-info-panel-container'); if (infoPanel) { const videoFooter = infoPanel.querySelector('.video__footer'); const videoSidebar = infoPanel.querySelector('.video__sidebar'); if (videoFooter) inner.appendChild(videoFooter); if (videoSidebar) inner.appendChild(videoSidebar); infoPanel.remove(); } }
     function checkResponsiveMode() { const isPC = window.innerWidth > 768; if (isPC && currentMode !== 'pc') { currentMode = 'pc'; createPCContainers(); if (originalNav) pcSidebar.appendChild(originalNav); document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC); } else if (!isPC && currentMode !== 'handy') { currentMode = 'handy'; if (originalNav) appContainer.appendChild(originalNav); if (pcSidebar) { pcSidebar.remove(); pcSidebar = null; } document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy); } }
     checkResponsiveMode(); window.addEventListener('resize', checkResponsiveMode);
-    if (window.innerWidth > 768) { const videoObserver2 = new MutationObserver(function(mutations) { if (currentMode === 'pc') mutations.forEach(mutation => mutation.addedNodes.forEach(node => { if (node.classList && node.classList.contains('video')) restructureVideoForPC(node); })); }); const videoContainer = document.getElementById('video-container'); if (videoContainer) videoObserver2.observe(videoContainer, { childList: true }); }
+    if (window.innerWidth > 768) { 
+        const videoObserver2 = new MutationObserver(function(mutations) { if (currentMode === 'pc') mutations.forEach(mutation => mutation.addedNodes.forEach(node => { if (node.classList && node.classList.contains('video')) restructureVideoForPC(node); })); }); const videoContainer = document.getElementById('video-container'); if (videoContainer) videoObserver2.observe(videoContainer, { childList: true }); 
+    }
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
