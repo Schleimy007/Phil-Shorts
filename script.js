@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getFirestore, collection, getDocs, doc, setDoc, getDoc, updateDoc, increment, addDoc, arrayUnion, arrayRemove, deleteDoc, onSnapshot, query, orderBy, where, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateEmail, updatePassword } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
 // === KONFIGURATION ===
@@ -14,6 +15,7 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
 const supabaseUrl = 'https://smxxafxqtehgegyziplm.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNteHhhZnhxdGVoZ2VneXppcGxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NDAxNTQsImV4cCI6MjA5MDExNjE1NH0.sZ1Oasg08RLluHjFavz6cR-dntcgAQboAUdMsfVqYBY';
@@ -1025,40 +1027,6 @@ window.onload = async function() {
     });
 };
 
-window.updateAccountSecurity = async function() {
-    const newEmail = document.getElementById('settings-email-input').value.trim();
-    const pass = document.getElementById('settings-pass-input').value;
-    const confirmPass = document.getElementById('settings-pass-confirm').value;
-
-    if (!newEmail && !pass) return showToast("Keine Änderungen eingetragen.");
-
-    let updates = {};
-
-    if (newEmail) {
-        if (!newEmail.includes('@')) return showCustomAlert("Fehler", "Ungültige E-Mail Adresse.");
-        updates.email = newEmail;
-    }
-
-    if (pass) {
-        if (pass.length < 6) return showCustomAlert("Fehler", "Passwort muss mind. 6 Zeichen haben.");
-        if (pass !== confirmPass) return showCustomAlert("Fehler", "Passwörter stimmen nicht überein.");
-        updates.appPassword = pass;
-    }
-
-    try {
-        await updateDoc(doc(db, "users", currentUser.uid), updates);
-        currentUser = { ...currentUser, ...updates };
-        localStorage.setItem('phil_session', JSON.stringify(currentUser));
-        showToast("Sicherheitsdaten aktualisiert! 🛡️");
-        
-        document.getElementById('settings-email-input').value = "";
-        document.getElementById('settings-pass-input').value = "";
-        document.getElementById('settings-pass-confirm').value = "";
-    } catch (e) {
-        showCustomAlert("Fehler", "Daten konnten nicht gespeichert werden.");
-    }
-};
-
 document.getElementById('logout-btn')?.addEventListener('click', () => { localStorage.removeItem('phil_session');
     window.location.reload(); });
 
@@ -1195,7 +1163,7 @@ function initLiveDatabase() {
                 }
                 if (change.type === "removed") { const vidEl = document.querySelector(`.video[data-id="${vData.id}"]`); if (vidEl) vidEl.remove(); }
             });
-            // HIER IST DER FLICKER-FIX:
+            
             if (document.getElementById('view-profile').classList.contains('active')) { 
                 const currentProfileUid = document.getElementById('profile-action-btn').dataset.uid; 
                 if (currentProfileUid) {
@@ -1521,7 +1489,6 @@ const videoObserver = new IntersectionObserver(entries => {
                     }); 
                 } 
             } else if (el.audioEl) {
-                // FOTO MODUS SOUND
                 el.audioEl.currentTime = el.audioEl.dataset.offset || 0;
                 el.audioEl.play().catch(err=>{});
                 const soundWrap = el.querySelector('.sound-disc-wrap');
@@ -1920,7 +1887,15 @@ window.renderProfileGrid = function(targetUid) {
 }
 
 window.openProfile = async function(targetUid) {
-    switchView('profile'); document.getElementById('profile-grid').innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
+    switchView('profile'); 
+    
+    // FIX: Nur neu rendern, wenn sich die UID ändert
+    const grid = document.getElementById('profile-grid');
+    if (grid.dataset.lastUid !== targetUid || grid.innerHTML === "" || grid.innerHTML.includes('loading-screen')) {
+        grid.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
+        grid.dataset.lastUid = targetUid;
+    }
+
     document.getElementById('view-profile').style.background = ''; document.getElementById('profile-audio-player').src = ''; document.getElementById('profile-audio-player').pause();
     if (currentProfileUnsubscribe) currentProfileUnsubscribe();
     currentProfileUnsubscribe = onSnapshot(doc(db, "users", targetUid), (docSnap) => {
@@ -1977,13 +1952,7 @@ window.openProfile = async function(targetUid) {
         profileUserStories = (targetUser.stories || []).filter(s => (Date.now() - s.timestamp) < storyDuration); 
         const picContainer = document.getElementById('profile-pic-container'); const storyBadge = document.getElementById('story-badge');
         if(profileUserStories.length > 0) { picContainer.classList.add('story-ring'); storyBadge.style.display = 'none'; } else { picContainer.classList.remove('story-ring'); if(currentUser && targetUid === currentUser.uid) storyBadge.style.display = 'flex'; else storyBadge.style.display = 'none'; }
-        
-        // FIX: Nur neu rendern wenn sich der Tab geändert hat (verhindert Flackern)
-        const grid = document.getElementById('profile-grid');
-        if (grid.dataset.lastUid !== targetUid || grid.innerHTML === "" || grid.innerHTML.includes('loading-screen')) {
-            grid.dataset.lastUid = targetUid;
-            window.renderProfileGrid(targetUid);
-        }
+        window.renderProfileGrid(targetUid);
         updateProfileGamificationUI();
     });
     if (currentUser && targetUid !== currentUser.uid && !checkPhilPlusStatus(3)) updateDoc(doc(db, "users", targetUid), { profileViews: increment(1) }).catch(e => {}); 
@@ -2225,7 +2194,7 @@ window.loadAdminDashboard = async function() {
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                         <div><strong style="color:white; font-size:14px;">${r.title}</strong><p style="font-size:11px; color:#888;">Von: ${r.senderName}</p></div>
                         <div style="display:flex; gap:8px;">
-                            <button class="admin-btn btn-blue" onclick="previewLibSound('${r.url}', this)"><i class="fas fa-play"></i></button>
+                            <button class="admin-btn btn-blue" onclick="previewSound('${r.url}', this)"><i class="fas fa-play"></i></button>
                             <button class="admin-btn btn-green" onclick="approveSound('${d.id}')">Freigeben</button>
                         </div>
                     </div></div>`;
@@ -2685,509 +2654,197 @@ document.getElementById('duet-record-btn')?.addEventListener('click', async () =
     }
 });
 
-class LiveManager {
-    static streamId = null;
-    static isBroadcaster = false;
-    static peer = null;
-    static localStream = null;
-    static timer = null;
-    static seconds = 0;
-    static heartbeatTimer = null;
-    static unsubs = [];
-    static amIMod = false;
-    static activeMods = [];
-    static activeCalls = [];
-    static disconnectGraceTimer = null;
-    static connectionRetryTimer = null;
-    static connectionAttempts = 0;
-    
-    static goalTarget = 0;
-    static goalCurrent = 0;
+// === EMAIL & PASSWORT AUTH ===
+let isRegisterMode = false;
+let generatedOTP = null;
+let pendingRegData = null;
 
-    static init() {
-        const startLiveBtn = document.getElementById('start-my-live-btn');
-        if (startLiveBtn) {
-            startLiveBtn.style.display = checkPhilPlusStatus(2) ? 'block' : 'none';
-            startLiveBtn.onclick = () => {
-                if(!checkPhilPlusStatus(2)) return showCustomAlert("Premium", "Live-Streaming erfordert Plus++!");
-                switchView('live-dashboard');
-                document.getElementById('live-dash-name').innerText = currentUser.displayName;
-                document.getElementById('live-dash-pic').src = currentUser.photoURL;
-                window.currentLiveSource = 'cam';
-                document.querySelectorAll('.live-source-card').forEach(c => c.classList.remove('active'));
-                document.getElementById('source-cam').classList.add('active');
-            };
-        }
+// Trage hier deine EmailJS Daten ein
+const EMAILJS_SERVICE_ID = "service_0w0m1ns";
+const EMAILJS_TEMPLATE_ID = "template_ae1lp14";
 
-        this.unsubs.push(onSnapshot(collection(db, "live_streams"), (snapshot) => {
-            const grid = document.getElementById('live-streams-grid');
-            grid.innerHTML = '';
-            let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
-            let hasStreams = false;
-            const now = Date.now();
-            
-            snapshot.forEach(docSnap => {
-                const stream = docSnap.data();
-                if (blocked.includes(stream.broadcasterUid)) return;
-                
-                if (stream.lastHeartbeat && (now - stream.lastHeartbeat > 15000)) {
-                    return; 
-                }
-
-                hasStreams = true;
-                const titleHtml = stream.title ? `<span style="display:block; font-size:12px; color:#ddd; margin-top:2px;">${stream.title}</span>` : '';
-                grid.innerHTML += `<div class="live-stream-card" onclick="window.LiveManager.join('${docSnap.id}', '${stream.broadcasterName.replace(/'/g, "\\'")}', '${stream.broadcasterPic}')"><img src="${stream.broadcasterPic}" style="width:60px; height:60px; border-radius:50%; border:2px solid #ff0050;"><div style="flex:1;"><strong style="font-size:16px; color:white; display:block;">${stream.broadcasterName}</strong><span style="color:#aaa; font-size:13px;">🔴 LIVE</span>${titleHtml}</div><div style="background:#222; padding:5px 10px; border-radius:10px; font-size:12px; font-weight:bold;"><i class="fas fa-eye"></i> ${stream.viewers || 0}</div></div>`;
+window.sendEmailOTP = async function(email, code) {
+    console.log("DEBUG: Code für " + email + " ist " + code);
+    try {
+        if(typeof emailjs !== 'undefined') {
+            await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+                to_email: email,
+                otp_code: code
             });
-            if(!hasStreams) grid.innerHTML = '<div class="empty-state"><p>Gerade ist niemand live.</p></div>';
-        }));
-
-        window.addEventListener('beforeunload', () => {
-            if (LiveManager.isBroadcaster && LiveManager.streamId) {
-                updateDoc(doc(db, "live_streams", LiveManager.streamId), { lastHeartbeat: 0 }).catch(()=>{});
-            }
-        });
-    }
-
-    static async start() {
-        const title = document.getElementById('live-stream-title').value.trim() || `${currentUser.displayName}'s Live Stream`;
-        const btn = document.getElementById('start-stream-action-btn');
-        btn.disabled = true; btn.innerText = "Verbinde...";
-        this.activeCalls = [];
-        
-        const goalTargetVal = parseInt(document.getElementById('live-stream-goal-target').value);
-        const goalDescVal = document.getElementById('live-stream-goal-desc').value;
-        this.goalTarget = isNaN(goalTargetVal) ? 0 : goalTargetVal;
-        this.goalCurrent = 0;
-        
-        try {
-            if(window.currentLiveSource === 'screen') {
-                const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-                let micStream; try { micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch(e) {}
-                let tracks = [...screenStream.getVideoTracks()];
-                if(screenStream.getAudioTracks().length > 0) tracks.push(...screenStream.getAudioTracks());
-                if(micStream) tracks.push(...micStream.getAudioTracks());
-                this.localStream = new MediaStream(tracks);
-                this.localStream.getVideoTracks()[0].addEventListener('ended', () => { this.leave(); showToast("Screen-Sharing beendet."); });
-            } else if (window.currentLiveSource === 'audio') {
-                this.localStream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-            } else {
-                this.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            }
-            
-            switchView('live-room');
-            const videoEl = document.getElementById('live-video-player');
-            videoEl.srcObject = this.localStream;
-            videoEl.muted = true; 
-            videoEl.style.transform = window.currentLiveSource !== 'screen' ? 'scaleX(-1)' : 'none';
-            
-            videoEl.addEventListener('playing', () => { document.getElementById('live-stream-offline-text').style.display = 'none'; });
-            videoEl.play().catch(e=>{});
-            
-            document.getElementById('live-broadcaster-name').innerText = currentUser.displayName;
-            document.getElementById('live-broadcaster-pic').src = currentUser.photoURL;
-            
-            this.isBroadcaster = true; this.streamId = currentUser.uid; this.amIMod = false;
-            document.getElementById('live-streamer-hud').style.display = 'flex';
-            document.getElementById('live-input-area').style.display = 'none';
-            document.getElementById('live-close-btn').style.display = 'none';
-            
-            this.seconds = 0; document.getElementById('live-hud-time').innerText = "00:00"; document.getElementById('live-hud-coins').innerText = "0";
-            this.timer = setInterval(() => { this.seconds++; document.getElementById('live-hud-time').innerText = formatLiveTime(this.seconds); }, 1000);
-
-            if(this.peer) this.peer.destroy();
-            this.peer = new Peer(currentUser.uid, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] } });
-            
-            this.peer.on('open', async (id) => {
-                const chatRef = collection(db, `live_streams/${currentUser.uid}/chat`);
-                const oldChats = await getDocs(chatRef);
-                oldChats.forEach(d => deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, d.id)));
-
-                let streamData = { broadcasterUid: currentUser.uid, broadcasterName: currentUser.displayName, broadcasterPic: currentUser.photoURL, title: title, viewers: 0, lastHeartbeat: Date.now(), timestamp: Date.now() };
-                
-                if(this.goalTarget > 0) {
-                    streamData.goalTarget = this.goalTarget;
-                    streamData.goalCurrent = 0;
-                    streamData.goalDesc = goalDescVal;
-                }
-
-                await setDoc(doc(db, "live_streams", currentUser.uid), streamData);
-                
-                this.heartbeatTimer = setInterval(() => {
-                    updateDoc(doc(db, "live_streams", currentUser.uid), { lastHeartbeat: Date.now() }).catch(()=>{});
-                }, 5000);
-
-                this.setupChat(); 
-                showToast("Du bist jetzt LIVE!");
-                btn.disabled = false; btn.innerHTML = `<i class="fas fa-broadcast-tower"></i> Jetzt LIVE gehen`;
-            });
-
-            this.peer.on('call', (call) => { 
-                call.answer(this.localStream); 
-                this.activeCalls.push(call);
-                call.on('close', () => {
-                    this.activeCalls = this.activeCalls.filter(c => c !== call);
-                });
-            });
-
-        } catch(e) { 
-            showCustomAlert("Fehler", "Zugriff verweigert oder abgebrochen."); 
-            btn.disabled = false; btn.innerHTML = `<i class="fas fa-broadcast-tower"></i> Jetzt LIVE gehen`;
+            showToast("Code an E-Mail gesendet! 📧");
+        } else {
+            showToast("EmailJS fehlt. Code steht in der Konsole.");
         }
-    }
-
-    static async join(streamId, name, pic) {
-        if(!currentUser) return showCustomAlert("Fehler", "Bitte einloggen.");
-        if(streamId === currentUser.uid) {
-            if(this.isBroadcaster) { switchView('live-room'); return; }
-            else { deleteDoc(doc(db, "live_streams", currentUser.uid)).catch(e=>{}); return showCustomAlert("Hinweis", "Alter Stream bereinigt. Bitte starte neu."); }
-        }
-        
-        switchView('live-room');
-        document.getElementById('live-broadcaster-name').innerText = name; document.getElementById('live-broadcaster-pic').src = pic;
-        this.isBroadcaster = false; this.streamId = streamId; this.amIMod = false;
-        
-        document.getElementById('live-streamer-hud').style.display = 'none';
-        document.getElementById('live-input-area').style.display = 'flex';
-        document.getElementById('live-close-btn').style.display = 'block';
-
-        this.connectionAttempts = 0;
-        this.connectToPeer(streamId);
-        
-        await updateDoc(doc(db, "live_streams", streamId), { viewers: increment(1) }).catch(()=>{});
-        this.setupChat();
-    }
-
-    static connectToPeer(streamId) {
-        const videoEl = document.getElementById('live-video-player');
-        videoEl.srcObject = null; videoEl.style.transform = 'none';
-        
-        const offlineText = document.getElementById('live-stream-offline-text');
-        const unmuteOverlay = document.getElementById('live-unmute-overlay');
-        const reconnectOverlay = document.getElementById('live-reconnect-overlay');
-        
-        unmuteOverlay.style.display = 'none';
-        reconnectOverlay.style.display = this.connectionAttempts > 0 ? 'flex' : 'none';
-        offlineText.style.display = this.connectionAttempts === 0 ? 'flex' : 'none';
-        
-        if (this.connectionAttempts === 0) {
-            offlineText.innerHTML = '<i class="fas fa-spinner fa-spin" style="font-size:30px; margin-bottom:10px;"></i><span>Verbinde... STUN wird initialisiert</span>';
-        }
-
-        if(this.peer) this.peer.destroy();
-        this.peer = new Peer({ config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] } });
-        
-        clearTimeout(this.connectionRetryTimer);
-        this.connectionRetryTimer = setTimeout(() => {
-            if (!videoEl.srcObject || videoEl.paused) {
-                this.connectionAttempts++;
-                if (this.connectionAttempts <= 3) {
-                    console.log("Retry WebRTC Connection...", this.connectionAttempts);
-                    this.connectToPeer(streamId);
-                } else {
-                    showCustomAlert("Verbindungsfehler", "Der Stream konnte nicht geladen werden (Blackscreen). Versuche es später erneut.");
-                    this.leave();
-                }
-            }
-        }, 8000);
-
-        this.peer.on('open', (id) => {
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const dummyStream = audioCtx.createMediaStreamDestination().stream;
-            const call = this.peer.call(streamId, dummyStream);
-            
-            call.on('stream', (remoteStream) => {
-                clearTimeout(this.connectionRetryTimer); 
-                reconnectOverlay.style.display = 'none';
-                
-                videoEl.srcObject = remoteStream;
-                videoEl.muted = false;
-
-                const checkVideoState = () => {
-                    if(!videoEl.srcObject || !this.streamId) return;
-                    const vTrack = videoEl.srcObject.getVideoTracks()[0];
-                    if(vTrack && !vTrack.enabled) {
-                        offlineText.style.display = 'flex';
-                        offlineText.innerHTML = '<i class="fas fa-video-slash" style="font-size:30px; margin-bottom:10px;"></i><span>Bildschirm/Kamera ausgeschaltet</span>';
-                    } else if(vTrack && vTrack.enabled && !videoEl.paused) {
-                        offlineText.style.display = 'none';
-                    }
-                    requestAnimationFrame(checkVideoState);
-                };
-                checkVideoState();
-
-                const playPromise = videoEl.play();
-                if (playPromise !== undefined) {
-                    playPromise.catch(error => {
-                        videoEl.muted = true;
-                        videoEl.play().then(() => {
-                            unmuteOverlay.style.display = 'flex';
-                            unmuteOverlay.onclick = () => {
-                                videoEl.muted = false;
-                                unmuteOverlay.style.display = 'none';
-                            };
-                        });
-                    });
-                }
-            });
-        });
-    }
-
-    static async leave() {
-        switchView('feed');
-        clearTimeout(this.connectionRetryTimer);
-        clearTimeout(this.disconnectGraceTimer);
-        
-        this.activeCalls.forEach(call => call.close());
-        this.activeCalls = [];
-
-        if(this.peer) { this.peer.destroy(); this.peer = null; }
-        if(this.localStream) { this.localStream.getTracks().forEach(t => t.stop()); this.localStream = null; }
-        document.getElementById('live-video-player').srcObject = null;
-        document.getElementById('live-unmute-overlay').style.display = 'none';
-        document.getElementById('live-reconnect-overlay').style.display = 'none';
-        document.getElementById('live-goal-container').style.display = 'none';
-        
-        clearInterval(this.timer);
-        clearInterval(this.heartbeatTimer);
-        this.unsubs.forEach(u => u()); this.unsubs = [];
-        document.getElementById('live-gift-animation-container').innerHTML = '';
-
-        if(this.isBroadcaster) {
-            await deleteDoc(doc(db, "live_streams", currentUser.uid));
-        } else if (this.streamId) {
-            await updateDoc(doc(db, "live_streams", this.streamId), { viewers: increment(-1) }).catch(e=>{});
-        }
-        this.isBroadcaster = false; this.streamId = null; this.amIMod = false;
-    }
-
-    static setupChat() {
-        const box = document.getElementById('live-chat-box');
-        box.innerHTML = '';
-        
-        this.unsubs.push(onSnapshot(collection(db, `live_streams/${this.streamId}/mods`), (snap) => {
-            this.activeMods = [];
-            snap.forEach(d => this.activeMods.push(d.data().uid));
-            if(!this.isBroadcaster && this.activeMods.includes(currentUser.uid)) {
-                this.amIMod = true;
-                document.getElementById('live-streamer-hud').style.display = 'flex';
-                document.getElementById('live-toggle-cam-btn').style.display = 'none';
-                document.getElementById('open-mod-dashboard-btn').style.display = 'none'; 
-                document.getElementById('live-hud-coins').style.display = 'none';
-                document.getElementById('live-hud-time').style.display = 'none';
-                showToast("Du bist Mod in diesem Stream! 🛡️");
-            }
-        }));
-        
-        this.unsubs.push(onSnapshot(query(collection(db, `live_streams/${this.streamId}/chat`), orderBy("timestamp", "asc")), (snapshot) => {
-            snapshot.docChanges().forEach(change => {
-                if (change.type === "added") {
-                    const msg = change.doc.data();
-                    const msgId = change.doc.id;
-                    
-                    let blocked = (currentUser && currentUser.blockedUsers) ? currentUser.blockedUsers : [];
-                    if(blocked.includes(msg.uid) && msg.uid !== this.streamId) return;
-
-                    const msgDiv = document.createElement('div');
-                    msgDiv.className = 'live-chat-msg';
-                    msgDiv.id = `live-msg-${msgId}`;
-                    
-                    const isBroadcasterNode = msg.uid === this.streamId;
-                    const isModNode = this.activeMods.includes(msg.uid);
-
-                    if (isBroadcasterNode) msgDiv.classList.add('broadcaster');
-
-                    let badgeHtml = isBroadcasterNode ? '<span class="broadcaster-badge">Creator</span>' : (isModNode ? '<span class="broadcaster-badge" style="background:#00f2fe; color:black;">MOD</span>' : '');
-                    let nameHtml = `<span style="color:#aaa; font-weight:bold; cursor:pointer;" class="${isBroadcasterNode ? 'broadcaster-name' : ''}" onclick="openLiveChatContext('${msgId}', '${msg.uid}', '${msg.name.replace(/'/g,"\\'")}')">${msg.name}${badgeHtml}:</span>`;
-                    
-                    msgDiv.innerHTML = `<img src="${msg.pic}">${nameHtml} <span style="flex:1; word-break:break-word;">${formatText(msg.text)}</span>`;
-                    box.appendChild(msgDiv);
-                }
-                if (change.type === "removed") {
-                    const msgDiv = document.getElementById(`live-msg-${change.doc.id}`);
-                    if (msgDiv) msgDiv.remove();
-                }
-            });
-            box.scrollTop = box.scrollHeight;
-        }));
-        
-        this.unsubs.push(onSnapshot(doc(db, "live_streams", this.streamId), (docSnap) => {
-            if(docSnap.exists()) {
-                clearTimeout(this.disconnectGraceTimer);
-                const data = docSnap.data();
-                document.getElementById('live-viewer-count').innerText = data.viewers || 0;
-                
-                if(data.goalTarget) {
-                    document.getElementById('live-goal-container').style.display = 'block';
-                    document.getElementById('live-goal-desc').innerText = data.goalDesc;
-                    document.getElementById('live-goal-target').innerText = data.goalTarget;
-                    document.getElementById('live-goal-current').innerText = data.goalCurrent || 0;
-                    
-                    let progressPercent = Math.min(((data.goalCurrent || 0) / data.goalTarget) * 100, 100);
-                    document.getElementById('live-goal-progress').style.width = progressPercent + '%';
-                    
-                    if((data.goalCurrent || 0) >= data.goalTarget && data.goalTarget > 0) {
-                        document.getElementById('live-goal-container').classList.add('micro-glow');
-                    }
-                }
-            } else if(!this.isBroadcaster) {
-                this.disconnectGraceTimer = setTimeout(() => {
-                    showCustomAlert("Beendet", "Live-Stream wurde beendet."); 
-                    this.leave(); 
-                }, 5000);
-            }
-        }));
-
-        let initialGiftsLoad = true; let sessionCoins = 0;
-        this.unsubs.push(onSnapshot(query(collection(db, `live_streams/${this.streamId}/gifts`), orderBy("timestamp", "asc")), (snapshot) => {
-            if(initialGiftsLoad) {
-                snapshot.forEach(docSnap => { sessionCoins += docSnap.data().price; });
-                if(this.isBroadcaster) document.getElementById('live-hud-coins').innerText = sessionCoins;
-                initialGiftsLoad = false; return;
-            }
-            snapshot.docChanges().forEach((change) => {
-                if (change.type === "added") {
-                    const g = change.doc.data();
-                    if(this.isBroadcaster) { sessionCoins += g.price; document.getElementById('live-hud-coins').innerText = sessionCoins; }
-                    
-                    const container = document.getElementById('live-gift-animation-container');
-                    const giftEl = document.createElement('div');
-                    giftEl.className = 'live-gift-item';
-                    giftEl.style.position = 'absolute'; giftEl.style.bottom = '20%'; giftEl.style.left = '50%'; giftEl.style.transform = 'translateX(-50%)'; giftEl.style.zIndex = '200'; giftEl.style.textAlign = 'center'; giftEl.style.animation = 'liveFlyUpGift 3s ease-out forwards';
-                    giftEl.innerHTML = `<span style="font-size:14px; color:#ffd700; background:rgba(0,0,0,0.6); padding:4px 12px; border-radius:20px; display:block; margin-bottom:10px; border:1px solid #ffd700; white-space:nowrap;">${g.name} sendet ${g.giftName}</span><span style="font-size:120px; filter:drop-shadow(0 0 10px rgba(255,215,0,0.5));">${g.emoji}</span>`;
-                    container.appendChild(giftEl);
-                    
-                    const msgDiv = document.createElement('div');
-                    msgDiv.className = 'live-chat-msg';
-                    msgDiv.style.background = 'rgba(255, 215, 0, 0.2)'; msgDiv.style.borderLeft = '3px solid #ffd700';
-                    msgDiv.innerHTML = `<span style="color:#ffd700; font-weight:bold;">🎁 ${g.name} sendet ${g.giftName} ${g.emoji}</span>`;
-                    box.appendChild(msgDiv); box.scrollTop = box.scrollHeight;
-
-                    setTimeout(() => giftEl.remove(), 3500);
-                }
-            });
-        }));
-    }
-}
-
-window.LiveManager = LiveManager;
-
-function formatLiveTime(sec) {
-    const m = Math.floor(sec / 60).toString().padStart(2, '0');
-    const s = (sec % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-}
-
-window.initLiveStreamsList = () => LiveManager.init();
-window.selectLiveSource = (src) => {
-    window.currentLiveSource = src;
-    document.querySelectorAll('.live-source-card').forEach(c => c.classList.remove('active'));
-    document.getElementById('source-' + src).classList.add('active');
-};
-window.toggleLiveCamera = () => {
-    if (LiveManager.localStream) {
-        const videoTrack = LiveManager.localStream.getVideoTracks().find(t => t.kind === 'video');
-        if (videoTrack) {
-            videoTrack.enabled = !videoTrack.enabled;
-            const btn = document.getElementById('live-toggle-cam-btn');
-            if(btn) {
-                if (videoTrack.enabled) { btn.innerHTML = '<i class="fas fa-video"></i> Kamera Aus'; btn.style.background = '#333'; } 
-                else { btn.innerHTML = '<i class="fas fa-video-slash"></i> Kamera Ein'; btn.style.background = '#ff4444'; }
-            }
-        }
-    }
-};
-window.leaveLiveRoom = () => LiveManager.leave();
-
-window.openLiveChatContext = function(msgId, senderUid, senderName) {
-    if(senderUid === LiveManager.streamId || (!LiveManager.isBroadcaster && !LiveManager.amIMod)) return; 
-    document.getElementById('live-chat-context-title').innerText = `@${senderName}`;
-    let contentHtml = `<button class="profile-action-btn edit-btn" onclick="deleteLiveMsg('${msgId}')"><i class="fas fa-trash" style="color:#ff4444;"></i> Nachricht löschen</button>`;
-    contentHtml += `<button class="profile-action-btn edit-btn" onclick="banLiveUser('${senderUid}')"><i class="fas fa-ban" style="color:#ff4444;"></i> User Bannen</button>`;
-    if(LiveManager.isBroadcaster) { contentHtml += `<button class="profile-action-btn edit-btn" onclick="makeLiveMod('${senderUid}')"><i class="fas fa-shield-alt" style="color:#00f2fe;"></i> Zum Mod ernennen</button>`; }
-    document.getElementById('live-chat-context-content').innerHTML = contentHtml;
-    document.getElementById('live-chat-context-modal').classList.add('show');
-};
-
-window.deleteLiveMsg = async function(msgId) {
-    if(!LiveManager.isBroadcaster && !LiveManager.amIMod) return;
-    try { await deleteDoc(doc(db, `live_streams/${LiveManager.streamId}/chat`, msgId)); showToast("Nachricht gelöscht."); document.getElementById('live-chat-context-modal').classList.remove('show'); } catch(e) {}
-};
-
-window.banLiveUser = async function(targetUid) {
-    if(!LiveManager.isBroadcaster && !LiveManager.amIMod) return;
-    if(confirm("Diesen Nutzer wirklich bannen und aus dem Stream werfen?")) {
-        try {
-            if(LiveManager.isBroadcaster) {
-                if(!currentUser.blockedUsers) currentUser.blockedUsers = [];
-                if(!currentUser.blockedUsers.includes(targetUid)) {
-                    currentUser.blockedUsers.push(targetUid);
-                    await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayUnion(targetUid) });
-                    localStorage.setItem('phil_session', JSON.stringify(currentUser));
-                }
-            } else if(LiveManager.amIMod) {
-                await updateDoc(doc(db, "users", LiveManager.streamId), { blockedUsers: arrayUnion(targetUid) });
-            }
-            showToast("Nutzer aus dem Stream gebannt.");
-            document.getElementById('live-chat-context-modal').classList.remove('show');
-        } catch(e) {}
+    } catch (err) {
+        console.error(err);
+        showToast("Email-Versand Fehler. Code in Konsole.");
     }
 };
 
-window.makeLiveMod = async function(targetUid) {
-    if(!LiveManager.isBroadcaster) return;
-    try { await setDoc(doc(db, `live_streams/${currentUser.uid}/mods`, targetUid), { uid: targetUid }); showToast("Nutzer zum Moderator ernannt!"); document.getElementById('live-chat-context-modal').classList.remove('show'); } catch(e) {}
-};
-
-window.switchModTab = function(tab) {
-    document.querySelectorAll('#mod-dashboard-modal .shop-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector(`#mod-dashboard-modal .shop-tab[onclick="switchModTab('${tab}')"]`).classList.add('active');
-    document.getElementById('mod-tab-mods').style.display = 'none'; document.getElementById('mod-tab-bans').style.display = 'none';
-    document.getElementById(`mod-tab-${tab}`).style.display = 'block';
-};
-
-window.loadModDashboard = async function() {
-    if(!LiveManager.isBroadcaster) return;
-    document.getElementById('mod-dashboard-modal').classList.add('show');
-    const modsList = document.getElementById('mod-dashboard-mods-list'); const bansList = document.getElementById('mod-dashboard-banned-list');
-    modsList.innerHTML = ''; bansList.innerHTML = '';
-
-    const snap = await getDocs(collection(db, `live_streams/${currentUser.uid}/mods`));
-    if(snap.empty) modsList.innerHTML = '<p style="text-align:center; color:#555;">Keine Mods vorhanden.</p>';
-    snap.forEach(d => {
-        const modUid = d.id; const u = allKnownUsers.find(x => x.uid === modUid); if(!u) return;
-        modsList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:10px;"><div style="display:flex; align-items:center; gap:10px;"><img src="${u.photoURL}" style="width:30px; height:30px; border-radius:50%;"><span>@${u.username}</span></div><button class="profile-action-btn edit-btn" style="min-height:30px; padding:0 10px; font-size:12px; background:#ff4444;" onclick="removeLiveMod('${modUid}')">Entfernen</button></div>`;
-    });
-
-    if(!currentUser.blockedUsers || currentUser.blockedUsers.length === 0) bansList.innerHTML = '<p style="text-align:center; color:#555;">Keine gebannten User.</p>';
-    else {
-        currentUser.blockedUsers.forEach(uid => {
-            const u = allKnownUsers.find(x => x.uid === uid); if(!u) return;
-            bansList.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; background:#222; padding:10px; border-radius:10px;"><div style="display:flex; align-items:center; gap:10px;"><img src="${u.photoURL}" style="width:30px; height:30px; border-radius:50%;"><span>@${u.username}</span></div><button class="profile-action-btn edit-btn" style="min-height:30px; padding:0 10px; font-size:12px; background:#39ff14; color:black;" onclick="toggleBlockUser('${uid}')">Entbannen</button></div>`;
-        });
-    }
-};
-
-window.removeLiveMod = async function(uid) {
-    if(!LiveManager.isBroadcaster) return;
-    await deleteDoc(doc(db, `live_streams/${currentUser.uid}/mods`, uid)); showToast("Mod entfernt."); loadModDashboard();
-};
-
-document.getElementById('start-stream-action-btn')?.addEventListener('click', () => LiveManager.start());
-document.getElementById('open-mod-dashboard-btn')?.addEventListener('click', () => loadModDashboard());
-document.getElementById('send-live-chat-btn')?.addEventListener('click', async () => {
-    const input = document.getElementById('live-chat-input'); const text = input.value.trim(); if(!text || !LiveManager.streamId) return;
-    input.value = ''; await addDoc(collection(db, `live_streams/${LiveManager.streamId}/chat`), { uid: currentUser.uid, name: currentUser.displayName, pic: currentUser.photoURL, text: text, timestamp: Date.now() });
+document.getElementById('auth-switch-register-btn')?.addEventListener('click', (e) => {
+    isRegisterMode = !isRegisterMode;
+    document.getElementById('auth-username').style.display = isRegisterMode ? 'block' : 'none';
+    document.getElementById('auth-login-btn').innerText = isRegisterMode ? "Registrieren" : "Einloggen";
+    e.target.innerText = isRegisterMode ? "Zurück zum Login" : "Neuen Account erstellen";
 });
-document.getElementById('live-chat-input')?.addEventListener('keypress', (e) => { if (e.key === 'Enter') document.getElementById('send-live-chat-btn').click(); });
 
-window.searchUsers = function(query) {
-    let results = [];
-    allKnownUsers.forEach(u => {
-        if (u.username.toLowerCase().includes(query.toLowerCase()) || u.displayName.toLowerCase().includes(query.toLowerCase())) {
-            results.push(u);
+document.getElementById('auth-login-btn')?.addEventListener('click', async () => {
+    const email = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const username = document.getElementById('auth-username').value.trim().toLowerCase();
+    const btn = document.getElementById('auth-login-btn');
+
+    if(!email || !password) return showCustomAlert("Fehler", "Bitte alle Felder ausfüllen.");
+
+    btn.disabled = true;
+    btn.innerText = "Lädt...";
+
+    try {
+        if(isRegisterMode) {
+            if(password.length < 6) throw new Error("Passwort muss mind. 6 Zeichen lang sein.");
+            if(username.length < 3) throw new Error("Benutzername muss mind. 3 Zeichen lang sein.");
+
+            const nameSnap = await getDocs(query(collection(db, "users"), where("username", "==", username)));
+            if (!nameSnap.empty) throw new Error("Dieser Benutzername ist bereits vergeben.");
+
+            generatedOTP = Math.floor(100000 + Math.random() * 900000).toString();
+            pendingRegData = { email, password, username };
+
+            console.log("\n=============================================");
+            console.log("🔐 DEIN PHIL SHORTS BESTÄTIGUNGSCODE IST: " + generatedOTP);
+            console.log("=============================================\n");
+
+            await window.sendEmailOTP(email, generatedOTP);
+
+            document.getElementById('login-input-section').style.display = 'none';
+            document.getElementById('google-login-container').style.display = 'none';
+            document.getElementById('otp-section').style.display = 'flex';
+        } else {
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+            if(userDoc.exists()) {
+                currentUser = userDoc.data();
+                if (currentUser.banned) {
+                    auth.signOut();
+                    throw new Error("Dein Account wurde gesperrt.");
+                }
+                localStorage.setItem('phil_session', JSON.stringify(currentUser));
+                document.getElementById('login-screen').classList.remove('show');
+                window.location.reload();
+            } else {
+                throw new Error("Benutzerdaten nicht gefunden.");
+            }
         }
-    });
-    return results;
+    } catch (error) {
+        let msg = error.message;
+        if(error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') msg = "E-Mail oder Passwort ist falsch.";
+        if(error.code === 'auth/invalid-email') msg = "Ungültige E-Mail Adresse.";
+        if(error.code === 'auth/email-already-in-use') msg = "Diese E-Mail ist bereits registriert.";
+        showCustomAlert("Fehler", msg);
+    } finally {
+        btn.disabled = false;
+        btn.innerText = isRegisterMode ? "Registrieren" : "Einloggen";
+    }
+});
+
+document.getElementById('auth-cancel-btn')?.addEventListener('click', () => {
+    generatedOTP = null;
+    pendingRegData = null;
+    document.getElementById('auth-otp').value = '';
+    document.getElementById('otp-section').style.display = 'none';
+    document.getElementById('login-input-section').style.display = 'flex';
+    document.getElementById('google-login-container').style.display = 'block';
+});
+
+document.getElementById('auth-verify-btn')?.addEventListener('click', async () => {
+    const inputCode = document.getElementById('auth-otp').value.trim();
+    if(inputCode !== generatedOTP) return showCustomAlert("Falscher Code", "Der eingegebene Code ist inkorrekt.");
+
+    const btn = document.getElementById('auth-verify-btn');
+    btn.disabled = true;
+    btn.innerText = "Erstelle Account...";
+
+    try {
+        const userCredential = await createUserWithEmailAndPassword(auth, pendingRegData.email, pendingRegData.password);
+        const uid = userCredential.user.uid;
+
+        const newUser = { 
+            uid: uid, 
+            displayName: pendingRegData.username, 
+            username: pendingRegData.username, 
+            email: pendingRegData.email, 
+            photoURL: "https://api.dicebear.com/7.x/avataaars/svg?seed=" + uid, 
+            bio: "Neu in der Community! 👋", 
+            following: [], followers: [], savedVideos: [], blockedUsers: [], 
+            socialLinks: { ig: '', yt: '', tw: '', tt: '' }, 
+            verified: false, coins: 1000, xp: 0, streak: 1, profileViews: 0, 
+            isAdmin: false, banned: false, decorations: [], activeBorder: "", stories: [], 
+            appTheme: 'default', dmPrivacy: 'everyone', philPlusTier: 0, 
+            lastLogin: new Date().toDateString(), lastActive: Date.now(), 
+            customBorder: { c1: '#ff0050', c2: '#00f2fe', grad: true } 
+        };
+
+        await setDoc(doc(db, "users", uid), newUser);
+        
+        currentUser = newUser;
+        localStorage.setItem('phil_session', JSON.stringify(currentUser));
+        
+        showToast("Erfolgreich registriert! 🎉");
+        document.getElementById('login-screen').classList.remove('show');
+        window.location.reload(); 
+        
+    } catch (error) {
+        let msg = "Fehler bei der Registrierung.";
+        if(error.code === 'auth/email-already-in-use') msg = "Diese E-Mail Adresse ist bereits vergeben!";
+        showCustomAlert("Registrierung fehlgeschlagen", msg);
+        document.getElementById('auth-cancel-btn').click();
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "Code Bestätigen";
+    }
+});
+
+window.updateAccountSecurity = async function() {
+    const newEmail = document.getElementById('settings-email-input').value.trim();
+    const newPass = document.getElementById('settings-pass-input').value;
+    const confirmPass = document.getElementById('settings-pass-confirm').value;
+
+    if (!newEmail && !newPass) return showToast("Keine Änderungen eingetragen.");
+
+    const user = auth.currentUser;
+    if(!user && (newEmail || newPass)) return showCustomAlert("Sicherheit", "Bitte melde dich erneut an, um sensible Daten zu ändern.");
+
+    try {
+        let updates = {};
+        if (newEmail) {
+            if (!newEmail.includes('@')) return showCustomAlert("Fehler", "Ungültige E-Mail Adresse.");
+            await updateEmail(user, newEmail);
+            updates.email = newEmail;
+        }
+
+        if (newPass) {
+            if (newPass.length < 6) return showCustomAlert("Fehler", "Passwort muss mind. 6 Zeichen haben.");
+            if (newPass !== confirmPass) return showCustomAlert("Fehler", "Passwörter stimmen nicht überein.");
+            await updatePassword(user, newPass);
+        }
+
+        if(Object.keys(updates).length > 0) {
+            await updateDoc(doc(db, "users", currentUser.uid), updates);
+            currentUser = { ...currentUser, ...updates };
+            localStorage.setItem('phil_session', JSON.stringify(currentUser));
+        }
+
+        showToast("Sicherheitsdaten aktualisiert! 🛡️");
+        document.getElementById('settings-email-input').value = "";
+        document.getElementById('settings-pass-input').value = "";
+        document.getElementById('settings-pass-confirm').value = "";
+    } catch (e) {
+        if(e.code === 'auth/requires-recent-login') {
+            showCustomAlert("Sicherheit", "Bitte logge dich kurz aus und wieder ein, um diese Daten zu ändern.");
+        } else {
+            showCustomAlert("Fehler", "Daten konnten nicht gespeichert werden.");
+        }
+    }
 };
 
 function initResponsiveLayout() {

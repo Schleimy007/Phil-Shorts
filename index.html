@@ -23,7 +23,14 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+
     <script>
+        (function(){
+            // HIER deine EmailJS Public Key einfügen, wenn du dich bei emailjs.com anmeldest
+            emailjs.init("1GBVFdSAqzftqj2WE");
+        })();
+
         function handleGoogleLogin(response) {
             document.getElementById('login-text').innerText = "Wird authentifiziert...";
             window.dispatchEvent(new CustomEvent('googleLoginSuccess', {
@@ -62,10 +69,35 @@
             <div class="login-box">
                 <img src="https://i.imgur.com/l1luc1q.png" class="app-logo" alt="Logo">
                 <h2>Willkommen bei Phil Shorts</h2>
-                <p id="login-text" style="color: #aaa; margin-bottom: 30px; font-size: 14px;">Logge dich mit deinem offiziellen Google Account ein.</p>
-                <div id="g_id_onload" data-client_id="825368838802-830ev6a720t4hb5qrb7jo5de7orb4pr0.apps.googleusercontent.com" data-context="signin" data-ux_mode="popup" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
-                <div style="display: flex; justify-content: center; width: 100%;">
-                    <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_black" data-text="signin_with" data-size="large" data-width="250"></div>
+                <p id="login-text" style="color: #aaa; margin-bottom: 30px; font-size: 14px;">Logge dich ein oder erstelle einen Account.</p>
+                
+                <div id="login-input-section" style="display:flex; flex-direction:column; gap:10px;">
+                    <input type="text" id="auth-username" class="comment-input" placeholder="Benutzername (nur für Registrierung)" style="display:none; text-align:center;">
+                    <input type="email" id="auth-email" class="comment-input" placeholder="E-Mail Adresse" style="text-align: center;">
+                    <input type="password" id="auth-password" class="comment-input" placeholder="Passwort" style="text-align: center;">
+                    <button id="auth-login-btn" class="profile-action-btn" style="width:100%;">Einloggen</button>
+                    <button id="auth-switch-register-btn" class="profile-action-btn edit-btn" style="width:100%; margin-bottom: 10px;">Neuen Account erstellen</button>
+                </div>
+
+                <div id="otp-section" style="display:none; flex-direction:column; gap:10px; margin-bottom: 20px;">
+                    <h4 style="color:#00f2fe; margin-bottom: 5px;">E-Mail Bestätigung</h4>
+                    <p style="font-size:12px; color:#aaa; margin-bottom: 10px;">Wir haben dir einen 6-stelligen Code gesendet.</p>
+                    <input type="text" id="auth-otp" class="comment-input" placeholder="123456" maxlength="6" style="text-align:center; font-size:24px; letter-spacing:5px; font-weight:bold;">
+                    <button id="auth-verify-btn" class="profile-action-btn" style="width:100%; background:#39ff14; color:black;">Code Bestätigen</button>
+                    <button id="auth-cancel-btn" class="profile-action-btn edit-btn" style="width:100%;">Abbrechen</button>
+                </div>
+
+                <div id="google-login-container">
+                    <div style="display: flex; align-items: center; margin-bottom: 20px; opacity: 0.5;">
+                        <hr style="flex: 1; border: 0; border-top: 1px solid #fff;">
+                        <span style="padding: 0 10px; font-size: 12px; color: #fff;">ODER</span>
+                        <hr style="flex: 1; border: 0; border-top: 1px solid #fff;">
+                    </div>
+
+                    <div id="g_id_onload" data-client_id="825368838802-830ev6a720t4hb5qrb7jo5de7orb4pr0.apps.googleusercontent.com" data-context="signin" data-ux_mode="popup" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
+                    <div style="display: flex; justify-content: center; width: 100%;">
+                        <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_black" data-text="signin_with" data-size="large" data-width="250"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -838,57 +870,44 @@
                 <h4>Post Erstellen</h4><i class="fas fa-times close-modal" id="close-upload"></i>
             </div>
             <div class="modal-body upload-body">
-                <div class="file-upload-wrapper">
+                <div class="file-upload-wrapper" id="main-file-upload-wrapper">
                     <input type="file" id="up-file" class="file-input-hidden" accept="video/*, image/*" multiple required>
                     <div class="file-upload-design" id="up-file-btn" onclick="document.getElementById('up-file').click()">
                         <i class="fas fa-cloud-upload-alt"></i>
                         <p id="up-file-text" style="word-break: break-all; padding: 0 10px;">Video oder Bilder auswählen</p>
-                        <p style="font-size: 11px; color: #666; margin-top: 5px;">(Plus++: bis 3 Min. | Plus: 100MB)</p>
+                        <p style="font-size: 11px; color: #666; margin-top: 5px;">(Bilder = Fotomodus | Video = Filmmodus)</p>
                     </div>
                 </div>
 
                 <div id="upload-media-preview-container" class="upload-media-preview" style="display: none;">
                     <video id="upload-video-preview" playsinline loop class="upload-preview-el"></video>
-                    <img id="upload-image-preview" class="upload-preview-el">
+                    <img id="upload-image-preview" class="upload-preview-el" style="display: none;">
                 </div>
 
-                <div id="upload-music-system" class="advanced-settings-box" style="border-color: #ffd700; margin-top: 10px;">
-                    <h5 style="margin-bottom: 12px; color: #ffd700;"><i class="fas fa-music"></i> Hintergrundmusik</h5>
+                <div id="upload-audio-controls" class="advanced-settings-box" style="display:none; border-color:#00f2fe; margin-top: 10px;">
+                    <h5 style="margin-bottom: 12px; color: #00f2fe;"><i class="fas fa-volume-up"></i> Lautstärke anpassen</h5>
                     
-                    <button id="open-sound-library-btn" type="button" class="profile-action-btn edit-btn" style="width: 100%; gap: 10px; margin-bottom: 10px;">
-                        <i class="fas fa-search"></i> Sound aus Bibliothek wählen
-                    </button>
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <span style="font-size: 12px; color: #888;">Video</span>
+                        <input type="range" id="up-volume-slider" class="trim-slider slider-red" min="0" max="1" step="0.05" value="1" style="flex: 1;">
+                        <span style="font-size: 12px; color: #888;">Max</span>
+                    </div>
 
-                    <div id="selected-sound-editor" style="display: none; background: rgba(0,242,254,0.1); padding: 12px; border-radius: 12px; border: 1px solid #00f2fe;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <i class="fas fa-compact-disc fa-spin" style="color: #00f2fe;"></i>
-                                <strong id="active-sound-name" style="font-size: 13px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Song Name</strong>
-                            </div>
-                            <i class="fas fa-times-circle" style="color: #ff4444; cursor: pointer; font-size: 18px;" onclick="window.removeSelectedMusic()"></i>
-                        </div>
-                        
-                        <label style="font-size: 11px; color: #888; display: block; margin-bottom: 5px;">Startpunkt wählen (Offset):</label>
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                            <span id="sound-start-time-display" style="font-size: 12px; color: #00f2fe; min-width: 35px;">0:00</span>
-                            <input type="range" id="sound-offset-slider" class="trim-slider slider-blue" min="0" max="120" value="0" style="flex: 1;">
-                        </div>
+                    <div class="setting-toggle-row" style="margin-bottom: 10px;">
+                        <span style="font-size: 12px;">Originalton komplett stummschalten</span>
+                        <label class="switch"><input type="checkbox" id="up-mute-original-toggle"><span class="slider round"></span></label>
+                    </div>
 
-                        <div style="display: flex; justify-content: space-between; gap: 10px;">
-                            <div style="flex: 1;">
-                                <label style="font-size: 10px; color: #888;">Lautstärke Video</label>
-                                <input type="range" id="up-video-vol" class="trim-slider slider-red" min="0" max="1" step="0.05" value="1" style="width:100%;">
-                            </div>
-                            <div style="flex: 1;">
-                                <label style="font-size: 10px; color: #888;">Lautstärke Musik</label>
-                                <input type="range" id="up-music-vol" class="trim-slider slider-blue" min="0" max="1" step="0.05" value="1" style="width:100%;">
-                            </div>
-                        </div>
-                        
-                        <div class="setting-toggle-row" style="margin-top:10px;">
-                            <span style="font-size: 12px;">Originalton stummschalten</span>
-                            <label class="switch"><input type="checkbox" id="up-mute-original-toggle"><span class="slider round"></span></label>
-                        </div>
+                    <hr style="border:0; border-top:1px solid #333; margin: 15px 0;">
+                    
+                    <h5 style="margin-bottom: 12px; color: #ffd700;"><i class="fas fa-music"></i> Eigene Musik hinterlegen</h5>
+                    <div id="custom-audio-name" style="display:none; background: rgba(0, 242, 254, 0.1); padding: 8px 12px; border-radius: 8px; font-size: 12px; color: #00f2fe; margin-bottom: 10px; word-break: break-all;">
+                        <i class="fas fa-compact-disc fa-spin"></i> <span id="custom-audio-name-text"></span>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <input type="file" id="up-custom-audio-file" accept="audio/*" style="display:none;">
+                        <button type="button" class="profile-action-btn edit-btn" style="flex:1;" onclick="document.getElementById('up-custom-audio-file').click()"><i class="fas fa-file-audio"></i> MP3 wählen</button>
+                        <button type="button" class="profile-action-btn" id="up-remove-audio-btn" style="display:none; background:#ff4444; width: 46px; padding: 0;"><i class="fas fa-trash"></i></button>
                     </div>
                 </div>
 
@@ -1084,17 +1103,14 @@
                     </div>
                     <label style="color:#888; font-size:12px;">Farbe 1</label>
                     <input type="color" id="cb-color1" value="#ff0050" style="width: 100%; height: 40px; border-radius: 10px; margin-bottom: 15px; cursor: pointer; border:none;">
-
                     <div class="setting-toggle-row" style="margin-bottom: 15px;">
                         <span>Gradient (Verlauf) aktivieren</span>
                         <label class="switch"><input type="checkbox" id="cb-grad-toggle"><span class="slider round"></span></label>
                     </div>
-
                     <div id="cb-color2-container" style="display:none;">
                         <label style="color:#888; font-size:12px;">Farbe 2</label>
                         <input type="color" id="cb-color2" value="#00f2fe" style="width: 100%; height: 40px; border-radius: 10px; margin-bottom: 15px; cursor: pointer; border:none;">
                     </div>
-
                     <button class="profile-action-btn" onclick="saveCustomBorder()" style="width: 100%; background: #ffd700; color: black; margin-top: 10px;">Speichern & Ausrüsten</button>
                 </div>
             </div>
@@ -1187,4 +1203,5 @@
     </div>
     <script type="module" src="script.js"></script>
 </body>
+
 </html>
