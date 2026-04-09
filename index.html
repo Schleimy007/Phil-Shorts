@@ -48,6 +48,16 @@
         <div id="toast" class="toast">Nachricht hier</div>
         <div id="achievement-popup" class="achievement-popup"><i class="fas fa-trophy"></i> <span id="achievement-text"></span></div>
 
+        <div id="video-processing-overlay" class="full-screen-overlay" style="z-index: 9999; background: rgba(0,0,0,0.9); flex-direction: column; display: none;">
+            <i class="fas fa-compact-disc fa-spin" style="font-size: 50px; color: #00f2fe; margin-bottom: 20px;"></i>
+            <h3 style="color: white; margin-bottom: 10px;">Video wird erstellt...</h3>
+            <p style="color: #aaa; font-size: 14px; text-align: center; max-width: 80%;">Der Sound wird mit dem Video synchronisiert. Bitte schließe die App nicht.</p>
+            <div style="width: 60%; height: 6px; background: #333; border-radius: 3px; margin-top: 30px; overflow: hidden;">
+                <div id="render-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ff0050, #00f2fe); transition: width 0.2s;"></div>
+            </div>
+            <p id="render-progress-text" style="color: #00f2fe; font-size: 12px; margin-top: 10px; font-weight: bold;">0%</p>
+        </div>
+
         <div id="login-screen" class="full-screen-overlay">
             <div class="login-box">
                 <img src="https://i.imgur.com/l1luc1q.png" class="app-logo" alt="Logo">
@@ -464,9 +474,9 @@
             </div>
 
             <div id="admin-tab-sounds" class="admin-content-section" style="display:none; padding: 0 15px 80px;">
-                <h4 style="padding: 10px 0; color:#888; font-size:14px; text-transform:uppercase;">Ausstehende Sound-Prüfungen</h4>
-                <div id="admin-sound-requests-list">
-                    <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>
+                <h4 style="padding: 10px 0; color:#ffd700; font-size:14px; text-transform:uppercase;"><i class="fas fa-music"></i> Neue Sound Anfragen</h4>
+                <div id="admin-sound-requests-list" style="display: flex; flex-direction: column; gap: 12px;">
+                    <p style="color: #555; text-align: center; margin-top: 20px;">Keine neuen Anfragen.</p>
                 </div>
             </div>
         </div>
@@ -838,6 +848,40 @@
                     </div>
                 </div>
 
+                <div id="upload-media-preview-container" class="upload-media-preview" style="display: none;">
+                    <video id="upload-video-preview" playsinline loop class="upload-preview-el"></video>
+                    <img id="upload-image-preview" class="upload-preview-el">
+                </div>
+
+                <div id="upload-music-selector-box" class="advanced-settings-box" style="border-color: #ffd700; margin-top: 10px;">
+                    <h5 style="margin-bottom: 12px; color: #ffd700;"><i class="fas fa-music"></i> Hintergrundmusik</h5>
+                    
+                    <button id="open-sound-library-btn" type="button" class="profile-action-btn edit-btn" style="width: 100%; margin-bottom: 10px;">
+                        <i class="fas fa-search"></i> Sound auswählen
+                    </button>
+
+                    <div id="selected-sound-editor" style="display: none; background: rgba(0,242,254,0.1); padding: 12px; border-radius: 12px; border: 1px solid #00f2fe;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <i class="fas fa-music fa-beat" style="color: #00f2fe;"></i>
+                                <strong id="active-sound-name" style="font-size: 13px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Song Name</strong>
+                            </div>
+                            <i class="fas fa-times-circle" style="color: #ff4444; cursor: pointer; font-size: 18px;" onclick="removeSelectedMusic()"></i>
+                        </div>
+                        
+                        <label style="font-size: 11px; color: #888; display: block; margin-bottom: 5px;">Startpunkt im Song (Trimmen):</label>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                            <span id="sound-start-time-display" style="font-size: 12px; color: #00f2fe; min-width: 35px;">0:00</span>
+                            <input type="range" id="sound-offset-slider" class="trim-slider slider-blue" min="0" max="120" value="0" style="flex: 1;">
+                        </div>
+
+                        <div class="setting-toggle-row">
+                            <span style="font-size: 12px;">Originalton stummschalten</span>
+                            <label class="switch"><input type="checkbox" id="up-mute-original-toggle"><span class="slider round"></span></label>
+                        </div>
+                    </div>
+                </div>
+
                 <button id="open-sound-library-btn" class="profile-action-btn edit-btn" style="width: 100%; margin-top: 10px; display: none;"><i class="fas fa-music"></i> Musik hinzufügen / bearbeiten</button>
                 
                 <div id="upload-sound-editor" style="display:none; background: rgba(0, 0, 0, 0.3); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-top: 10px;">
@@ -1150,6 +1194,41 @@
                 <div id="mod-tab-bans" style="display: none;">
                     <p style="color:#888; font-size:13px; text-align:center; margin-bottom:15px;">Gebannte User aus deinem Stream (entblocken):</p>
                     <div id="mod-dashboard-banned-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="sound-library-modal" class="modal" style="height: 85%; z-index: 7000;">
+            <div class="modal-header">
+                <h4>Musik finden</h4>
+                <i class="fas fa-times close-modal" onclick="document.getElementById('sound-library-modal').classList.remove('show')"></i>
+            </div>
+            <div class="shop-tabs">
+                <div class="shop-tab active" data-sound-tab="lib-discover" onclick="switchSoundTab('lib-discover')">Entdecken</div>
+                <div class="shop-tab" data-sound-tab="lib-trends" onclick="switchSoundTab('lib-trends')">Originalton</div>
+                <div class="shop-tab" data-sound-tab="lib-request" onclick="switchSoundTab('lib-request')">Einsenden</div>
+            </div>
+            <div class="modal-body" style="padding: 10px;">
+                <div id="lib-discover" class="sound-tab-content active">
+                    <div class="search-input-box" style="margin-bottom: 15px;">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="lib-sound-search" placeholder="Songs suchen..." class="search-bar">
+                    </div>
+                    <div id="official-sounds-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                </div>
+                <div id="lib-trends" class="sound-tab-content" style="display:none;">
+                    <div id="community-sounds-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                </div>
+                <div id="lib-request" class="sound-tab-content" style="display:none;">
+                    <div class="advanced-settings-box" style="text-align:center;">
+                        <i class="fas fa-file-upload" style="font-size: 30px; color: #ffd700; margin-bottom: 10px;"></i>
+                        <h5>Eigene MP3 an Admins senden</h5>
+                        <input type="text" id="req-song-title" class="comment-input" placeholder="Song Name / Artist" style="margin-bottom: 10px;">
+                        <input type="file" id="req-song-file" accept="audio/mp3" style="display: none;">
+                        <button class="profile-action-btn edit-btn" style="width: 100%;" onclick="document.getElementById('req-song-file').click()">MP3 Datei wählen</button>
+                        <p id="req-file-status" style="font-size: 11px; margin-top: 5px; color: #00f2fe;"></p>
+                        <button id="submit-sound-request" class="profile-action-btn" style="width: 100%; margin-top: 15px; background: #ffd700; color: black;">Absenden</button>
+                    </div>
                 </div>
             </div>
         </div>

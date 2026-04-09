@@ -3686,3 +3686,121 @@ input:checked+.slider:before {
     from { box-shadow: 0 0 10px #ff4444; }
     to { box-shadow: 0 0 25px #ff4444; }
 }
+/* --- NEU: SOUND SYSTEM & EDITOR STYLES --- */
+
+/* Verarbeitungs-Overlay (Zusammenfügen von Video & Audio) */
+#video-processing-overlay {
+    background: rgba(0, 0, 0, 0.95) !important;
+}
+
+#render-progress-bar {
+    box-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+}
+
+/* Container für die Sound-Einträge in der Bibliothek */
+.sound-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 20px;
+}
+
+/* Einzelnes Sound-Item (TikTok Style) */
+.sound-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid #222;
+    transition: background 0.2s;
+}
+
+.sound-item:active {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.sound-item img {
+    width: 45px;
+    height: 45px;
+    border-radius: 8px;
+    object-fit: cover;
+}
+
+.sound-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.sound-info strong {
+    display: block;
+    font-size: 14px;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sound-info span {
+    font-size: 12px;
+    color: #888;
+}
+
+/* Sound Editor Bereich im Upload Modal */
+#upload-sound-editor {
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* Spezieller Slider für den Sound-Startpunkt (Trimmen) */
+#sound-offset-slider {
+    accent-color: #00f2fe;
+}
+
+#sound-offset-display {
+    font-family: 'Courier New', Courier, monospace;
+    background: #222;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid #333;
+}
+
+/* Play/Pause Button Animation im Editor */
+.fa-compact-disc.fa-spin {
+    animation-duration: 3s;
+}
+
+/* Admin Sound Request Karten */
+.admin-sound-card {
+    background: rgba(255, 215, 0, 0.05);
+    border: 1px solid rgba(255, 215, 0, 0.2);
+    border-radius: 15px;
+    padding: 12px;
+}
+
+/* Tab-Content Übergänge */
+.sound-tab-content {
+    animation: fadeIn 0.3s ease;
+}
+
+/* Lautstärke Regler Icons */
+.advanced-settings-box label i {
+    margin-right: 5px;
+    color: #888;
+}
+
+/* Suchen-Eingabe in der Bibliothek */
+#lib-sound-search {
+    border-radius: 12px;
+    background: #1a1a1a !important;
+    border-color: #333 !important;
+}
+
+#lib-sound-search:focus {
+    border-color: #00f2fe !important;
+}

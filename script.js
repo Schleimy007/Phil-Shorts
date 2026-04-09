@@ -45,6 +45,13 @@ window.customUploadAudioFile = null;
 let sessionInterests = {};
 let creatorAffinities = {};
 
+// === GLOBALE SOUND-VARIABLEN ===
+let selectedLibrarySound = null; // Speichert den gewählten Song
+let soundPreviewPlayer = new Audio(); // Player für die Bibliotheks-Vorschau
+let soundRequestFile = null; // Die hochgeladene MP3 für Admins
+let adminSoundsUnsub = null;
+let officialSoundsCache = [];
+
 if (!document.getElementById('dynamic-live-styles')) {
     const style = document.createElement('style');
     style.id = 'dynamic-live-styles';
@@ -57,6 +64,61 @@ if (!document.getElementById('dynamic-live-styles')) {
     `;
     document.head.appendChild(style);
 }
+
+// --- SOUND BIBLIOTHEK LOGIK ---
+window.switchSoundTab = function(tabId) {
+    document.querySelectorAll('.sound-tab-content').forEach(c => c.style.display = 'none');
+    document.querySelectorAll('#sound-library-modal .shop-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(tabId).style.display = 'block';
+    event.target.classList.add('active');
+    if (tabId === 'lib-discover') loadOfficialLibrary();
+    if (tabId === 'lib-trends') loadCommunityTrends();
+};
+
+async function loadOfficialLibrary() {
+    const list = document.getElementById('official-sounds-list');
+    list.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
+    const snap = await getDocs(query(collection(db, "official_sounds"), orderBy("timestamp", "desc")));
+    list.innerHTML = '';
+    if (snap.empty) { list.innerHTML = '<p style="color:#555; text-align:center; margin-top:20px;">Keine Musik gefunden.</p>'; return; }
+    snap.forEach(docSnap => {
+        const s = docSnap.data();
+        list.innerHTML += createSoundItemHTML(docSnap.id, s.title, s.url, "Phil Shorts Music", "https://i.imgur.com/JDPRzCc.png");
+    });
+}
+
+function loadCommunityTrends() {
+    const list = document.getElementById('community-sounds-list');
+    list.innerHTML = '';
+    const trends = [];
+    allVideosData.forEach(v => {
+        if (v.soundUrl && !trends.find(t => t.url === v.soundUrl)) {
+            trends.push({ id: v.id, title: v.soundName || "Originalton", url: v.url, author: v.authorName, pic: v.authorPic });
+        }
+    });
+    if (trends.length === 0) list.innerHTML = '<p style="color:#555; text-align:center;">Noch keine Trends.</p>';
+    trends.forEach(t => { list.innerHTML += createSoundItemHTML(t.id, t.title, t.url, t.author, t.pic); });
+}
+
+function createSoundItemHTML(id, title, url, author, pic) {
+    const safeTitle = title.replace(/'/g, "\\'");
+    return `<div class="sound-item"><img src="${pic}"><div class="sound-info"><strong>${title}</strong><span>${author}</span></div>
+            <div style="display:flex; gap:10px;">
+                <button class="chat-send-btn" style="background:#222; width:35px; height:35px;" onclick="previewSound('${url}', this)"><i class="fas fa-play"></i></button>
+                <button class="chat-send-btn" style="width:35px; height:35px;" onclick="selectSoundForUpload('${id}', '${safeTitle}', '${url}')"><i class="fas fa-check"></i></button>
+            </div></div>`;
+}
+
+window.previewSound = function(url, btn) {
+    if (!soundPreviewPlayer.paused && soundPreviewPlayer.src === url) {
+        soundPreviewPlayer.pause();
+        btn.innerHTML = '<i class="fas fa-play"></i>';
+    } else {
+        soundPreviewPlayer.src = url;
+        soundPreviewPlayer.play();
+        btn.innerHTML = '<i class="fas fa-pause"></i>';
+    }
+};
 
 // === MICRO-INTERACTIONS & GAMIFICATION ===
 function triggerHaptic(type = 'light') {
@@ -889,6 +951,11 @@ window.onload = async function() {
         try {
             const isVideo = files[0].type.startsWith('video/');
             let uploadObj = { 
+                soundUrl: selectedLibrarySound ? selectedLibrarySound.url : null,
+                soundOffset: selectedLibrarySound ? selectedLibrarySound.offset : 0,
+                videoVolume: parseFloat(document.getElementById('video-volume-slider').value),
+                musicVolume: parseFloat(document.getElementById('music-volume-slider').value),
+                muteOriginal: document.getElementById('up-mute-original-toggle').checked,
                 authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
                 title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now(),
                 muteOriginal: isMuted, postVolume: postVol
@@ -1232,22 +1299,21 @@ function createVideoElement(video) {
     let postVol = video.postVolume !== undefined ? video.postVolume : 1;
     let origMuted = video.muteOriginal ? true : false;
 
-    if(video.soundUrl) {
-        const audioEl = new Audio(video.soundUrl); audioEl.loop = true; audioEl.muted = true; div.audioEl = audioEl;
+if (video.soundUrl) {
+        const audioEl = new Audio(video.soundUrl);
+        audioEl.loop = true;
+        div.audioEl = audioEl;
         const v = div.querySelector('.video__player');
-        if(v) {
-            v.addEventListener('play', () => { 
-                audioEl.volume = window.globalVolume * postVol; 
-                audioEl.muted = window.globalMuted; 
-                audioEl.play().catch(e=>{}); 
-
-                v.volume = window.globalVolume * postVol;
-                v.muted = window.globalMuted || origMuted;
+        if (v) {
+            v.addEventListener('play', () => {
+                audioEl.currentTime = (video.soundOffset || 0) + v.currentTime;
+                audioEl.volume = video.musicVolume !== undefined ? (window.globalVolume * video.musicVolume) : window.globalVolume;
+                audioEl.play().catch(e => {});
+                v.volume = video.videoVolume !== undefined ? (window.globalVolume * video.videoVolume) : window.globalVolume;
+                if (video.muteOriginal) v.muted = true;
             });
             v.addEventListener('pause', () => audioEl.pause());
-            v.addEventListener('timeupdate', () => { if(Math.abs(audioEl.currentTime - v.currentTime) > 0.5 && audioEl.duration) audioEl.currentTime = v.currentTime % audioEl.duration; });
-            const volSlider = div.querySelector('.volume-slider'); if(volSlider) volSlider.addEventListener('input', (e) => { audioEl.volume = e.target.value * postVol; v.volume = e.target.value * postVol; });
-            const muteBtn = div.querySelector('.mute-btn'); if(muteBtn) muteBtn.addEventListener('click', () => { audioEl.muted = window.globalMuted; v.muted = window.globalMuted || origMuted; });
+            v.addEventListener('seeking', () => { audioEl.currentTime = (video.soundOffset || 0) + v.currentTime; });
         }
     } else {
         const v = div.querySelector('.video__player');
@@ -2024,6 +2090,24 @@ window.loadAdminDashboard = async function() {
         });
     } catch (e) {}
 }
+
+// NEU: Sound Requests im Admin Dashboard
+    const soundList = document.getElementById('admin-sound-requests-list');
+    onSnapshot(collection(db, "sound_requests"), (snap) => {
+        soundList.innerHTML = '';
+        if (snap.empty) { soundList.innerHTML = '<p style="color:#555; text-align:center;">Keine neuen Anfragen.</p>'; return; }
+        snap.forEach(d => {
+            const r = d.data();
+            soundList.innerHTML += `<div class="admin-sound-card" style="margin-bottom:10px; padding:10px; background:#1a1a1a; border-radius:10px; border:1px solid #333;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div><strong>${r.title}</strong><p style="font-size:11px; color:#888;">Von: ${r.senderName}</p></div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="admin-btn btn-blue" onclick="previewSound('${r.url}', this)"><i class="fas fa-play"></i></button>
+                        <button class="admin-btn btn-green" onclick="approveSound('${d.id}')">Freigeben</button>
+                    </div>
+                </div></div>`;
+        });
+    });
 
 window.toggleVerifyAdmin = async function(targetUid, currentStatus) { if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return; await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus }); loadAdminDashboard(); };
 window.toggleAdminRole = async function(targetUid, currentStatus) { if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return; await updateDoc(doc(db, "users", targetUid), { isAdmin: !currentStatus }); loadAdminDashboard(); };
@@ -3010,7 +3094,23 @@ document.getElementById('sound-play-btn')?.addEventListener('click', () => {
     }
 });
 
-window.removeSelectedSound = function() { window.selectedUploadSound = null; document.getElementById('upload-sound-preview').style.display = 'none'; }
+window.selectSoundForUpload = function(id, name, url) {
+    selectedLibrarySound = { id, name, url, offset: 0 };
+    soundPreviewPlayer.pause();
+    document.getElementById('sound-library-modal').classList.remove('show');
+    document.getElementById('selected-sound-editor').style.display = 'block';
+    document.getElementById('active-sound-name').innerText = name;
+    document.getElementById('open-sound-library-btn').innerText = "Sound ändern";
+    document.getElementById('video-volume-slider').value = 0.2;
+    showToast("Musik hinzugefügt! 🎵");
+};
+
+window.removeSelectedMusic = function() {
+    selectedLibrarySound = null;
+    document.getElementById('selected-sound-editor').style.display = 'none';
+    document.getElementById('open-sound-library-btn').innerText = "Sound auswählen";
+    document.getElementById('up-mute-original-toggle').checked = false;
+};
 
 document.getElementById('up-file')?.addEventListener('change', function(e) {
     const files = e.target.files; const txt = document.querySelector('#up-file-btn p'); const icon = document.querySelector('#up-file-btn i'); 
@@ -3036,6 +3136,11 @@ document.getElementById('submit-upload')?.addEventListener('click', async() => {
     try {
         const isVideo = files[0].type.startsWith('video/');
         let uploadObj = { 
+            soundUrl: selectedLibrarySound ? selectedLibrarySound.url : null,
+            soundOffset: selectedLibrarySound ? selectedLibrarySound.offset : 0,
+            videoVolume: parseFloat(document.getElementById('video-volume-slider').value),
+            musicVolume: parseFloat(document.getElementById('music-volume-slider').value),
+            muteOriginal: document.getElementById('up-mute-original-toggle').checked,
             authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
             title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() 
         };
@@ -3072,6 +3177,37 @@ document.getElementById('submit-upload')?.addEventListener('click', async() => {
 document.getElementById('open-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.add('show'));
 document.getElementById('close-upload')?.addEventListener('click', () => document.getElementById('upload-modal').classList.remove('show'));
 document.getElementById('close-comments')?.addEventListener('click', () => document.getElementById('comment-modal').classList.remove('show'));
+
+document.getElementById('open-sound-library-btn')?.addEventListener('click', () => {
+    document.getElementById('sound-library-modal').classList.add('show');
+    loadOfficialLibrary();
+});
+
+document.getElementById('sound-offset-slider')?.addEventListener('input', (e) => {
+    const val = e.target.value;
+    document.getElementById('sound-offset-display').innerText = val + ".0s";
+    if (selectedLibrarySound) selectedLibrarySound.offset = parseInt(val);
+});
+
+document.getElementById('req-song-file')?.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if(file) {
+        soundRequestFile = file;
+        document.getElementById('req-file-status').innerText = "Datei: " + file.name;
+    }
+});
+
+document.getElementById('submit-sound-request')?.addEventListener('click', async () => {
+    const title = document.getElementById('req-song-title').value.trim();
+    if(!title || !soundRequestFile) return showToast("Bitte Titel und Datei angeben!");
+    const btn = document.getElementById('submit-sound-request'); btn.disabled = true; btn.innerText = "Lade hoch...";
+    try {
+        const url = await uploadFileToFirebase(soundRequestFile, 'sound_requests');
+        await addDoc(collection(db, "sound_requests"), { title, url, senderName: currentUser.displayName, senderUid: currentUser.uid, timestamp: Date.now() });
+        showToast("Anfrage gesendet! 👍");
+        document.getElementById('sound-library-modal').classList.remove('show');
+    } catch(e) { showToast("Fehler!"); } finally { btn.disabled = false; btn.innerText = "Absenden"; }
+});
 
 function initResponsiveLayout() {
     const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;
