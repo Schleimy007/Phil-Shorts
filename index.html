@@ -814,20 +814,15 @@
             </div>
             <div class="modal-body upload-body">
 
-                <div id="upload-media-preview-container" class="upload-media-preview">
-                    <video id="upload-video-preview" playsinline loop class="upload-preview-el"></video>
-                    <img id="upload-image-preview" class="upload-preview-el">
-                </div>
-
                 <div id="upload-sound-preview" style="display:none; background: rgba(0, 242, 254, 0.1); border: 1px solid #00f2fe; padding: 10px 15px; border-radius: 15px; align-items: center; justify-content: space-between; margin-bottom: 10px;">
                     <div>
-                        <span style="display:block; font-size:11px; color:#00f2fe; font-weight:bold; margin-bottom:3px;"><i class="fas fa-music"></i> App-Sound ausgewählt</span>
+                        <span style="display:block; font-size:11px; color:#00f2fe; font-weight:bold; margin-bottom:3px;"><i class="fas fa-music"></i> Sound ausgewählt</span>
                         <strong id="upload-sound-name" style="font-size:14px; color:white;">Sound Name</strong>
                     </div>
                     <i class="fas fa-times" style="color:#ff4444; font-size: 18px; cursor: pointer;" onclick="removeSelectedSound()"></i>
                 </div>
 
-                <div class="file-upload-wrapper" id="main-file-upload-wrapper">
+                <div class="file-upload-wrapper">
                     <input type="file" id="up-file" class="file-input-hidden" accept="video/*, image/*" multiple required>
                     <div class="file-upload-design" id="up-file-btn" onclick="document.getElementById('up-file').click()">
                         <i class="fas fa-cloud-upload-alt"></i>
@@ -836,34 +831,7 @@
                     </div>
                 </div>
 
-                <div id="upload-audio-controls" class="advanced-settings-box" style="display: none;">
-                    <h5 style="margin-bottom: 15px; color: #00f2fe;"><i class="fas fa-sliders-h"></i> Sound & Vorschau</h5>
-                    
-                    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                        <input type="file" id="up-custom-audio-file" accept="audio/mp3, audio/wav, audio/mpeg" class="file-input-hidden">
-                        <button id="up-custom-audio-btn" class="profile-action-btn edit-btn" style="flex: 1; font-size: 13px; min-height: 40px;" onclick="document.getElementById('up-custom-audio-file').click()">
-                            <i class="fas fa-music"></i> Eigene MP3 wählen
-                        </button>
-                        <button id="up-remove-audio-btn" class="profile-action-btn edit-btn" style="display: none; background: #ff4444; width: 40px; padding: 0; min-height: 40px;">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                    <div id="custom-audio-name" style="display: none; font-size: 12px; color: #00f2fe; margin-bottom: 15px; word-break: break-all;"><i class="fas fa-check"></i> <span id="custom-audio-name-text">song.mp3</span></div>
-
-                    <div class="setting-toggle-row" id="mute-original-row" style="margin-bottom: 15px;">
-                        <span style="font-size: 13px; color: white;">Originalton stummschalten</span>
-                        <label class="switch"><input type="checkbox" id="up-mute-original-toggle"><span class="slider round"></span></label>
-                    </div>
-
-                    <label style="color:#888; font-size:12px; display:block; margin-bottom: 8px;">Lautstärke (Vorschau & Post)</label>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-volume-mute" style="color: #888; font-size: 12px;"></i>
-                        <input type="range" id="up-volume-slider" class="trim-slider slider-blue" min="0" max="1" step="0.05" value="1" style="flex: 1;">
-                        <i class="fas fa-volume-up" style="color: #888; font-size: 12px;"></i>
-                    </div>
-                </div>
-
-                <div class="setting-toggle-row" style="margin-top: 5px; background: rgba(255,255,255,0.05); padding: 10px 15px; border-radius: 15px;">
+                <div class="setting-toggle-row" style="margin-top: 15px; background: rgba(255,255,255,0.05); padding: 10px 15px; border-radius: 15px;">
                     <span style="font-weight: bold; font-size: 14px;">Als Teil einer Serie posten</span>
                     <label class="switch"><input type="checkbox" id="up-series-toggle"><span class="slider round"></span></label>
                 </div>
@@ -1075,7 +1043,7 @@
                 <i class="fas fa-times close-modal" onclick="document.getElementById('dm-context-modal').classList.remove('show')"></i>
             </div>
             <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;" id="dm-context-content">
-            </div>
+                </div>
         </div>
 
         <div id="dm-edit-modal" class="modal" style="height: auto; z-index: 6100;">
