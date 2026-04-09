@@ -450,9 +450,24 @@
                     <p id="admin-total-videos">0</p>
                 </div>
             </div>
-            <h4 style="padding: 10px 15px; color:#888; font-size:14px; text-transform:uppercase;">Alle Benutzer</h4>
-            <div class="admin-user-list" id="admin-user-list">
-                <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>
+            
+            <div class="shop-tabs" style="margin-bottom: 10px;">
+                <div class="shop-tab active" onclick="switchAdminTab('users')">Benutzer</div>
+                <div class="shop-tab" onclick="switchAdminTab('sounds')">Sound Requests</div>
+            </div>
+
+            <div id="admin-tab-users" class="admin-content-section active">
+                <h4 style="padding: 10px 15px; color:#888; font-size:14px; text-transform:uppercase;">Alle Benutzer</h4>
+                <div class="admin-user-list" id="admin-user-list">
+                    <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>
+                </div>
+            </div>
+
+            <div id="admin-tab-sounds" class="admin-content-section" style="display:none; padding: 0 15px 80px;">
+                <h4 style="padding: 10px 0; color:#888; font-size:14px; text-transform:uppercase;">Ausstehende Sound-Prüfungen</h4>
+                <div id="admin-sound-requests-list">
+                    <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>
+                </div>
             </div>
         </div>
 
@@ -814,14 +829,6 @@
             </div>
             <div class="modal-body upload-body">
 
-                <div id="upload-sound-preview" style="display:none; background: rgba(0, 242, 254, 0.1); border: 1px solid #00f2fe; padding: 10px 15px; border-radius: 15px; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                    <div>
-                        <span style="display:block; font-size:11px; color:#00f2fe; font-weight:bold; margin-bottom:3px;"><i class="fas fa-music"></i> Sound ausgewählt</span>
-                        <strong id="upload-sound-name" style="font-size:14px; color:white;">Sound Name</strong>
-                    </div>
-                    <i class="fas fa-times" style="color:#ff4444; font-size: 18px; cursor: pointer;" onclick="removeSelectedSound()"></i>
-                </div>
-
                 <div class="file-upload-wrapper">
                     <input type="file" id="up-file" class="file-input-hidden" accept="video/*, image/*" multiple required>
                     <div class="file-upload-design" id="up-file-btn" onclick="document.getElementById('up-file').click()">
@@ -831,13 +838,35 @@
                     </div>
                 </div>
 
+                <button id="open-sound-library-btn" class="profile-action-btn edit-btn" style="width: 100%; margin-top: 10px; display: none;"><i class="fas fa-music"></i> Musik hinzufügen / bearbeiten</button>
+                
+                <div id="upload-sound-editor" style="display:none; background: rgba(0, 0, 0, 0.3); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-top: 10px;">
+                    <h5 style="color: #00f2fe; margin-bottom: 10px;"><i class="fas fa-sliders-h"></i> Sound Editor</h5>
+                    <strong id="editor-sound-name" style="display:block; font-size:14px; margin-bottom:15px; color: #ffd700;">Ausgewählter Sound</strong>
+                    
+                    <label style="font-size:12px; color:#aaa;">Musik Startpunkt (Offset)</label>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                        <input type="range" id="sound-offset-slider" class="trim-slider slider-blue" min="0" max="100" value="0" style="flex: 1;">
+                        <span id="sound-offset-display" style="font-size:12px; color:white; width: 40px; text-align: right;">0.0s</span>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; margin-top: 10px;">
+                        <div style="width: 48%;">
+                            <label style="font-size:12px; color:#aaa;">Original Audio (Video)</label>
+                            <input type="range" id="video-volume-slider" class="trim-slider slider-red" min="0" max="1" step="0.05" value="1" style="width: 100%; margin-top: 5px;">
+                        </div>
+                        <div style="width: 48%;">
+                            <label style="font-size:12px; color:#aaa;">Hinzugefügte Musik</label>
+                            <input type="range" id="music-volume-slider" class="trim-slider slider-blue" min="0" max="1" step="0.05" value="1" style="width: 100%; margin-top: 5px;">
+                        </div>
+                    </div>
+                    <button id="remove-sound-editor-btn" class="profile-action-btn" style="width:100%; background:transparent; border: 1px solid #ff4444; color: #ff4444; margin-top: 15px; min-height: 40px;"><i class="fas fa-trash"></i> Sound entfernen</button>
+                </div>
+
                 <div class="setting-toggle-row" style="margin-top: 15px; background: rgba(255,255,255,0.05); padding: 10px 15px; border-radius: 15px;">
                     <span style="font-weight: bold; font-size: 14px;">Als Teil einer Serie posten</span>
                     <label class="switch"><input type="checkbox" id="up-series-toggle"><span class="slider round"></span></label>
                 </div>
-
-                <div id="video-advanced-editor" style="display:none;"></div>
-                <div id="image-advanced-editor" style="display:none;"></div>
 
                 <hr style="border:0; border-top:1px solid #333; margin: 15px 0;">
                 <input type="text" id="up-title" class="comment-input" placeholder="Titel..." maxlength="60" style="border-radius:15px; margin-bottom:10px; width: 100%;">
@@ -845,6 +874,53 @@
                 <p id="upload-status" style="text-align: center; font-size: 14px; font-weight: bold; color: #ff0050;"></p>
                 <button id="submit-upload" class="profile-action-btn" style="width:100%; min-height: 56px; font-size:16px;">Veröffentlichen</button>
             </div>
+        </div>
+
+        <div id="sound-library-modal" class="modal" style="height: 80%; z-index: 5000;">
+            <div class="modal-header">
+                <h4><i class="fas fa-music" style="color:#00f2fe;"></i> Sound Bibliothek</h4>
+                <i class="fas fa-times close-modal" id="close-sound-library"></i>
+            </div>
+            <div class="shop-tabs">
+                <div class="shop-tab active" onclick="switchSoundTab('official')">Offiziell</div>
+                <div class="shop-tab" onclick="switchSoundTab('community')">Community</div>
+                <div class="shop-tab" onclick="switchSoundTab('upload')">Einreichen</div>
+            </div>
+            <div class="modal-body" style="padding: 15px; background: #0a0a0a;">
+                <div id="lib-official" class="sound-tab-content active" style="display:block;">
+                    <div id="official-sounds-list" style="display:flex; flex-direction:column; gap:10px;">
+                        <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>
+                    </div>
+                </div>
+                <div id="lib-community" class="sound-tab-content" style="display:none;">
+                    <p style="font-size:12px; color:#888; margin-bottom:10px; text-align:center;">Audiospuren aus Videos der Community</p>
+                    <div id="community-sounds-list" style="display:flex; flex-direction:column; gap:10px;">
+                        <div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>
+                    </div>
+                </div>
+                <div id="lib-upload" class="sound-tab-content" style="display:none;">
+                    <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 15px; border: 1px dashed #444; text-align:center;">
+                        <i class="fas fa-cloud-upload-alt" style="font-size:40px; color:#00f2fe; margin-bottom:15px;"></i>
+                        <h4 style="margin-bottom: 10px;">Sound Einreichen</h4>
+                        <p style="color:#aaa; font-size:13px; margin-bottom:20px;">Lade eine MP3 hoch. Ein Admin wird sie prüfen und der offiziellen Bibliothek hinzufügen.</p>
+                        <input type="text" id="req-sound-name" class="comment-input" placeholder="Name des Sounds (z.B. Künstler - Titel)" style="width:100%; margin-bottom:15px;">
+                        <input type="file" id="req-sound-file" accept="audio/mp3, audio/wav, audio/mpeg" style="display:none;">
+                        <button class="profile-action-btn edit-btn" onclick="document.getElementById('req-sound-file').click()" style="width:100%; margin-bottom:10px; background:#222;"><i class="fas fa-file-audio"></i> MP3 Auswählen</button>
+                        <p id="req-sound-file-name" style="text-align:center; font-size:12px; color:#00f2fe; margin-bottom:15px; font-weight:bold;"></p>
+                        <button id="submit-sound-request-btn" class="profile-action-btn" style="width:100%; background:#ffd700; color:black;"><i class="fas fa-paper-plane"></i> Zur Prüfung einreichen</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="video-processing-overlay" class="full-screen-overlay" style="z-index: 9999; background: rgba(0,0,0,0.95); flex-direction: column;">
+            <i class="fas fa-cog fa-spin" style="font-size: 50px; color: #00f2fe; margin-bottom: 20px;"></i>
+            <h3 style="color: white; margin-bottom: 10px;">Video wird gerendert...</h3>
+            <p style="color: #aaa; font-size: 14px; text-align: center; max-width: 80%;">Die Audiospuren werden live im Browser zusammengefügt. Bitte wechsle nicht den Tab und schließe die App nicht.</p>
+            <div style="width: 60%; height: 6px; background: #333; border-radius: 3px; margin-top: 30px; overflow: hidden; box-shadow: inset 0 0 5px rgba(0,0,0,0.5);">
+                <div id="render-progress-bar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ff0050, #00f2fe); transition: width 0.2s;"></div>
+            </div>
+            <p id="render-progress-text" style="color: #00f2fe; font-size: 12px; margin-top: 10px; font-weight: bold;">0%</p>
         </div>
 
         <div id="settings-modal" class="modal">

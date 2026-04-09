@@ -2875,3 +2875,343 @@ function initResponsiveLayout() {
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
+/* =========================================================
+   NEUE FEATURES: SOUND-BIBLIOTHEK, SOUND-EDITOR & RENDERING
+   ========================================================= */
+
+// 1. Upload UI anpassen (Musik Button anzeigen bei Video-Auswahl)
+document.getElementById('up-file')?.addEventListener('change', function(e) {
+    const files = e.target.files;
+    if(files.length === 1 && files[0].type.startsWith('video/')) {
+        document.getElementById('open-sound-library-btn').style.display = 'block';
+    } else {
+        document.getElementById('open-sound-library-btn').style.display = 'none';
+    }
+});
+
+document.getElementById('open-sound-library-btn')?.addEventListener('click', () => {
+    document.getElementById('sound-library-modal').classList.add('show');
+    window.switchSoundTab('official');
+});
+
+document.getElementById('close-sound-library')?.addEventListener('click', () => {
+    document.getElementById('sound-library-modal').classList.remove('show');
+});
+
+// 2. Sound Tabs & Laden der Sounds
+window.switchSoundTab = function(tab) {
+    document.querySelectorAll('.sound-tab-content').forEach(t => t.style.display = 'none');
+    document.getElementById('lib-' + tab).style.display = 'block';
+    document.querySelectorAll('#sound-library-modal .shop-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`#sound-library-modal .shop-tab[onclick="switchSoundTab('${tab}')"]`).classList.add('active');
+
+    if(tab === 'official') loadOfficialSounds();
+    if(tab === 'community') loadCommunitySounds();
+};
+
+window.loadOfficialSounds = async function() {
+    const list = document.getElementById('official-sounds-list');
+    list.innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i></div>';
+    try {
+        const snap = await getDocs(collection(db, "official_sounds"));
+        list.innerHTML = '';
+        if(snap.empty) { list.innerHTML = '<p style="color:#aaa; text-align:center;">Keine offiziellen Sounds.</p>'; return; }
+        snap.forEach(docSnap => {
+            const s = docSnap.data();
+            list.innerHTML += createSoundCardHtml(docSnap.id, s.name, s.author, s.url, 'https://i.imgur.com/JDPRzCc.png');
+        });
+    } catch(e) { list.innerHTML = '<p style="color:red; text-align:center;">Fehler beim Laden.</p>'; }
+};
+
+window.loadCommunitySounds = function() {
+    const list = document.getElementById('community-sounds-list');
+    list.innerHTML = '';
+    let uniqueSounds = [];
+    allVideosData.forEach(v => {
+        if(v.soundId && v.soundUrl && !uniqueSounds.find(s => s.id === v.soundId)) {
+            uniqueSounds.push({id: v.soundId, name: v.soundName, author: v.authorUsername, url: v.soundUrl, pic: v.authorPic});
+        }
+    });
+    if(uniqueSounds.length === 0) { list.innerHTML = '<p style="color:#aaa; text-align:center;">Keine Community Sounds.</p>'; return; }
+    uniqueSounds.forEach(s => {
+        list.innerHTML += createSoundCardHtml(s.id, s.name, "@" + s.author, s.url, s.pic);
+    });
+};
+
+function createSoundCardHtml(id, name, author, url, pic) {
+    const safeName = name.replace(/'/g, "\\'");
+    const safeUrl = url.replace(/'/g, "\\'");
+    return `<div class="sound-lib-card">
+        <img src="${pic}">
+        <div class="sound-lib-info">
+            <div class="sound-lib-title">${name}</div>
+            <div class="sound-lib-author">${author}</div>
+        </div>
+        <div class="sound-lib-play" onclick="playLibSound('${safeUrl}', this)"><i class="fas fa-play"></i></div>
+        <button class="sound-lib-use" onclick="selectSoundForUpload('${id}', '${safeName}', '${safeUrl}')">Nutzen</button>
+    </div>`;
+}
+
+let libAudioPlayer = new Audio();
+window.playLibSound = function(url, btn) {
+    const icon = btn.querySelector('i');
+    if(libAudioPlayer.src.includes(url) && !libAudioPlayer.paused) {
+        libAudioPlayer.pause(); icon.className = 'fas fa-play';
+    } else {
+        document.querySelectorAll('.sound-lib-play i').forEach(i => i.className = 'fas fa-play');
+        libAudioPlayer.src = url; libAudioPlayer.play(); icon.className = 'fas fa-pause';
+    }
+};
+
+window.selectSoundForUpload = function(id, name, url) {
+    libAudioPlayer.pause();
+    window.selectedUploadSound = { id, name, url };
+    document.getElementById('sound-library-modal').classList.remove('show');
+    document.getElementById('upload-sound-editor').style.display = 'block';
+    document.getElementById('editor-sound-name').innerHTML = `<i class="fas fa-music"></i> ${name}`;
+};
+
+document.getElementById('remove-sound-editor-btn')?.addEventListener('click', () => {
+    window.selectedUploadSound = null;
+    document.getElementById('upload-sound-editor').style.display = 'none';
+});
+
+// 3. Sound Request einreichen (Community lädt hoch)
+document.getElementById('req-sound-file')?.addEventListener('change', e => {
+    if(e.target.files[0]) document.getElementById('req-sound-file-name').innerText = e.target.files[0].name;
+});
+
+document.getElementById('submit-sound-request-btn')?.addEventListener('click', async () => {
+    const file = document.getElementById('req-sound-file').files[0];
+    const name = document.getElementById('req-sound-name').value.trim();
+    if(!file || !name) return showCustomAlert("Fehler", "Bitte MP3 und Name angeben.");
+    
+    const btn = document.getElementById('submit-sound-request-btn');
+    btn.innerText = "Lädt hoch..."; btn.disabled = true;
+    try {
+        const url = await uploadFileToFirebase(file, 'sound_requests');
+        await addDoc(collection(db, "sound_requests"), {
+            uid: currentUser.uid, name: name, url: url, timestamp: Date.now()
+        });
+        showToast("Sound zur Prüfung eingereicht!");
+        document.getElementById('req-sound-file').value = '';
+        document.getElementById('req-sound-name').value = '';
+        document.getElementById('req-sound-file-name').innerText = '';
+    } catch(e) { showCustomAlert("Fehler", "Upload fehlgeschlagen."); }
+    btn.innerHTML = `<i class="fas fa-paper-plane"></i> Zur Prüfung einreichen`; btn.disabled = false;
+});
+
+// 4. Admin Dashboard Sound Freigabe (Admins prüfen die MP3s)
+const originalSwitchAdminTab = window.switchAdminTab || function(tab) {};
+window.switchAdminTab = function(tab) {
+    document.querySelectorAll('.admin-content-section').forEach(t => t.style.display = 'none');
+    document.getElementById(`admin-tab-${tab}`).style.display = 'block';
+    document.querySelectorAll('#view-admin .shop-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`#view-admin .shop-tab[onclick="switchAdminTab('${tab}')"]`)?.classList.add('active');
+    if(tab === 'sounds') loadAdminSoundRequests();
+    else originalSwitchAdminTab(tab);
+};
+
+window.loadAdminSoundRequests = async function() {
+    const list = document.getElementById('admin-sound-requests-list');
+    list.innerHTML = '<div class="loading-screen"><i class="fas fa-spinner fa-spin"></i></div>';
+    try {
+        const snap = await getDocs(collection(db, "sound_requests"));
+        list.innerHTML = '';
+        if(snap.empty) { list.innerHTML = '<p style="color:#aaa; text-align:center;">Keine offenen Anfragen.</p>'; return; }
+        snap.forEach(d => {
+            const s = d.data();
+            list.innerHTML += `<div class="admin-user-card">
+                <strong style="color:white;">${s.name}</strong>
+                <audio src="${s.url}" controls style="width:100%; height:30px; margin: 10px 0;"></audio>
+                <div class="admin-actions">
+                    <button class="admin-btn btn-green" onclick="approveSound('${d.id}', '${s.name.replace(/'/g,"\\'")}', '${s.url}')">Annehmen</button>
+                    <button class="admin-btn btn-red" onclick="rejectSound('${d.id}')">Ablehnen</button>
+                </div>
+            </div>`;
+        });
+    } catch(e) {}
+};
+
+window.approveSound = async function(docId, name, url) {
+    try {
+        await addDoc(collection(db, "official_sounds"), { name: name, author: "Phil Shorts Official", url: url, timestamp: Date.now() });
+        await deleteDoc(doc(db, "sound_requests", docId));
+        showToast("Sound hinzugefügt!"); loadAdminSoundRequests();
+    } catch(e) {}
+};
+window.rejectSound = async function(docId) {
+    try { await deleteDoc(doc(db, "sound_requests", docId)); showToast("Abgelehnt."); loadAdminSoundRequests(); } catch(e) {}
+};
+
+// Offset Anzeige updaten
+document.getElementById('sound-offset-slider')?.addEventListener('input', (e) => {
+    document.getElementById('sound-offset-display').innerText = parseFloat(e.target.value).toFixed(1) + "s";
+});
+
+// 5. Video Rendering Engine (Überschreibt den Original-Upload-Button sauber)
+const originalUploadBtn = document.getElementById('submit-upload');
+if (originalUploadBtn) {
+    const newUploadBtn = originalUploadBtn.cloneNode(true);
+    originalUploadBtn.parentNode.replaceChild(newUploadBtn, originalUploadBtn);
+    
+    newUploadBtn.addEventListener('click', async () => {
+        const files = document.getElementById('up-file').files; 
+        const titleVal = document.getElementById('up-title').value.trim(); 
+        const desc = document.getElementById('up-desc').value.trim();
+        
+        if (!files || files.length === 0) return showCustomAlert("Fehlende Daten", "Bitte wähle eine Datei aus.");
+        if (!titleVal || !desc) return showCustomAlert("Fehlende Daten", "Titel und Beschreibung erforderlich.");
+        
+        let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024;
+        for(let i=0; i<files.length; i++) { if(files[i].size > maxSize) return showCustomAlert("Zu groß", "Datei überschreitet Limit!"); }
+        
+        const isVideo = files[0].type.startsWith('video/');
+        const isSeries = document.getElementById('up-series-toggle') ? document.getElementById('up-series-toggle').checked : false;
+
+        let fileToUpload = files[0];
+
+        // WENN EIN SOUND GEWÄHLT IST -> RENDERN (Verschmelzen von Video & MP3)
+        if (isVideo && window.selectedUploadSound) {
+            const overlay = document.getElementById('video-processing-overlay');
+            overlay.classList.add('show');
+            const progBar = document.getElementById('render-progress-bar');
+            const progText = document.getElementById('render-progress-text');
+            
+            try {
+                fileToUpload = await renderVideoWithAudio(
+                    files[0], 
+                    window.selectedUploadSound.url, 
+                    parseFloat(document.getElementById('video-volume-slider').value),
+                    parseFloat(document.getElementById('music-volume-slider').value),
+                    parseFloat(document.getElementById('sound-offset-slider').value),
+                    (percent) => {
+                        progBar.style.width = percent + '%';
+                        progText.innerText = Math.round(percent) + '%';
+                    }
+                );
+            } catch(e) {
+                overlay.classList.remove('show');
+                return showCustomAlert("Rendering Fehler", "Das Video konnte nicht verarbeitet werden.");
+            }
+            overlay.classList.remove('show');
+        }
+
+        // Upload-Prozess ausführen
+        const btn = document.getElementById('submit-upload'); 
+        const status = document.getElementById('upload-status'); 
+        btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
+
+        try {
+            let uploadObj = { 
+                authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
+                title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() 
+            };
+
+            if(window.selectedUploadSound) {
+                uploadObj.soundId = window.selectedUploadSound.id;
+                uploadObj.soundName = window.selectedUploadSound.name;
+                uploadObj.soundUrl = window.selectedUploadSound.url;
+            }
+            if(isSeries) uploadObj.seriesId = "series_" + currentUser.uid + "_" + Date.now();
+
+            awardXP(20);
+
+            if (isVideo) {
+                const finalUrl = await uploadFileToFirebase(fileToUpload, 'videos');
+                await addDoc(collection(db, "videos"), { mediaType: 'video', url: finalUrl, ...uploadObj });
+            } else {
+                let uploadedUrls = [];
+                for(let i=0; i<files.length; i++) { const url = await uploadFileToFirebase(files[i], 'images'); uploadedUrls.push(url); }
+                await addDoc(collection(db, "videos"), { mediaType: 'images', urls: uploadedUrls, ...uploadObj });
+            }
+            
+            showToast("Erfolgreich veröffentlicht! 🎉"); 
+            document.getElementById('upload-modal').classList.remove('show');
+            document.getElementById('up-file').value = ''; 
+            document.getElementById('up-title').value = ''; 
+            document.getElementById('up-desc').value = ''; 
+            if(document.getElementById('up-series-toggle')) document.getElementById('up-series-toggle').checked = false;
+            document.querySelector('#up-file-btn p').innerText = "Video oder Bilder auswählen"; 
+            document.querySelector('#up-file-btn i').className = "fas fa-cloud-upload-alt"; 
+            document.querySelector('#up-file-btn i').style.color = "#aaa"; 
+            window.selectedUploadSound = null;
+            document.getElementById('upload-sound-editor').style.display = 'none';
+        } catch (e) { 
+            showCustomAlert("Upload Fehler", "Fehler beim Upload."); 
+        } finally { 
+            btn.disabled = false; status.innerText = ""; 
+        }
+    });
+}
+
+// Rendering-Logik (Kombiniert AudioContext & MediaRecorder)
+async function renderVideoWithAudio(videoFile, audioUrl, vidVol, musVol, offsetSec, progressCallback) {
+    return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.src = URL.createObjectURL(videoFile);
+        video.muted = true;
+        video.crossOrigin = "anonymous";
+        
+        const audio = new Audio(audioUrl);
+        audio.crossOrigin = "anonymous";
+
+        video.onloadeddata = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+
+            const canvasStream = canvas.captureStream(30); // Video Stream mit 30 FPS generieren
+            
+            const audioCtx = new AudioContext();
+            const dest = audioCtx.createMediaStreamDestination();
+
+            // Original Audio des Videos einbinden
+            const vidSource = audioCtx.createMediaElementSource(video);
+            const vidGain = audioCtx.createGain();
+            vidGain.gain.value = vidVol;
+            vidSource.connect(vidGain).connect(dest);
+
+            // Neue MP3 einbinden
+            const musSource = audioCtx.createMediaElementSource(audio);
+            const musGain = audioCtx.createGain();
+            musGain.gain.value = musVol;
+            musSource.connect(musGain).connect(dest);
+
+            // Abgemischte Audiospur an den Canvas Video-Stream heften
+            dest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
+
+            const recorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm' });
+            let chunks = [];
+            recorder.ondataavailable = e => { if(e.data.size > 0) chunks.push(e.data); };
+            
+            recorder.onstop = () => {
+                const blob = new Blob(chunks, { type: 'video/webm' });
+                const newFile = new File([blob], "rendered_video.webm", { type: 'video/webm' });
+                resolve(newFile);
+            };
+
+            recorder.start();
+            audio.currentTime = offsetSec; // Startpunkt der MP3
+            video.play();
+            audio.play();
+
+            // Frames auf das Canvas malen, solange das Video läuft
+            function draw() {
+                if (video.paused || video.ended) {
+                    recorder.stop();
+                    audio.pause();
+                    return;
+                }
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                let percent = (video.currentTime / video.duration) * 100;
+                progressCallback(percent);
+                requestAnimationFrame(draw);
+            }
+            draw();
+        };
+        
+        video.onerror = () => reject("Video Load Error");
+    });
+}
