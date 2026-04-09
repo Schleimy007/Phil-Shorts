@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phil Shorts | Live Studio PRO 🎬</title>
+    <link rel="shortcut icon" type="image/png" href="https://i.imgur.com/JDPRzCc.png">
+    <link rel="stylesheet" href="style.css"> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { background: #050505; color: white; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .studio-container { display: grid; grid-template-columns: 280px 1fr 380px; grid-template-rows: 60px 1fr 100px; height: 100vh; }
+        
+        .studio-header { grid-column: 1 / 4; background: #111; border-bottom: 1px solid #222; display: flex; align-items: center; padding: 0 20px; justify-content: space-between; z-index: 100; }
+        .studio-logo { display: flex; align-items: center; gap: 10px; font-weight: bold; color: #ff0050; font-size: 1.2rem; }
+        
+        .studio-sidebar-left { background: #0a0a0a; border-right: 1px solid #222; padding: 15px; overflow-y: auto; }
+        .scene-card { background: #1a1a1a; border: 2px solid transparent; border-radius: 12px; padding: 12px; margin-bottom: 12px; cursor: pointer; transition: 0.2s; }
+        .scene-card.active { border-color: #00f2fe; background: rgba(0, 242, 254, 0.05); }
+        .scene-card i { font-size: 20px; margin-bottom: 5px; color: #888; }
+        .scene-card.active i { color: #00f2fe; }
+        
+        .studio-main { background: #000; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; padding: 20px; border-bottom: 1px solid #222; }
+        #studio-preview { width: 100%; max-height: 85%; object-fit: contain; background: #111; border-radius: 12px; box-shadow: 0 0 50px rgba(0,0,0,1); transform: scaleX(-1); }
+        .live-indicator { position: absolute; top: 40px; left: 40px; background: #ff0050; padding: 6px 14px; border-radius: 6px; font-weight: bold; font-size: 12px; letter-spacing: 1px; animation: pulse 2s infinite; display: none; z-index: 10; }
+        
+        .studio-sidebar-right { background: #0a0a0a; border-left: 1px solid #222; display: flex; flex-direction: column; }
+        .chat-area { flex: 1; overflow-y: auto; padding: 15px; font-size: 14px; display: flex; flex-direction: column-reverse; gap: 8px; }
+        .chat-msg { background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border: 1px solid #222; }
+        .chat-msg strong { color: #00f2fe; margin-right: 5px; }
+        
+        .soundboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 15px; }
+        .snd-btn { background: #222; border: 1px solid #333; color: white; padding: 8px; border-radius: 6px; font-size: 11px; cursor: pointer; }
+        .snd-btn:active { background: #444; }
+
+        .studio-footer { grid-column: 1 / 4; background: #111; border-top: 1px solid #222; display: flex; align-items: center; justify-content: space-around; padding: 0 20px; }
+        .stat-item { text-align: center; min-width: 100px; }
+        .stat-item strong { display: block; font-size: 20px; color: #ff0050; }
+        .stat-item span { font-size: 10px; color: #666; font-weight: bold; }
+
+        .btn-live { background: #ff0050; color: white; border: none; padding: 12px 30px; border-radius: 25px; font-weight: bold; cursor: pointer; transition: 0.3s; box-shadow: 0 4px 15px rgba(255, 0, 80, 0.3); }
+        .btn-live.stop { background: #333; box-shadow: none; }
+        
+        .preview-controls { position: absolute; bottom: 40px; display: flex; gap: 15px; z-index: 20; }
+        .ctrl-btn { width: 50px; height: 50px; border-radius: 50%; background: rgba(0,0,0,0.7); backdrop-filter: blur(10px); display: flex; align-items: center; justify-content: center; cursor: pointer; border: 1px solid #333; font-size: 18px; }
+        .ctrl-btn.muted { color: #ff4444; border-color: #ff4444; }
+    </style>
+</head>
+<body>
+
+<div class="studio-container">
+    <header class="studio-header">
+        <div class="studio-logo">
+            <img src="https://i.imgur.com/JDPRzCc.png" height="35">
+            <span>LIVE STUDIO PRO</span>
+        </div>
+        <div id="stream-status-text" style="font-size: 14px; color: #666;">Bereit zum Streamen</div>
+        <button id="master-live-btn" class="btn-live">GO LIVE</button>
+    </header>
+
+    <aside class="studio-sidebar-left">
+        <h5 style="color:#00f2fe; margin-bottom: 15px; font-size: 11px; text-transform: uppercase;">Szenensteuerung</h5>
+        <div class="scene-card active" data-scene="cam" onclick="switchScene('cam')">
+            <i class="fas fa-camera"></i>
+            <strong>Kamera-Ansicht</strong>
+        </div>
+        <div class="scene-card" data-scene="screen" onclick="switchScene('screen')">
+            <i class="fas fa-desktop"></i>
+            <strong>Bildschirm teilen</strong>
+        </div>
+        
+        <h5 style="color:#ff0050; margin-top: 30px; margin-bottom: 15px; font-size: 11px; text-transform: uppercase;">Soundboard</h5>
+        <div class="soundboard-grid">
+            <button class="snd-btn" onclick="playEffect('applaus')">👏 Applaus</button>
+            <button class="snd-btn" onclick="playEffect('airhorn')">📢 Airhorn</button>
+            <button class="snd-btn" onclick="playEffect('laugh')">😂 Lachen</button>
+            <button class="snd-btn" onclick="playEffect('wow')">✨ Wow!</button>
+        </div>
+
+        <h5 style="color:#ffd700; margin-top: 30px; margin-bottom: 15px; font-size: 11px; text-transform: uppercase;">Live-Ziel</h5>
+        <input type="number" id="goal-input" class="comment-input" placeholder="Anzahl Coins" style="width: 100%;">
+        <button class="profile-action-btn edit-btn" onclick="updateGoal()" style="width: 100%; margin-top: 10px;">Ziel setzen</button>
+    </aside>
+
+    <main class="studio-main">
+        <div class="live-indicator" id="live-dot">● LIVE</div>
+        <video id="studio-preview" autoplay muted playsinline></video>
+        
+        <div class="preview-controls">
+            <div class="ctrl-btn" id="toggle-mic" onclick="toggleMic()"><i class="fas fa-microphone"></i></div>
+            <div class="ctrl-btn" id="toggle-vid" onclick="toggleVid()"><i class="fas fa-video"></i></div>
+        </div>
+    </main>
+
+    <aside class="studio-sidebar-right">
+        <div class="tab-bar">
+            <div class="tab active" onclick="switchStudioTab('chat')">MOD-CHAT</div>
+            <div class="tab" onclick="switchStudioTab('events')">GESCHENKE</div>
+        </div>
+        <div id="studio-chat" class="chat-area"></div>
+        <div id="studio-events" class="chat-area" style="display:none;"></div>
+        <div style="padding: 15px; background: #111; display: flex; gap: 8px;">
+             <input type="text" id="studio-chat-input" class="comment-input" placeholder="Nachricht..." style="flex: 1;">
+             <button onclick="sendHostMessage()" style="background:#00f2fe; border:none; width:40px; border-radius:8px; color:black;"><i class="fas fa-paper-plane"></i></button>
+        </div>
+    </aside>
+
+    <footer class="studio-footer">
+        <div class="stat-item">
+            <strong id="stat-viewers">0</strong>
+            <span>Zuschauer</span>
+        </div>
+        <div class="stat-item">
+            <strong id="stat-coins" style="color: #ffd700;">0</strong>
+            <span>Coins verdient</span>
+        </div>
+        <div class="stat-item">
+            <strong id="stat-duration" style="color: white;">00:00:00</strong>
+            <span>Stream Dauer</span>
+        </div>
+        <div class="stat-item">
+            <strong id="stat-health" style="color: #39ff14;">EXZELLENT</strong>
+            <span>Stream Status</span>
+        </div>
+    </footer>
+</div>
+
+<script type="module" src="studio.js"></script>
+
+</body>
+</html>
