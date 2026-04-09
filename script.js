@@ -608,7 +608,7 @@ window.onload = async function() {
         if (!currentUser.savedVideos) currentUser.savedVideos = [];
         if (!currentUser.blockedUsers) currentUser.blockedUsers = [];
         if (!currentUser.socialLinks) currentUser.socialLinks = { ig: '', yt: '', tw: '', tt: '' };
-        if (!currentUser.dmPrivacy) currentUser.dmPrivacy = 'everyone'; 
+        if (!currentUser.dmPrivacy) currentUser.dmPrivacy = 'everyone';
         initLiveDatabase();
         initLiveUser();
         initInbox();
@@ -1117,7 +1117,7 @@ const videoObserver = new IntersectionObserver(entries => {
         if (e.isIntersecting && document.getElementById('view-feed').classList.contains('active')) {
             if(el.classList.contains('dummy-ad-video')) return; 
             
-            if(videoPlayer && videoPlayer.src === "") {
+            if(videoPlayer && !videoPlayer.src) {
                 videoPlayer.src = videoPlayer.dataset.originalSrc;
             }
             
@@ -1974,7 +1974,7 @@ window.openDMContextMenu = function(msgId, senderUid, text) {
         html += `<button class="profile-action-btn edit-btn" onclick="openEditDMModal('${msgId}', '${text.replace(/'/g, "\\'")}')"><i class="fas fa-pen"></i> Bearbeiten</button>`;
         html += `<button class="profile-action-btn" style="background:#ff4444; color:white;" onclick="deleteDM('${msgId}')"><i class="fas fa-trash"></i> Löschen</button>`;
     } else {
-        html += `<button class="profile-action-btn" style="background:#ff4444; color:white;" onclick="reportDM('${msgId}')"><i class="fas fa-flag"></i> Melden</button>`;
+        html += `<button class="profile-action-btn" style="background:#ff4444; color:white;" onclick="reportDM('${msgId}', '${senderUid}', '${text.replace(/'/g, "\\'")}')"><i class="fas fa-flag"></i> Melden</button>`;
     }
     
     document.getElementById('dm-context-content').innerHTML = html;
@@ -2012,8 +2012,31 @@ window.deleteDM = async function(msgId) {
     }
 };
 
-window.reportDM = function(msgId) {
-    showToast("Die Nachricht wurde dem Support gemeldet.");
+window.reportDM = async function(msgId, senderUid, text) {
+    if (!currentUser) return;
+    
+    try {
+        const ticketRef = await addDoc(collection(db, "reports"), { 
+            uid: currentUser.uid, 
+            name: currentUser.displayName, 
+            hasPlus: checkPhilPlusStatus(1), 
+            tier: currentUser.philPlusTier || 0, 
+            status: 'open', 
+            type: 'dm_report',
+            reportedUser: senderUid,
+            timestamp: Date.now() 
+        }); 
+        
+        await addDoc(collection(db, `reports/${ticketRef.id}/messages`), { 
+            senderUid: currentUser.uid, 
+            text: `[SYSTEM] DM MELDUNG:\nChat-ID: ${window.currentChatId}\nNachricht: "${text}"`, 
+            timestamp: Date.now() 
+        });
+
+        showToast("Nachricht gemeldet! Ticket erstellt.");
+    } catch(e) {
+        showCustomAlert("Fehler", "Meldung fehlgeschlagen.");
+    }
     document.getElementById('dm-context-modal').classList.remove('show');
 };
 
@@ -2788,7 +2811,7 @@ document.getElementById('up-file')?.addEventListener('change', function(e) {
 document.getElementById('submit-upload')?.addEventListener('click', async() => {
     const files = document.getElementById('up-file').files; const titleInput = document.getElementById('up-title'); const descInput = document.getElementById('up-desc');
     const titleVal = titleInput ? titleInput.value.trim() : ""; const desc = descInput ? descInput.value.trim() : "";
-    if (!files || files.length === 0) return showCustomAlert("Fehhlende Daten", "Bitte wähle mindestens eine Datei aus.");
+    if (!files || files.length === 0) return showCustomAlert("Fehlende Daten", "Bitte wähle mindestens eine Datei aus.");
     if (!titleVal || !desc) return showCustomAlert("Fehlende Daten", "Bitte gib einen Titel UND eine Beschreibung ein.");
     
     let maxSize = checkPhilPlusStatus(1) ? 100 * 1024 * 1024 : 30 * 1024 * 1024; let limitText = checkPhilPlusStatus(1) ? "100" : "30";
