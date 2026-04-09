@@ -28,6 +28,7 @@ let currentUser = JSON.parse(localStorage.getItem('phil_session'));
 if (currentUser) currentUser.verified = false;
 let notifSettings = JSON.parse(localStorage.getItem('phil_notif_settings')) || { master: false, comments: true, likes: true, dms: true, follows: true };
 
+window.currentSoundPreviewPlayer = new Audio();
 window.editingProfileUid = null;
 window.globalMuted = false;
 window.globalVolume = 1;
@@ -40,10 +41,10 @@ let cropperInstance = null;
 let sessionInterests = {};
 let creatorAffinities = {};
 
-// === GLOBALE SOUND-VARIABLEN ===
+// === NEU: SOUND SYSTEM VARIABLEN ===
 window.selectedLibrarySound = null; 
-window.soundPreviewPlayer = new Audio();
-window.soundRequestFile = null;
+window.soundPreviewPlayer = new Audio(); 
+window.soundRequestFile = null; 
 
 if (!document.getElementById('dynamic-live-styles')) {
     const style = document.createElement('style');
@@ -65,23 +66,23 @@ window.switchSoundTab = function(tabId) {
     document.getElementById(tabId).style.display = 'block';
     if(event) event.target.classList.add('active');
     
-    if (tabId === 'lib-discover') window.loadOfficialSounds();
-    if (tabId === 'lib-trends') window.loadCommunitySounds();
+    if (tabId === 'lib-discover') window.loadOfficialLibrary();
+    if (tabId === 'lib-trends') window.loadCommunityTrends();
 };
 
-window.loadOfficialSounds = async function() {
+window.loadOfficialLibrary = async function() {
     const list = document.getElementById('official-sounds-list');
     list.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
     const snap = await getDocs(query(collection(db, "official_sounds"), orderBy("timestamp", "desc")));
     list.innerHTML = '';
-    if (snap.empty) { list.innerHTML = '<p style="color:#555; text-align:center; margin-top:20px;">Keine Musik gefunden.</p>'; return; }
+    if (snap.empty) { list.innerHTML = '<p style="color:#555; text-align:center; margin-top:20px;">Keine offiziellen Songs gefunden.</p>'; return; }
     snap.forEach(docSnap => {
         const s = docSnap.data();
         list.innerHTML += createSoundItemHTML(docSnap.id, s.title, s.url, "Phil Shorts Music", "https://i.imgur.com/JDPRzCc.png");
     });
 };
 
-window.loadCommunitySounds = function() {
+window.loadCommunityTrends = function() {
     const list = document.getElementById('community-sounds-list');
     list.innerHTML = '';
     const trends = [];
@@ -90,7 +91,7 @@ window.loadCommunitySounds = function() {
             trends.push({ id: v.id, title: v.soundName || "Originalton", url: v.soundUrl, author: v.authorName, pic: v.authorPic });
         }
     });
-    if (trends.length === 0) { list.innerHTML = '<p style="color:#555; text-align:center;">Noch keine Trends.</p>'; return; }
+    if (trends.length === 0) { list.innerHTML = '<p style="color:#555; text-align:center;">Noch keine Community Trends.</p>'; return; }
     trends.forEach(t => { list.innerHTML += createSoundItemHTML(t.id, t.title, t.url, t.author, t.pic); });
 };
 
@@ -100,8 +101,8 @@ function createSoundItemHTML(id, title, url, author, pic) {
                 <img src="${pic || 'https://i.imgur.com/JDPRzCc.png'}">
                 <div class="sound-item-info"><strong>${title}</strong><span>${author}</span></div>
                 <div class="sound-item-btns">
-                    <button class="sound-lib-play" onclick="previewLibSound('${url}', this)"><i class="fas fa-play"></i></button>
-                    <button class="sound-lib-use" onclick="selectSoundForUpload('${id}', '${safeTitle}', '${url}')">Wählen</button>
+                    <button class="sound-lib-play profile-action-btn edit-btn" style="min-width:40px; padding:0;" onclick="previewLibSound('${url}', this)"><i class="fas fa-play"></i></button>
+                    <button class="sound-lib-use profile-action-btn" style="min-width:60px; padding:0 10px; font-size:12px;" onclick="selectSoundForUpload('${id}', '${safeTitle}', '${url}')">Wählen</button>
                 </div>
             </div>`;
 }
@@ -123,16 +124,13 @@ window.selectSoundForUpload = function(id, name, url) {
     window.soundPreviewPlayer.pause();
     document.getElementById('sound-library-modal').classList.remove('show');
     
-    // UI Update im Upload Modal
     document.getElementById('upload-music-system').style.display = 'block';
     document.getElementById('selected-sound-editor').style.display = 'block';
     document.getElementById('active-sound-name').innerText = name;
     document.getElementById('open-sound-library-btn').innerHTML = '<i class="fas fa-search"></i> Sound ändern';
     
-    // Standard Audio Balance (Musik Fokus)
     const vidVol = document.getElementById('up-video-vol');
     if(vidVol) vidVol.value = 0.2; 
-    
     showToast("Musik hinzugefügt! 🎵");
 };
 
@@ -303,7 +301,8 @@ let sortedFeed = [];
 const viewedVideos = new Set();
 
 window.switchView = function(viewId) {
-    if (viewId !== 'sound' && window.soundPreviewPlayer) { window.soundPreviewPlayer.pause(); const icon = document.getElementById('sound-play-icon'); if (icon) icon.className = 'fas fa-play'; }
+    if (viewId !== 'sound' && window.currentSoundPreviewPlayer) { window.currentSoundPreviewPlayer.pause(); const icon = document.getElementById('sound-play-icon'); if (icon) icon.className = 'fas fa-play'; }
+    if (window.soundPreviewPlayer) window.soundPreviewPlayer.pause();
     
     document.querySelectorAll('.view').forEach(v => {
         v.classList.remove('active');
@@ -356,8 +355,6 @@ function getUserData(uid, fallbackName, fallbackUsername, fallbackPic, fallbackV
 function getVerifiedBadge(isVerif) { return isVerif ? '<i class="fas fa-check-circle verified-badge"></i>' : ''; }
 
 function timeAgo(timestamp) { const now = Date.now(); const diff = now - Number(timestamp); const minutes = Math.floor(diff / 60000); const hours = Math.floor(minutes / 60); const days = Math.floor(hours / 24); if (minutes < 1) return 'gerade eben'; if (minutes < 60) return `vor ${minutes} Min.`; if (hours < 24) return `vor ${hours} Std.`; if (days < 7) return `vor ${days} T.`; return new Date(Number(timestamp)).toLocaleDateString('de-DE'); }
-
-// === OPTIMIERTE DISCORD STYLE EMBEDS OHNE LAGS ===
 
 window.processEmbeds = async function() {
     const placeholders = document.querySelectorAll('.embed-placeholder[data-url]');
@@ -927,7 +924,6 @@ window.onload = async function() {
         btn.disabled = true; status.innerText = "Lade hoch... Bitte warten!";
         
         const isSeries = document.getElementById('up-series-toggle') ? document.getElementById('up-series-toggle').checked : false;
-        const isMuted = document.getElementById('up-mute-original-toggle')?.checked || false;
         
         try {
             const isVideo = files[0].type.startsWith('video/');
@@ -936,13 +932,13 @@ window.onload = async function() {
                 soundOffset: window.selectedLibrarySound ? window.selectedLibrarySound.offset : 0,
                 videoVolume: parseFloat(document.getElementById('up-video-vol')?.value || 1),
                 musicVolume: parseFloat(document.getElementById('up-music-vol')?.value || 1),
-                muteOriginal: isMuted,
+                muteOriginal: document.getElementById('up-mute-original-toggle')?.checked || false,
                 soundId: window.selectedLibrarySound ? window.selectedLibrarySound.id : "original",
                 soundName: window.selectedLibrarySound ? window.selectedLibrarySound.name : `Originalton - ${currentUser.displayName}`,
                 authorUid: currentUser.uid, authorName: currentUser.displayName, authorUsername: currentUser.username, authorPic: currentUser.photoURL, authorVerified: currentUser.verified || false, 
                 title: titleVal, description: desc, likedBy: [], gifts: 0, comments: [], views: 0, timestamp: Date.now() 
             };
-
+            
             if(isSeries) uploadObj.seriesId = "series_" + currentUser.uid + "_" + Date.now();
             awardXP(20);
 
@@ -963,9 +959,21 @@ window.onload = async function() {
         } catch (e) { showCustomAlert("Upload Fehler", "Fehler beim Upload."); } finally { btn.disabled = false; if(status) status.innerText = ""; }
     });
 
-    document.getElementById('open-sound-library-btn')?.addEventListener('click', () => {
-        document.getElementById('sound-library-modal').classList.add('show');
-        window.loadOfficialSounds();
+    document.querySelectorAll('#open-sound-library-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#sound-library-modal').forEach(modal => modal.classList.add('show'));
+            if (window.loadOfficialLibrary) window.loadOfficialLibrary();
+        });
+    });
+
+    document.querySelectorAll('#close-sound-library, .close-modal').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const targetModal = e.target.closest('.modal');
+            if (targetModal && targetModal.id === 'sound-library-modal') {
+                targetModal.classList.remove('show');
+                if (window.soundPreviewPlayer) window.soundPreviewPlayer.pause();
+            }
+        });
     });
 
     document.getElementById('sound-offset-slider')?.addEventListener('input', (e) => {
@@ -1001,6 +1009,13 @@ window.onload = async function() {
             document.getElementById('req-song-title').value = '';
         } catch(e) { showToast("Fehler!"); } finally { btn.disabled = false; btn.innerText = "Absenden"; }
     });
+
+    document.querySelectorAll('#open-upload, .add-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#upload-modal').forEach(modal => modal.classList.add('show'));
+        });
+    });
+
 };
 
 document.getElementById('logout-btn')?.addEventListener('click', () => { localStorage.removeItem('phil_session');
@@ -2105,7 +2120,6 @@ window.loadAdminDashboard = async function() {
             userList.innerHTML += `<div class="admin-user-card ${u.banned ? 'banned-card' : ''}"><div class="admin-user-header" onclick="openProfile('${u.uid}')" style="cursor:pointer;"><img src="${u.photoURL || 'https://api.dicebear.com/7.x/avataaars/svg?seed=fallback'}"><div style="flex:1; min-width:0;"><strong style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;">@${u.displayName} ${isVerif}${isAdminBadge}${isBannedBadge}</strong><div style="font-size:11px; color:#888;">${u.email} | Coins: ${u.coins || 0}</div></div></div>${actionsHtml}</div>`;
         });
 
-        // Admin Sound Requests Laden
         const soundList = document.getElementById('admin-sound-requests-list');
         onSnapshot(collection(db, "sound_requests"), (snap) => {
             soundList.innerHTML = '';
@@ -2125,6 +2139,22 @@ window.loadAdminDashboard = async function() {
 
     } catch (e) {}
 }
+
+window.approveSound = async function(id) {
+    const docRef = doc(db, "sound_requests", id);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+        const data = snap.data();
+        await addDoc(collection(db, "official_sounds"), {
+            title: data.title,
+            url: data.url,
+            senderUid: data.senderUid,
+            timestamp: Date.now()
+        });
+        await deleteDoc(docRef);
+        showToast("Sound wurde veröffentlicht! 🎧");
+    }
+};
 
 window.toggleVerifyAdmin = async function(targetUid, currentStatus) { if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return; await updateDoc(doc(db, "users", targetUid), { verified: !currentStatus }); loadAdminDashboard(); };
 window.toggleAdminRole = async function(targetUid, currentStatus) { if (!currentUser || (currentUser.email !== "schleimyverteilung@gmail.com" && !currentUser.isAdmin)) return; await updateDoc(doc(db, "users", targetUid), { isAdmin: !currentStatus }); loadAdminDashboard(); };
@@ -2370,6 +2400,7 @@ document.getElementById('save-dm-edit-btn')?.addEventListener('click', async () 
     } catch(e) { showCustomAlert("Fehler", "Konnte nicht bearbeitet werden."); }
 });
 
+
 let currentDMSnapshot = null; window.currentChatId = null; window.currentChatPartner = null;
 window.openDM = async function(targetUid, targetName, targetPic) {
     if (!currentUser) return; 
@@ -2441,7 +2472,9 @@ window.openDM = async function(targetUid, targetName, targetPic) {
             }); 
         }
         dmBox.scrollTop = dmBox.scrollHeight;
+        
         window.processEmbeds();
+
         if (unreadIds.length > 0) {
             unreadIds.forEach(id => updateDoc(doc(db, `chats/${window.currentChatId}/messages`, id), { read: true }));
             updateDoc(doc(db, "chats", window.currentChatId), { lastMessageRead: true });
@@ -2602,7 +2635,10 @@ class LiveManager {
             snapshot.forEach(docSnap => {
                 const stream = docSnap.data();
                 if (blocked.includes(stream.broadcasterUid)) return;
-                if (stream.lastHeartbeat && (now - stream.lastHeartbeat > 15000)) return; 
+                
+                if (stream.lastHeartbeat && (now - stream.lastHeartbeat > 15000)) {
+                    return; 
+                }
 
                 hasStreams = true;
                 const titleHtml = stream.title ? `<span style="display:block; font-size:12px; color:#ddd; margin-top:2px;">${stream.title}</span>` : '';
@@ -2694,7 +2730,9 @@ class LiveManager {
             this.peer.on('call', (call) => { 
                 call.answer(this.localStream); 
                 this.activeCalls.push(call);
-                call.on('close', () => { this.activeCalls = this.activeCalls.filter(c => c !== call); });
+                call.on('close', () => {
+                    this.activeCalls = this.activeCalls.filter(c => c !== call);
+                });
             });
 
         } catch(e) { 
@@ -2749,6 +2787,7 @@ class LiveManager {
             if (!videoEl.srcObject || videoEl.paused) {
                 this.connectionAttempts++;
                 if (this.connectionAttempts <= 3) {
+                    console.log("Retry WebRTC Connection...", this.connectionAttempts);
                     this.connectToPeer(streamId);
                 } else {
                     showCustomAlert("Verbindungsfehler", "Der Stream konnte nicht geladen werden (Blackscreen). Versuche es später erneut.");
@@ -2899,8 +2938,8 @@ class LiveManager {
             } else if(!this.isBroadcaster) {
                 this.disconnectGraceTimer = setTimeout(() => {
                     showCustomAlert("Beendet", "Live-Stream wurde beendet."); 
-                    this.leave(); 
-                }, 5000);
+                    this.leave();
+                    }, 5000);
             }
         }));
 
