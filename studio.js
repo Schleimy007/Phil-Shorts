@@ -36,7 +36,6 @@ let mode = 'cam';
 let isPiPMode = false;
 let animationFrameId;
 
-// 🔥 NEU: FPS Einstellungen
 let targetFPS = 30;
 let fpsInterval = 1000 / targetFPS;
 let thenRenderTime = Date.now();
@@ -124,6 +123,7 @@ window.changeFPS = async () => {
     sysToast(`Stream-Qualität auf ${targetFPS} FPS gesetzt!`);
 };
 
+// Startet beim Laden NUR die Kamera für die Vorschau
 async function initBaseCamera() {
     try {
         const camStream = await navigator.mediaDevices.getUserMedia({ 
@@ -143,6 +143,7 @@ async function initBaseCamera() {
     }
 }
 
+// Füllt das Dropdown und reagiert auf Mic-Wechsel
 async function populateMics() {
     try {
         const devices = await navigator.mediaDevices.enumerateDevices();
@@ -163,6 +164,7 @@ async function populateMics() {
             facecamVideo.srcObject = new MediaStream([localVideoTrack]);
             if(mode === 'cam') previewVideo.srcObject = new MediaStream([localVideoTrack]);
             
+            // Wenn der Mixer (und der Stream) schon läuft, Audio Source updaten!
             if(audioCtx && micSource) {
                 micSource.disconnect();
                 micSource = audioCtx.createMediaStreamSource(new MediaStream([localAudioTrack]));
@@ -176,6 +178,7 @@ async function populateMics() {
     } catch(e) {}
 }
 
+// Wird beim allerersten Szene-Wechsel ODER bei Stream-Start aktiviert, umzeitsyncro zu sichern
 function initAudioMixer() {
     if(audioCtx) return;
 
@@ -200,7 +203,6 @@ function initAudioMixer() {
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
     const micBar = document.getElementById('mic-level');
 
-    // CPU-schonende Audio-Animation (ca 20fps statt 144fps)
     let lastVisTime = 0;
     function drawVisualizer(now) {
         requestAnimationFrame(drawVisualizer);
@@ -216,7 +218,7 @@ function initAudioMixer() {
     }
     requestAnimationFrame(drawVisualizer);
 
-    // Initialisiere captureStream mit 60 (Maximal-Cap), die eigentliche FPS regelt unser renderCanvas Loop!
+    // Canvas liefert das Bild, audioDest liefert das fertige Audio!
     const canvasStream = canvas.captureStream(60); 
     finalStream = new MediaStream([canvasStream.getVideoTracks()[0], audioDestination.stream.getAudioTracks()[0]]);
     
@@ -224,8 +226,7 @@ function initAudioMixer() {
     startCompositor();
 }
 
-
-// === COMPOSITING (Der Video-Mixer für die Zuschauer) ===
+// === COMPOSITING (Der Video-Mixer) ===
 function startCompositor() {
     function renderCanvas() {
         animationFrameId = requestAnimationFrame(renderCanvas);
@@ -233,7 +234,6 @@ function startCompositor() {
         let now = Date.now();
         let elapsed = now - thenRenderTime;
 
-        // 🔥 DIE FRAME-BREMSE (Verhindert Lags!)
         if (elapsed > fpsInterval) {
             thenRenderTime = now - (elapsed % fpsInterval);
 
@@ -286,14 +286,15 @@ window.switchScene = async (type) => {
     isPiPMode = false;
     facecamOverlay.style.display = 'none';
     
-    initAudioMixer();
+    initAudioMixer(); // Startet den Mixer im Hintergrund
 
     try {
         if (type === 'screen' || type === 'pip') {
+            // 🔥 FIX: ERST den Screen (Monitor) anfordern, dann die Facecam aktivieren
             if (!localScreenTrack) {
                 const screenStream = await navigator.mediaDevices.getDisplayMedia({ 
                     video: { frameRate: { ideal: targetFPS, max: targetFPS } }, 
-                    audio: true 
+                    audio: true // Versucht PC-Systemsound abzugreifen
                 });
                 localScreenTrack = screenStream.getVideoTracks()[0];
                 
@@ -311,9 +312,11 @@ window.switchScene = async (type) => {
             
             if(type === 'pip') {
                 isPiPMode = true;
+                // Facecam-Track läuft schon im Hintergrund (von initBaseCamera), wir blenden nur das Div ein
                 facecamOverlay.style.display = 'block';
             }
         } else {
+            // Normale Cam Ansicht
             previewVideo.srcObject = new MediaStream([localVideoTrack]);
             previewVideo.style.transform = 'scaleX(-1)';
         }
@@ -353,6 +356,7 @@ function setupExtraUI() {
         }
     });
 
+    // Erlaubt das Leiser-Stellen von Game-Sound NUR auf den Kopfhörern des Streamers
     document.getElementById('pc-volume-slider').addEventListener('input', (e) => {
         previewVideo.volume = e.target.value;
     });
@@ -411,10 +415,10 @@ document.getElementById('master-live-btn').addEventListener('click', () => {
 });
 
 async function startStream() {
-    initAudioMixer(); 
-    if(audioCtx.state === 'suspended') await audioCtx.resume(); 
+    initAudioMixer();
+    if(audioCtx && audioCtx.state === 'suspended') await audioCtx.resume(); 
 
-    // CHAT RESET VOR DEM START!
+    // 🔥 FIX: Chat wird bei JEDEM neuen Stream restlos gelöscht!
     const q = query(collection(db, `live_streams/${currentUser.uid}/chat`));
     const snaps = await getDocs(q);
     snaps.forEach(d => deleteDoc(d.ref));
@@ -542,13 +546,15 @@ function setupContextMenu() {
             const isMe = (ctxTargetUid === currentUser.uid);
             const isMod = modsList.includes(ctxTargetUid);
 
+            // 🔥 FIX: Streamer-Schutz (Verstecke gefährliche Buttons bei eigener ID)
             document.getElementById('ctx-delete').style.display = isMe ? 'none' : 'flex';
             document.getElementById('ctx-ban').style.display = isMe ? 'none' : 'flex';
             document.getElementById('ctx-timeout').style.display = isMe ? 'none' : 'flex';
             document.getElementById('ctx-mod').style.display = isMe ? 'none' : 'flex';
 
             if(!isMe) {
-                document.getElementById('ctx-mod').innerHTML = isMod ? '<i class="fas fa-user-minus"></i> Mod-Status entfernen' : '<i class="fas fa-shield-alt"></i> Moderator machen';
+                // Dynamischer Mod-Button Text
+                document.getElementById('ctx-mod').innerHTML = isMod ? '<i class="fas fa-user-minus"></i> Mod-Status entfernen' : '<i class="fas fa-shield-alt" style="color:#10b981;"></i> Moderator machen';
             }
 
             let x = e.clientX; let y = e.clientY;
@@ -592,15 +598,22 @@ function setupContextMenu() {
     }
 
     document.getElementById('ctx-pin').addEventListener('click', () => { window.pinMessage(ctxTargetText); menu.classList.remove('active'); });
-    document.getElementById('ctx-whisper').addEventListener('click', () => { window.open(`index.html?dm=${ctxTargetUid}`, '_blank'); menu.classList.remove('active'); });
+    
+    // 🔥 FIX: Direktes Flüstern in DMs
+    document.getElementById('ctx-whisper').addEventListener('click', () => { 
+        window.open(`index.html?dm=${ctxTargetUid}`, '_blank'); 
+        menu.classList.remove('active'); 
+    });
     
     document.getElementById('ctx-delete').addEventListener('click', async () => {
         if(ctxTargetMsgId && isLive) { 
             await deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, ctxTargetMsgId)); 
             sysToast("Nachricht entfernt"); 
+            menu.classList.remove('active');
         }
     });
 
+    // 🔥 FIX: Custom Timeout via Prompt
     const timeoutLogic = async () => {
         if(ctxTargetUid && isLive) {
             let mins = prompt(`Wie viele Minuten Timeout für ${ctxTargetName}?`, "5");
@@ -728,7 +741,9 @@ function setupListeners() {
             </div>`;
         });
         
-        if(!isChatPaused) scroller.scrollTop = scroller.scrollHeight;
+        if(!isChatPaused) {
+            scroller.scrollTop = scroller.scrollHeight;
+        }
     });
 
     onSnapshot(doc(db, "live_streams", currentUser.uid), docSnap => {
