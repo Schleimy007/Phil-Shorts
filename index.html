@@ -22,17 +22,20 @@
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 
     <script>
         (function(){
-            // HIER deine EmailJS Public Key einfügen
+            // HIER deine EmailJS Public Key einfügen, wenn du dich bei emailjs.com anmeldest
             emailjs.init("1GBVFdSAqzftqj2WE");
         })();
 
         function handleGoogleLogin(response) {
             document.getElementById('login-text').innerText = "Wird authentifiziert...";
-            window.dispatchEvent(new CustomEvent('googleLoginSuccess', { detail: response }));
+            window.dispatchEvent(new CustomEvent('googleLoginSuccess', {
+                detail: response
+            }));
         }
 
         function switchPlusTier(tier) {
@@ -90,6 +93,7 @@
                         <span style="padding: 0 10px; font-size: 12px; color: #fff;">ODER</span>
                         <hr style="flex: 1; border: 0; border-top: 1px solid #fff;">
                     </div>
+
                     <div id="g_id_onload" data-client_id="825368838802-830ev6a720t4hb5qrb7jo5de7orb4pr0.apps.googleusercontent.com" data-context="signin" data-ux_mode="popup" data-callback="handleGoogleLogin" data-auto_prompt="false"></div>
                     <div style="display: flex; justify-content: center; width: 100%;">
                         <div class="g_id_signin" data-type="standard" data-shape="pill" data-theme="filled_black" data-text="signin_with" data-size="large" data-width="250"></div>
@@ -108,6 +112,21 @@
             <div class="app__videos" id="video-container">
                 <div class="loading-screen" id="initial-loader"><i class="fas fa-spinner fa-spin"></i>
                     <p>Lade Algorithmus...</p>
+                </div>
+                <div id="skeleton-loader" style="display: none; width: 100%; height: 100%; position: absolute; top:0; left:0; z-index: 50;">
+                    <div class="skeleton-video">
+                        <div class="skeleton-ui right">
+                            <div class="skeleton-avatar"></div>
+                            <div class="skeleton-icon"></div>
+                            <div class="skeleton-icon"></div>
+                            <div class="skeleton-icon"></div>
+                        </div>
+                        <div class="skeleton-ui bottom">
+                            <div class="skeleton-text short"></div>
+                            <div class="skeleton-text long"></div>
+                            <div class="skeleton-text medium"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -130,6 +149,7 @@
                 </div>
             </div>
             <div class="grid-container" id="sound-grid" style="padding-bottom: 120px;"></div>
+
             <div style="position: fixed; bottom: 0; left: 0; width: 100%; padding: 15px 20px; background: linear-gradient(to top, rgba(0,0,0,1) 60%, rgba(0,0,0,0)); z-index: 100; padding-bottom: calc(15px + env(safe-area-inset-bottom));">
                 <button class="profile-action-btn" id="use-sound-btn" style="width: 100%; background: #ff0050; color: white; font-size: 16px; border-radius: 30px; box-shadow: 0 4px 15px rgba(255,0,80,0.4);"><i class="fas fa-video"></i> Diesen Sound nutzen</button>
             </div>
@@ -142,12 +162,14 @@
             <div class="duet-container" style="display:flex; height:100%; width:100%; align-items:center; padding-bottom: 120px; position:relative;">
                 <video id="duet-orig-video" playsinline style="width:50%; height:80%; object-fit:cover; border-right:2px solid #333;"></video>
                 <video id="duet-cam-video" playsinline autoplay muted style="width:50%; height:80%; object-fit:cover; transform:scaleX(-1);"></video>
+
                 <div id="comment-reply-overlay" style="display:none; position:absolute; top:20%; left:50%; transform:translateX(-50%); background:rgba(255,255,255,0.9); padding:10px 15px; border-radius:10px; color:black; max-width:80%; z-index: 200; box-shadow:0 4px 10px rgba(0,0,0,0.5);">
                     <div style="font-size:11px; font-weight:bold; color:#ff0050; margin-bottom:5px;">Antwort auf Kommentar</div>
                     <div id="comment-reply-text" style="font-size:14px;"></div>
                 </div>
             </div>
             <canvas id="duet-canvas" style="display:none;"></canvas>
+
             <div class="duet-controls" style="position:absolute; bottom:30px; width:100%; display:flex; justify-content:center; flex-direction:column; align-items:center; z-index:100;">
                 <div id="duet-timer" style="color:white; text-shadow:0 2px 4px black; margin-bottom:15px; font-weight:bold; font-size:18px;">00:00</div>
                 <button id="duet-record-btn" class="chat-send-btn" style="width:80px; height:80px; background:#ff0050; border:4px solid white; transition: all 0.3s;"><i class="fas fa-video" id="duet-record-icon" style="font-size:24px;"></i></button>
@@ -191,101 +213,103 @@
                     <input type="text" id="live-stream-goal-desc" class="comment-input" placeholder="Belohnung (Z.B. Chili essen)" style="width:100%; border-radius:10px; border:none; background:rgba(0,0,0,0.5);">
                 </div>
 
+                <div>
+                    <h4 style="margin-bottom: 10px; color: #888; font-size: 13px; text-transform: uppercase; text-align:center;">Übertragungs-Quelle wählen</h4>
+                    <div style="display: flex; gap: 10px; justify-content: center;">
+                        <div class="live-source-card active" id="source-cam" onclick="selectLiveSource('cam')">
+                            <i class="fas fa-camera"></i><span>Kamera</span>
+                        </div>
+                        <div class="live-source-card" id="source-screen" onclick="selectLiveSource('screen')">
+                            <i class="fas fa-desktop"></i><span>Screen</span>
+                        </div>
+                        <div class="live-source-card" id="source-audio" onclick="selectLiveSource('audio')">
+                            <i class="fas fa-microphone"></i><span>Mic Only</span>
+                        </div>
+                    </div>
+                </div>
+
                 <button class="profile-action-btn" id="start-stream-action-btn" style="background:#ff0050; width:100%; font-size:18px; min-height: 60px; margin-top: 10px; border-radius: 30px; box-shadow: 0 4px 15px rgba(255,0,80,0.4);">
                     <i class="fas fa-broadcast-tower"></i> Jetzt LIVE gehen
                 </button>
             </div>
         </div>
 
-        <div id="view-live-room" class="view" style="background: #0e0e10; overflow: hidden;">
-            <style>
-                #view-live-room.active { position: fixed !important; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 99999; display: flex !important; }
-                .lr-layout { display: flex; width: 100%; height: 100%; }
-                .lr-video-col { flex: 1; background: #000; position: relative; display: flex; align-items: center; justify-content: center; }
-                .lr-header { position: absolute; top: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; z-index: 10; pointer-events: none; }
-                .lr-host-badge { background: rgba(0,0,0,0.6); backdrop-filter: blur(10px); padding: 6px 12px 6px 6px; border-radius: 30px; display: flex; align-items: center; gap: 12px; pointer-events: auto; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-                .lr-host-badge img { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #ff0050; object-fit: cover; }
-                .lr-host-info { display: flex; flex-direction: column; }
-                .lr-live-tag { background: #ff0050; color: white; font-size: 10px; font-weight: 900; padding: 2px 6px; border-radius: 4px; display: inline-block; width: max-content; margin-bottom: 2px; box-shadow: 0 0 10px rgba(255,0,80,0.5); }
-                .lr-actions { display: flex; gap: 10px; pointer-events: auto; }
-                .lr-btn { background: rgba(0,0,0,0.6); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); color: white; width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; transition: 0.2s; }
-                .lr-btn:hover { background: #ff0050; border-color: #ff0050; transform: scale(1.05); }
-                .lr-overlay-msg { position: absolute; display: flex; flex-direction: column; align-items: center; color: white; font-weight: bold; text-shadow: 0 2px 10px black; z-index: 5; text-align: center; }
-                
-                .lr-chat-col { width: 350px; background: #18181b; display: flex; flex-direction: column; border-left: 1px solid #1f1f23; }
-                .lr-chat-header { padding: 20px; border-bottom: 1px solid #1f1f23; font-weight: 700; color: white; display: flex; justify-content: space-between; font-size: 15px; }
-                .lr-chat-area { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
-                .lr-chat-msg { font-size: 13.5px; line-height: 1.4; color: #efeff1; word-wrap: break-word; padding: 4px 8px; border-radius: 6px; transition: 0.1s; }
-                .lr-chat-msg:hover { background: rgba(255,255,255,0.05); }
-                .lr-chat-msg strong { color: #00f2fe; cursor: pointer; font-weight: 700; }
-                .lr-input-area { padding: 15px; border-top: 1px solid #1f1f23; display: flex; gap: 10px; background: #0e0e10; }
-                .lr-input { flex: 1; background: #18181b; border: 1px solid #333; color: white; padding: 12px 15px; border-radius: 20px; font-size: 13px; outline: none; transition: 0.2s; }
-                .lr-input:focus { border-color: #00f2fe; }
-                .lr-send-btn, .lr-gift-btn { width: 42px; height: 42px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; font-size: 15px; }
-                .lr-send-btn { background: #00f2fe; color: black; }
-                .lr-gift-btn { background: #ff0050; color: white; }
-                .lr-send-btn:active, .lr-gift-btn:active { transform: scale(0.9); }
-                
-                @media (max-width: 768px) {
-                    .lr-layout { flex-direction: column; }
-                    .lr-video-col { flex: none; height: 35vh; }
-                    .lr-chat-col { width: 100%; flex: 1; }
-                }
-            </style>
-            
-            <div class="lr-layout">
-                <div class="lr-video-col">
-                    <div class="lr-header">
-                        <div class="lr-host-badge" onclick="openProfile(window.currentLiveStreamerUid)" style="cursor: pointer;">
-                            <img id="live-broadcaster-pic" src="https://i.imgur.com/JDPRzCc.png">
-                            <div class="lr-host-info">
-                                <span class="lr-live-tag">LIVE</span>
-                                <strong id="live-broadcaster-name" style="font-size: 14px; color: white; margin-top: 2px;">Lade...</strong>
-                            </div>
-                        </div>
-                        <div class="lr-actions">
-                            <div class="lr-btn" style="width: auto; padding: 0 15px; font-size: 14px; font-weight: bold; background: rgba(0,0,0,0.8);"><i class="fas fa-eye" style="margin-right: 8px; color: #00f2fe;"></i> <span id="live-viewer-count">0</span></div>
-                            <div class="lr-btn" onclick="leaveLiveRoom()"><i class="fas fa-times"></i></div>
-                        </div>
-                    </div>
-                    
-                    <div id="live-stream-offline-text" class="lr-overlay-msg">
-                        <i class="fas fa-circle-notch fa-spin" style="font-size: 50px; color: #00f2fe; margin-bottom: 20px;"></i>
-                        <span style="font-size: 16px;">Verbinde mit Stream...</span>
-                    </div>
-                    
-                    <div id="live-unmute-overlay" class="lr-overlay-msg" style="display:none; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; cursor: pointer; z-index: 20; backdrop-filter: blur(10px);">
-                        <i class="fas fa-volume-up" style="font-size: 60px; color: #ff0050; margin-bottom: 20px; animation: pulse 2s infinite;"></i>
-                        <span style="font-size: 20px;">Tippen, um Ton zu aktivieren</span>
-                    </div>
-                    
-                    <video id="live-video-player" autoplay playsinline style="width: 100%; height: 100%; object-fit: contain; z-index: 1;"></video>
-                </div>
-                
-                <div class="lr-chat-col">
-                    <div class="lr-chat-header">
-                        <span>Stream Chat</span>
-                        <i class="fas fa-user-friends" style="color: #888;"></i>
-                    </div>
-                    
-                    <div id="live-goal-container" style="display:none; background: rgba(255,215,0,0.05); border-bottom: 1px solid rgba(255,215,0,0.1); padding: 15px; font-size: 13px;">
-                        <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 8px;">
-                            <span id="live-goal-desc" style="color: white;">Ziel</span>
-                            <span style="color: #ffd700;"><span id="live-goal-current">0</span> / <span id="live-goal-target">0</span> <i class="fas fa-coins"></i></span>
-                        </div>
-                        <div style="width: 100%; height: 8px; background: #222; border-radius: 4px; overflow: hidden;">
-                            <div id="live-goal-progress" style="height: 100%; background: linear-gradient(90deg, #ff0050, #ffd700); width: 0%; transition: 0.3s;"></div>
+        <div id="view-live-room" class="view" style="background:black; z-index: 4000; overflow:hidden;">
+            <div id="live-streamer-hud" style="display:none; position:absolute; top:80px; right:15px; background:rgba(0,0,0,0.6); backdrop-filter:blur(5px); border-radius:15px; padding:15px; z-index:150; border:1px solid rgba(255,255,255,0.1); width:150px; flex-direction:column; gap:10px; text-align:center;">
+                <div style="color:#ffd700; font-size:14px; font-weight:bold;"><i class="fas fa-coins"></i> <span id="live-hud-coins">0</span></div>
+                <div style="color:#00f2fe; font-size:12px;"><i class="fas fa-clock"></i> <span id="live-hud-time">00:00</span></div>
+                <button class="profile-action-btn" id="live-toggle-cam-btn" onclick="toggleLiveCamera()" style="background:#333; min-height:30px; font-size:12px; padding:5px; border-radius:8px; margin-top:5px;"><i class="fas fa-video"></i> Kamera Aus</button>
+                <button class="profile-action-btn" id="open-mod-dashboard-btn" style="background:#9b59b6; min-height:30px; font-size:12px; padding:5px; border-radius:8px; margin-top:5px;"><i class="fas fa-shield-alt"></i> Mod Dashboard</button>
+                <button class="profile-action-btn" onclick="leaveLiveRoom()" style="background:#ff4444; min-height:30px; font-size:12px; padding:5px; border-radius:8px; margin-top:5px;">Stream beenden</button>
+            </div>
+
+            <div class="live-room-header">
+                <div style="display:flex; flex-direction:column; gap:10px;">
+                    <div style="display:flex; align-items:center; gap:10px; background: rgba(0,0,0,0.5); padding: 5px 15px 5px 5px; border-radius: 30px; backdrop-filter: blur(5px); width: max-content;">
+                        <img id="live-broadcaster-pic" src="" style="width:35px; height:35px; border-radius:50%; object-fit:cover;">
+                        <div>
+                            <strong id="live-broadcaster-name" style="font-size:14px; display:block;">Broadcaster</strong>
+                            <span class="live-badge">LIVE</span>
                         </div>
                     </div>
 
-                    <div id="live-chat-box" class="lr-chat-area"></div>
-                    
-                    <div class="lr-input-area">
-                        <input type="text" id="live-chat-input" class="lr-input" placeholder="Sag Hallo...">
-                        <button id="send-live-chat-btn" class="lr-send-btn"><i class="fas fa-paper-plane"></i></button>
-                        <button id="live-gift-btn" class="lr-gift-btn"><i class="fas fa-gift"></i></button>
+                    <div id="live-goal-container" style="display:none; background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 12px; border: 1px solid #ffd700; width: 200px; backdrop-filter: blur(5px); z-index: 100;">
+                        <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px; font-weight:bold;">
+                            <span id="live-goal-desc" style="color:#fff;">Ziel</span>
+                            <span style="color:#ffd700;"><span id="live-goal-current">0</span>/<span id="live-goal-target">0</span> <i class="fas fa-coins"></i></span>
+                        </div>
+                        <div style="width:100%; height:6px; background:#333; border-radius:3px; overflow:hidden;">
+                            <div id="live-goal-progress" style="height:100%; width:0%; background:linear-gradient(90deg, #ff0050, #ffd700); transition: width 0.3s;"></div>
+                        </div>
                     </div>
                 </div>
+
+                <div style="display: flex; gap: 15px; align-items: flex-start;">
+                    <div style="background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: bold;"><i class="fas fa-eye"></i> <span id="live-viewer-count">0</span></div>
+                    <i class="fas fa-times" id="live-close-btn" onclick="leaveLiveRoom()" style="font-size:24px; cursor:pointer; text-shadow: 0 2px 4px black;"></i>
+                </div>
+            </div>
+
+            <div id="live-stream-offline-text" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:#aaa; font-size:18px; font-weight:bold; z-index: 10; display:flex; flex-direction:column; align-items:center; text-align:center;">
+                <i class="fas fa-spinner fa-spin" style="font-size:30px; margin-bottom:10px;"></i>
+                <span>Verbinde...</span>
+            </div>
+
+            <div id="live-unmute-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:25; justify-content:center; align-items:center; flex-direction:column; cursor:pointer; backdrop-filter: blur(5px);">
+                <i class="fas fa-volume-up" style="font-size:50px; color:white; margin-bottom:15px; animation: pulse 2s infinite;"></i>
+                <span style="color:white; font-weight:bold; font-size:18px;">Tippen, um dem Stream beizutreten</span>
+            </div>
+
+            <div id="live-reconnect-overlay" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:#fff; font-size:16px; font-weight:bold; z-index: 30; flex-direction:column; align-items:center; text-align:center; background: rgba(0,0,0,0.7); padding: 20px; border-radius: 15px;">
+                <i class="fas fa-satellite-dish fa-spin" style="font-size:30px; margin-bottom:10px; color:#ff0050;"></i>
+                <span>Verbindung wird wiederhergestellt...</span>
+            </div>
+
+            <div id="live-battle-container" style="display:none; position:absolute; top:120px; left:0; width:100%; height:40%; z-index: 15;">
+                <div style="display:flex; width:100%; height:100%;">
+                    <div style="flex:1; border-right:2px solid #ff0050; position:relative;">
+                        <div class="battle-score left" id="battle-score-left">0</div>
+                    </div>
+                    <div style="flex:1; position:relative;">
+                        <video id="live-battle-player" autoplay playsinline webkit-playsinline style="width:100%; height:100%; object-fit:cover; position:relative; z-index: 20;"></video>
+                        <div class="battle-score right" id="battle-score-right">0</div>
+                        <div id="battle-timer" style="position:absolute; top:10px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); color:#fff; font-weight:bold; padding:5px 15px; border-radius:15px; border:2px solid #ff0050; z-index:25;">60s</div>
+                    </div>
+                </div>
+                <div id="battle-progress-bar" style="width:100%; height:10px; background:#00f2fe; display:flex;">
+                    <div id="battle-progress-left" style="height:100%; width:50%; background:#ff0050; transition:width 0.3s;"></div>
+                </div>
+            </div>
+
+            <video id="live-video-player" autoplay playsinline webkit-playsinline style="width:100%; height:100%; object-fit:contain; position:relative; z-index: 20; transition: opacity 0.3s;"></video>
+
+            <div id="live-gift-animation-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index: 200; overflow:hidden;"></div>
+            <div class="live-chat-container" id="live-chat-box"></div>
+
+            <div class="chat-input-wrapper glass-nav-bottom" id="live-input-area" style="z-index: 101;">
+                <input type="text" id="live-chat-input" placeholder="Chatte live..." class="chat-input">
+                <button id="send-live-chat-btn" class="chat-send-btn"><i class="fas fa-paper-plane"></i></button>
+                <button id="live-gift-btn" class="chat-send-btn" style="background:#ffd700; color:black; margin-left:5px;"><i class="fas fa-gift"></i></button>
             </div>
         </div>
 
@@ -413,7 +437,8 @@
                     <div class="stat-box"><strong id="stat-following">0</strong><span>Folge ich</span></div>
                     <div class="stat-box"><strong id="stat-followers">0</strong><span>Follower</span></div>
                     <div class="stat-box"><strong id="stat-likes">0</strong><span>Likes</span></div>
-                    <div class="stat-box" title="Level und Erfahrungspunkte"><strong id="stat-xp">0</strong><span>XP (Lvl <span id="stat-level">1</span>)</span></div>
+                    <div class="stat-box" title="Level und Erfahrungspunkte"><strong id="stat-xp">0</strong><span>XP (Lvl <span id="stat-level">1</span>)</span>
+                    </div>
                     <div class="stat-box" title="Tägliche Aktivität"><strong id="stat-streak">0</strong><span>🔥 Streak</span></div>
                 </div>
 
