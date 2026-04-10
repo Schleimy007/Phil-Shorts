@@ -2958,70 +2958,62 @@ window.currentLiveStreamId = null;
 window.liveRoomUnsubscribes = [];
 
 window.joinLiveStream = async function(streamId) {
-    if(!currentUser) return showToast("Bitte erst einloggen!");
+    if(!currentUser) return showToast("Bitte einloggen!");
     
     window.currentLiveStreamId = streamId;
     switchView('live-room');
     
-    // UI Reset
     const videoEl = document.getElementById('live-video-player');
-    if(videoEl) videoEl.srcObject = null;
-    
     const offlineText = document.getElementById('live-stream-offline-text');
+    
+    if(videoEl) videoEl.srcObject = null;
     if(offlineText) {
         offlineText.style.display = 'flex';
-        offlineText.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:30px; margin-bottom:10px; color:#00f2fe;"></i><span>Verbinde mit Stream...</span>';
+        offlineText.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:40px; color:#00f2fe; margin-bottom:10px;"></i><span>Verbinde...</span>';
     }
     
-    // Check if stream exists
     const streamSnap = await getDoc(doc(db, "live_streams", streamId));
     if(!streamSnap.exists()) {
-        showToast("Stream ist bereits offline.");
-        switchView('live-list');
+        showToast("Stream ist offline.");
+        leaveLiveRoom();
         return;
     }
     const streamData = streamSnap.data();
+    window.currentLiveStreamerUid = streamData.broadcasterUid;
     
-    // HUD updaten
-    document.getElementById('live-broadcaster-pic').src = streamData.broadcasterPic;
-    document.getElementById('live-broadcaster-name').innerText = streamData.broadcasterName;
+    document.getElementById('live-broadcaster-pic').src = streamData.broadcasterPic || 'https://i.imgur.com/JDPRzCc.png';
+    document.getElementById('live-broadcaster-name').innerText = streamData.broadcasterName || 'Creator';
     
-    // Viewer Count hochzählen
     await updateDoc(doc(db, "live_streams", streamId), { viewers: increment(1) }).catch(()=>{});
     
-    // WebRTC PeerJS Verbindung aufbauen
     if(viewerPeer) viewerPeer.destroy();
     
-    // 🔥 DER FIX: Wir geben dem Zuschauer eine eigene, einmalige ID (Datum anhängen)
-    // Wenn du deinen eigenen Stream guckst, wirfst du dich so nicht mehr selbst aus dem Netz!
-    viewerPeer = new Peer(currentUser.uid + "_viewer_" + Date.now(), { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
+    // 🔥 DER FIX: Zufällige ID für den Zuschauer, damit er den Host nicht aus der Leitung kickt!
+    const viewerId = currentUser.uid + "_viewer_" + Date.now();
+    viewerPeer = new Peer(viewerId, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
     
-    // 🔥 FALLBACK FIX: Wenn nach 10 Sekunden kein Bild kommt, zeige "Offline" anstatt unendlich zu laden
-    let connectTimeout = setTimeout(() => {
+    let connectionTimeout = setTimeout(() => {
         if(offlineText && !videoEl.srcObject) {
-            offlineText.innerHTML = '<i class="fas fa-satellite-dish" style="font-size:30px; margin-bottom:10px; color:#ff4444;"></i><span style="color:#ff4444;">Offline</span>';
+            offlineText.innerHTML = '<i class="fas fa-satellite-dish" style="font-size:40px; color:#ff4444; margin-bottom:10px;"></i><span style="color:#ff4444;">Offline</span>';
         }
     }, 10000);
 
     viewerPeer.on('open', () => {
-        // Ruft den Broadcaster an
         const call = viewerPeer.call(streamData.broadcasterUid, new MediaStream());
         
         call.on('stream', (remoteStream) => {
-            clearTimeout(connectTimeout); // Signal ist da, Lade-Timeout abbrechen!
+            clearTimeout(connectionTimeout);
             if(offlineText) offlineText.style.display = 'none';
             
             if(videoEl) {
                 videoEl.srcObject = remoteStream;
-                videoEl.muted = true; // Browser erfordert Mute für Autoplay
-                videoEl.play().catch(e=>console.error(e));
+                videoEl.muted = true; 
+                videoEl.play().catch(e=>{});
             }
             
-            // Ton Overlay einblenden
             const unmuteOverlay = document.getElementById('live-unmute-overlay');
-            if(unmuteOverlay) unmuteOverlay.style.display = 'flex';
-            
             if(unmuteOverlay) {
+                unmuteOverlay.style.display = 'flex';
                 unmuteOverlay.onclick = () => {
                     videoEl.muted = false;
                     unmuteOverlay.style.display = 'none';
@@ -3032,12 +3024,11 @@ window.joinLiveStream = async function(streamId) {
         call.on('close', () => {
             if(offlineText) {
                 offlineText.style.display = 'flex';
-                offlineText.innerHTML = '<i class="fas fa-broadcast-tower" style="font-size:30px; margin-bottom:10px; color:#ff4444;"></i><span style="color:#ff4444;">Stream beendet</span>';
+                offlineText.innerHTML = '<i class="fas fa-broadcast-tower" style="font-size:40px; color:#ff4444; margin-bottom:10px;"></i><span>Beendet</span>';
             }
         });
     });
     
-    // Lade Chat für diesen Stream
     initLiveRoomListeners(streamId);
 };
 
