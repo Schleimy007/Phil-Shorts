@@ -191,6 +191,8 @@ async function startStream() {
 
     const title = document.getElementById('stream-title').value || "Live Stream";
 
+    if(peer) peer.destroy(); // Wichtig: Alte Verbindungen killen
+    
     peer = new Peer(currentUser.uid, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
     
     peer.on('open', async () => {
@@ -205,6 +207,16 @@ async function startStream() {
         });
     });
 
+    // 🔥 FIX: Wenn ein Zuschauer anklopft, rufen WIR ihn mit dem Stream an!
+    peer.on('connection', (conn) => {
+        conn.on('open', () => {
+            const call = peer.call(conn.peer, finalStream);
+            activeCalls.push(call);
+            call.on('close', () => { activeCalls = activeCalls.filter(c => c !== call); });
+        });
+    });
+
+    // Fallback: Falls ein Anruf über die alte Methode reinkommt
     peer.on('call', call => {
         call.answer(finalStream);
         activeCalls.push(call);

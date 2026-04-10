@@ -2969,7 +2969,7 @@ window.joinLiveStream = async function(streamId) {
     if(videoEl) videoEl.srcObject = null;
     if(offlineText) {
         offlineText.style.display = 'flex';
-        offlineText.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:40px; color:#00f2fe; margin-bottom:10px;"></i><span>Verbinde...</span>';
+        offlineText.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:40px; color:#00f2fe; margin-bottom:10px;"></i><span>Lade Stream...</span>';
     }
     
     const streamSnap = await getDoc(doc(db, "live_streams", streamId));
@@ -2987,10 +2987,7 @@ window.joinLiveStream = async function(streamId) {
     await updateDoc(doc(db, "live_streams", streamId), { viewers: increment(1) }).catch(()=>{});
     
     if(viewerPeer) viewerPeer.destroy();
-    
-    // 🔥 DER FIX: Zufällige ID für den Zuschauer, damit er den Host nicht aus der Leitung kickt!
-    const viewerId = currentUser.uid + "_viewer_" + Date.now();
-    viewerPeer = new Peer(viewerId, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
+    viewerPeer = new Peer(currentUser.uid + "_viewer_" + Date.now(), { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
     
     let connectionTimeout = setTimeout(() => {
         if(offlineText && !videoEl.srcObject) {
@@ -2998,11 +2995,20 @@ window.joinLiveStream = async function(streamId) {
         }
     }, 10000);
 
-    viewerPeer.on('open', () => {
-        const call = viewerPeer.call(streamData.broadcasterUid, new MediaStream());
+    viewerPeer.on('open', (id) => {
+        // 🔥 FIX: Wir rufen nicht an, wir pingen das Studio per Daten-Kanal an!
+        const conn = viewerPeer.connect(streamData.broadcasterUid);
+        conn.on('open', () => {
+            console.log("Ping gesendet, warte auf Video...");
+        });
+    });
+
+    // 🔥 FIX: Das Studio ruft uns jetzt mit dem Video an!
+    viewerPeer.on('call', (call) => {
+        call.answer(); // Wir nehmen ab (als Zuschauer ohne Kamera)
         
         call.on('stream', (remoteStream) => {
-            clearTimeout(connectionTimeout);
+            clearTimeout(connectionTimeout); // Signal da, Timeout löschen!
             if(offlineText) offlineText.style.display = 'none';
             
             if(videoEl) {
