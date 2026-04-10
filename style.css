@@ -4070,65 +4070,36 @@ input:checked+.slider:before {
     background: #333;
     border-radius: 10px;
 }
-/* =========================================================
-   TIKTOK STYLE: BOTTOM SHEET MODALS (WISCHBARE MENÜS)
-   ========================================================= */
-.modal {
-    top: auto !important;
-    bottom: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    transform: translateY(100%) !important;
-    border-radius: 20px 20px 0 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 !important;
-    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
-    border: none !important;
-    border-top: 1px solid #222 !important;
-    background: rgba(15, 15, 15, 0.98) !important; /* Leicht transparentes Schwarz */
-    backdrop-filter: blur(15px);
-}
 
-.modal.show {
-    transform: translateY(0) !important;
-}
+/* === LIVE ROOM ULTRA UPGRADES (TWITCH / TIKTOK STYLE) === */
 
-/* Der kleine graue Balken oben zum Runterziehen */
-.modal-header::before {
-    content: '';
-    position: absolute;
-    top: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 40px;
-    height: 5px;
-    background: #444;
-    border-radius: 4px;
-}
+.live-volume-ctrl { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.6); padding: 5px 12px; border-radius: 30px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); }
+.live-volume-slider { width: 80px; accent-color: #00f2fe; cursor: pointer; }
 
-.modal-header {
-    padding-top: 25px !important;
-    position: relative;
-    border-bottom: 1px solid rgba(255,255,255,0.05) !important;
-}
+/* Chat Badges */
+.chat-badge { padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 900; margin-right: 6px; letter-spacing: 0.5px; color: white; display: inline-block; vertical-align: middle; }
+.badge-host { background: #ff0050; }
+.badge-mod { background: #10b981; }
+.badge-admin { background: #ffd700; color: black; }
 
-/* Den Hintergrund des Videos leicht abdunkeln, wenn das Menü offen ist */
-.modal::after {
-    content: '';
-    position: fixed;
-    top: -100vh;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0,0,0,0.6);
-    z-index: -1;
-    opacity: 0;
-    transition: opacity 0.3s;
-    pointer-events: none;
-}
+/* Admin Chat Context Menü */
+.live-ctx-menu { position: fixed; background: rgba(20, 20, 23, 0.95); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 6px; min-width: 200px; box-shadow: 0 15px 40px rgba(0,0,0,0.7); z-index: 100000; display: none; opacity: 0; transform: scale(0.95); transition: 0.15s cubic-bezier(0.16, 1, 0.3, 1); }
+.live-ctx-menu.active { display: block; opacity: 1; transform: scale(1); }
+.live-ctx-item { padding: 10px 14px; font-size: 13px; font-weight: 600; color: #f4f4f5; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 12px; transition: 0.1s; }
+.live-ctx-item:hover { background: rgba(255,255,255,0.1); }
+.live-ctx-item.danger { color: #ff0050; }
+.live-ctx-item.danger:hover { background: #ff0050; color: white; }
+.live-ctx-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 6px 0; }
 
-.modal.show::after {
-    opacity: 1;
-    pointer-events: auto;
+/* 🔥 TIKTOK MASSIVE GIFT ANIMATION 🔥 */
+.viewer-gift-overlay { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); z-index: 99999; pointer-events: none; display: flex; flex-direction: column; align-items: center; text-align: center; animation: popInGift 3.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+.viewer-gift-overlay .gift-icon { font-size: 140px; filter: drop-shadow(0 0 40px rgba(255,215,0,0.9)); margin-bottom: 10px; }
+.viewer-gift-overlay .gift-text { font-size: 16px; color: white; text-shadow: 0 2px 10px black; background: rgba(0,0,0,0.7); backdrop-filter: blur(10px); padding: 10px 30px; border-radius: 30px; border: 2px solid #ffd700; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+.viewer-gift-overlay .gift-sender { color: #00f2fe; font-weight: 900; font-size: 20px; display: block; margin-bottom: 4px; text-transform: uppercase;}
+@keyframes popInGift { 
+    0% { opacity:0; transform: translate(-50%, 50%) scale(0.3); } 
+    10% { opacity:1; transform: translate(-50%, -50%) scale(1.2); } 
+    20% { transform: translate(-50%, -50%) scale(1); } 
+    80% { opacity:1; transform: translate(-50%, -50%) scale(1); } 
+    100% { opacity:0; transform: translate(-50%, -150%) scale(0.8); } 
 }

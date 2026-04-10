@@ -2955,10 +2955,12 @@ window.LiveManager = {
 // 3. ALS ZUSCHAUER DEM STREAM BEITRETEN (WebRTC)
 let viewerPeer = null;
 window.currentLiveStreamId = null;
+window.currentLiveStreamerUid = null;
 window.liveRoomUnsubscribes = [];
+let currentLiveMods = [];
 
 window.joinLiveStream = async function(streamId) {
-    if(!currentUser) return showToast("Bitte einloggen!");
+    if(!currentUser) return showToast("Bitte erst einloggen!");
     
     window.currentLiveStreamId = streamId;
     switchView('live-room');
@@ -2966,7 +2968,25 @@ window.joinLiveStream = async function(streamId) {
     const videoEl = document.getElementById('live-video-player');
     const offlineText = document.getElementById('live-stream-offline-text');
     
-    if(videoEl) videoEl.srcObject = null;
+    if(videoEl) {
+        videoEl.srcObject = null;
+        
+        // 🔥 PC Lautstärke Regler anbinden
+        const volSlider = document.getElementById('live-pc-volume');
+        if(volSlider) {
+            videoEl.volume = volSlider.value;
+            volSlider.oninput = (e) => {
+                videoEl.volume = e.target.value;
+                const icon = document.getElementById('live-vol-icon');
+                if(icon) {
+                    if(e.target.value == 0) icon.className = 'fas fa-volume-mute';
+                    else if(e.target.value < 0.5) icon.className = 'fas fa-volume-down';
+                    else icon.className = 'fas fa-volume-up';
+                }
+            };
+        }
+    }
+
     if(offlineText) {
         offlineText.style.display = 'flex';
         offlineText.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:40px; color:#00f2fe; margin-bottom:10px;"></i><span>Lade Stream...</span>';
@@ -2987,7 +3007,10 @@ window.joinLiveStream = async function(streamId) {
     await updateDoc(doc(db, "live_streams", streamId), { viewers: increment(1) }).catch(()=>{});
     
     if(viewerPeer) viewerPeer.destroy();
-    viewerPeer = new Peer(currentUser.uid + "_viewer_" + Date.now(), { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
+    
+    // Viewer ID mit Datum, damit Host nicht gekickt wird
+    const viewerId = currentUser.uid + "_viewer_" + Date.now();
+    viewerPeer = new Peer(viewerId, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
     
     let connectionTimeout = setTimeout(() => {
         if(offlineText && !videoEl.srcObject) {
@@ -2995,24 +3018,19 @@ window.joinLiveStream = async function(streamId) {
         }
     }, 10000);
 
-    viewerPeer.on('open', (id) => {
-        // 🔥 FIX: Wir rufen nicht an, wir pingen das Studio per Daten-Kanal an!
+    viewerPeer.on('open', () => {
         const conn = viewerPeer.connect(streamData.broadcasterUid);
-        conn.on('open', () => {
-            console.log("Ping gesendet, warte auf Video...");
-        });
+        conn.on('open', () => console.log("Verbunden mit Studio."));
     });
 
-    // 🔥 FIX: Das Studio ruft uns jetzt mit dem Video an!
     viewerPeer.on('call', (call) => {
-        call.answer(); // Wir nehmen ab (als Zuschauer ohne Kamera)
-        
+        call.answer(); 
         call.on('stream', (remoteStream) => {
-            clearTimeout(connectionTimeout); // Signal da, Timeout löschen!
+            clearTimeout(connectionTimeout); 
             if(offlineText) offlineText.style.display = 'none';
             
             if(videoEl) {
-                videoEl.srcObject = remoteStream;
+                videoEl.srcObject = remoteStream; // Empfängt Mic + Game Audio + Video kombiniert
                 videoEl.muted = true; 
                 videoEl.play().catch(e=>{});
             }
@@ -3041,15 +3059,11 @@ window.joinLiveStream = async function(streamId) {
 // 4. STREAM VERLASSEN
 window.leaveLiveRoom = async function() {
     if(window.currentLiveStreamId && currentUser) {
-        // Viewer Count runterzählen
         await updateDoc(doc(db, "live_streams", window.currentLiveStreamId), { viewers: increment(-1) }).catch(()=>{});
     }
     if(viewerPeer) viewerPeer.destroy();
     const videoEl = document.getElementById('live-video-player');
-    if(videoEl) {
-        videoEl.pause();
-        videoEl.srcObject = null;
-    }
+    if(videoEl) { videoEl.pause(); videoEl.srcObject = null; }
     
     if(window.liveRoomUnsubscribes) {
         window.liveRoomUnsubscribes.forEach(unsub => unsub());
@@ -3060,7 +3074,11 @@ window.leaveLiveRoom = async function() {
     switchView('live-list');
 };
 
-// 5. CHAT & GESCHENKE ALS ZUSCHAUER LADEN
+// 5. CHAT, MODERATION & GIFTS
+let ctxTargetUid = null;
+let ctxTargetMsgId = null;
+let ctxTargetName = null;
+
 function initLiveRoomListeners(streamId) {
     if(window.liveRoomUnsubscribes) window.liveRoomUnsubscribes.forEach(unsub => unsub());
     window.liveRoomUnsubscribes = [];
@@ -3068,55 +3086,203 @@ function initLiveRoomListeners(streamId) {
     const chatBox = document.getElementById('live-chat-box');
     if(chatBox) chatBox.innerHTML = '';
     
+    // Aktuelle Mods laden
+    const modUnsub = onSnapshot(collection(db, `live_streams/${streamId}/mods`), snap => {
+        currentLiveMods = snap.docs.map(d => d.id);
+    });
+    window.liveRoomUnsubscribes.push(modUnsub);
+
+    // Timeouts lokal laden
+    let timedOutUsers = {};
+    const timeoutUnsub = onSnapshot(collection(db, `live_streams/${streamId}/timeouts`), snap => {
+        snap.docs.forEach(d => { timedOutUsers[d.id] = d.data().expire; });
+    });
+    window.liveRoomUnsubscribes.push(timeoutUnsub);
+    
     // Chat Listener
-    const chatUnsub = onSnapshot(query(collection(db, `live_streams/${streamId}/chat`), orderBy("timestamp", "desc"), limit(30)), snap => {
+    const chatUnsub = onSnapshot(query(collection(db, `live_streams/${streamId}/chat`), orderBy("timestamp", "desc"), limit(50)), snap => {
         if(!chatBox) return;
         chatBox.innerHTML = '';
+        
+        const amIHost = currentUser.uid === streamId;
+        const amIMod = currentLiveMods.includes(currentUser.uid);
+        const amIAppAdmin = currentUser.isAdmin || currentUser.email === "schleimyverteilung@gmail.com";
+        const hasModPower = amIHost || amIMod || amIAppAdmin;
+
         snap.forEach(d => {
             const m = d.data();
+            
+            // Verstecke die Nachricht, wenn User im Timeout ist
+            if(timedOutUsers[m.uid] && timedOutUsers[m.uid] > Date.now()) return;
+
             const isHost = m.uid === streamId;
-            const hostBadge = isHost ? '<span style="background:#ff0050; color:white; font-size:9px; padding:2px 4px; border-radius:3px; margin-right:5px;">HOST</span>' : '';
-            chatBox.innerHTML += `<div class="live-chat-msg" style="background:rgba(0,0,0,0.5); padding:8px 12px; border-radius:10px; margin-bottom:5px; color:white; font-size:13px; backdrop-filter:blur(5px); width:fit-content; max-width:80%; pointer-events:auto;">
-                ${hostBadge}<strong style="color:#00f2fe; margin-right:5px; cursor:pointer;" onclick="openProfile('${m.uid}')">${m.name}:</strong> <span style="word-wrap: break-word;">${m.text}</span>
+            const isMod = currentLiveMods.includes(m.uid);
+            
+            let badge = '';
+            if(isHost) badge = '<span class="chat-badge badge-host">HOST</span>';
+            else if(m.uid === "schleimyverteilung@gmail.com" || m.isAdmin) badge = '<span class="chat-badge badge-admin">ADMIN</span>';
+            else if(isMod) badge = '<span class="chat-badge badge-mod">MOD</span>';
+            
+            // Klick-Logik für Moderation!
+            const clickInt = hasModPower ? `oncontextmenu="window.openLiveCtxMenu(event, '${m.uid}', '${d.id}', '${m.name.replace(/'/g, "\\'")}')" onclick="window.openLiveCtxMenu(event, '${m.uid}', '${d.id}', '${m.name.replace(/'/g, "\\'")}')"` : '';
+
+            chatBox.innerHTML += `<div class="lr-chat-msg" ${clickInt} style="cursor:${hasModPower ? 'pointer' : 'default'}">
+                ${badge}<strong>${m.name}</strong><span>:</span> <span style="color:#efeff1;">${m.text}</span>
             </div>`;
         });
+        chatBox.scrollTop = chatBox.scrollHeight;
     });
     window.liveRoomUnsubscribes.push(chatUnsub);
     
-    // Live Viewer & Goal Listener
+    // Stream Meta (Viewers + Coin Goal)
     const metaUnsub = onSnapshot(doc(db, "live_streams", streamId), docSnap => {
         if(docSnap.exists()) {
             const data = docSnap.data();
             const viewerEl = document.getElementById('live-viewer-count');
             if(viewerEl) viewerEl.innerText = data.viewers || 0;
             
-            // Wenn ein Live-Ziel gesetzt ist
-            if(data.goalTarget && data.goalTarget > 0) {
-                document.getElementById('live-goal-container').style.display = 'block';
-                document.getElementById('live-goal-desc').innerText = data.goalDesc || "Ziel";
-                document.getElementById('live-goal-current').innerText = data.goalCurrent || 0;
-                document.getElementById('live-goal-target').innerText = data.goalTarget;
-                const percent = Math.min(100, ((data.goalCurrent || 0) / data.goalTarget) * 100);
-                document.getElementById('live-goal-progress').style.width = percent + '%';
-            } else {
-                document.getElementById('live-goal-container').style.display = 'none';
+            const goalCont = document.getElementById('live-goal-container');
+            if(goalCont) {
+                if(data.goalTarget && data.goalTarget > 0) {
+                    goalCont.style.display = 'block';
+                    document.getElementById('live-goal-desc').innerText = data.goalDesc || "Ziel";
+                    document.getElementById('live-goal-current').innerText = data.goalCurrent || 0;
+                    document.getElementById('live-goal-target').innerText = data.goalTarget;
+                    const percent = Math.min(100, ((data.goalCurrent || 0) / data.goalTarget) * 100);
+                    document.getElementById('live-goal-progress').style.width = percent + '%';
+                } else {
+                    goalCont.style.display = 'none';
+                }
             }
         }
     });
     window.liveRoomUnsubscribes.push(metaUnsub);
+
+    // 🔥 TIKTOK GIFTS ANIMATION
+    const giftUnsub = onSnapshot(collection(db, `live_streams/${streamId}/gifts`), snap => {
+        snap.docChanges().forEach(change => {
+            if(change.type === 'added') {
+                const g = change.doc.data();
+                const animZone = document.getElementById('live-gift-animation-zone');
+                if(!animZone) return;
+                
+                const el = document.createElement('div');
+                el.className = 'viewer-gift-overlay';
+                el.innerHTML = `
+                    <span class="gift-icon">${g.emoji}</span>
+                    <div class="gift-text">
+                        <span class="gift-sender">${g.name}</span>
+                        <span>hat ${g.giftName} gesendet!</span>
+                    </div>
+                `;
+                animZone.appendChild(el);
+                setTimeout(() => el.remove(), 3500); 
+            }
+        });
+    });
+    window.liveRoomUnsubscribes.push(giftUnsub);
+
+    // --- CONTEXT MENU LOGIK ---
+    window.openLiveCtxMenu = function(e, uid, msgId, name) {
+        e.preventDefault();
+        ctxTargetUid = uid;
+        ctxTargetMsgId = msgId;
+        ctxTargetName = name;
+
+        const menu = document.getElementById('live-ctx-menu');
+        if(!menu) return;
+
+        const amIHost = currentUser.uid === window.currentLiveStreamId;
+        const amIAppAdmin = currentUser.isAdmin || currentUser.email === "schleimyverteilung@gmail.com";
+        const targetIsHost = uid === window.currentLiveStreamId;
+        const targetIsMod = currentLiveMods.includes(uid);
+
+        // Streamer schützen (kein Bann, kein Delete bei Host-Nachrichten)
+        if(targetIsHost) {
+            document.getElementById('lctx-delete').style.display = 'none';
+            document.getElementById('lctx-ban').style.display = 'none';
+            document.getElementById('lctx-timeout').style.display = 'none';
+            document.getElementById('lctx-mod').style.display = 'none';
+        } else {
+            document.getElementById('lctx-delete').style.display = 'flex';
+            document.getElementById('lctx-ban').style.display = 'flex';
+            document.getElementById('lctx-timeout').style.display = 'flex';
+            
+            if(amIHost || amIAppAdmin) {
+                document.getElementById('lctx-mod').style.display = 'flex';
+                document.getElementById('lctx-mod').innerHTML = targetIsMod ? '<i class="fas fa-user-minus" style="color:#ff4444;"></i> Mod-Status entfernen' : '<i class="fas fa-shield-alt"></i> Moderator machen';
+            } else {
+                document.getElementById('lctx-mod').style.display = 'none';
+            }
+        }
+
+        let x = e.clientX; let y = e.clientY;
+        if (x + 200 > window.innerWidth) x = window.innerWidth - 210;
+        if (y + 250 > window.innerHeight) y = window.innerHeight - 260;
+        menu.style.left = `${x}px`; menu.style.top = `${y}px`;
+        menu.classList.add('active');
+    };
+
+    document.addEventListener('click', (e) => { 
+        const menu = document.getElementById('live-ctx-menu');
+        if(menu && !e.target.closest('.live-ctx-menu')) menu.classList.remove('active'); 
+    });
+
+    document.getElementById('lctx-whisper')?.addEventListener('click', () => {
+        window.open(`index.html?dm=${ctxTargetUid}`, '_blank');
+        document.getElementById('live-ctx-menu').classList.remove('active');
+    });
+
+    document.getElementById('lctx-delete')?.addEventListener('click', async () => {
+        if(ctxTargetMsgId && window.currentLiveStreamId) {
+            await deleteDoc(doc(db, `live_streams/${window.currentLiveStreamId}/chat`, ctxTargetMsgId));
+            showToast("Nachricht gelöscht");
+            document.getElementById('live-ctx-menu').classList.remove('active');
+        }
+    });
+
+    document.getElementById('lctx-timeout')?.addEventListener('click', async () => {
+        if(ctxTargetUid && window.currentLiveStreamId) {
+            let mins = prompt(`Wie viele Minuten Timeout für ${ctxTargetName}?`, "5");
+            if(mins && !isNaN(mins)) {
+                await setDoc(doc(db, `live_streams/${window.currentLiveStreamId}/timeouts`, ctxTargetUid), { expire: Date.now() + (parseInt(mins) * 60000) });
+                showToast(`${ctxTargetName} hat ${mins}m Timeout.`);
+                document.getElementById('live-ctx-menu').classList.remove('active');
+            }
+        }
+    });
+
+    document.getElementById('lctx-ban')?.addEventListener('click', async () => {
+        if(ctxTargetUid && confirm(`Willst du ${ctxTargetName} wirklich aus dem Stream bannen?`)) {
+            // Bann bedeutet: Wir packen den User in die Block-Liste des Streamers
+            await updateDoc(doc(db, "users", window.currentLiveStreamId), { blockedUsers: arrayUnion(ctxTargetUid) });
+            showToast("User gebannt!");
+            document.getElementById('live-ctx-menu').classList.remove('active');
+        }
+    });
+
+    document.getElementById('lctx-mod')?.addEventListener('click', async () => {
+        if(ctxTargetUid && window.currentLiveStreamId) {
+            const targetIsMod = currentLiveMods.includes(ctxTargetUid);
+            if(targetIsMod) {
+                await deleteDoc(doc(db, `live_streams/${window.currentLiveStreamId}/mods`, ctxTargetUid));
+                showToast(`Mod-Rechte von ${ctxTargetName} entfernt.`);
+            } else {
+                await setDoc(doc(db, `live_streams/${window.currentLiveStreamId}/mods`, ctxTargetUid), { uid: ctxTargetUid });
+                showToast(`${ctxTargetName} ist nun Mod!`);
+            }
+            document.getElementById('live-ctx-menu').classList.remove('active');
+        }
+    });
 }
 
-// Senden von Chat-Nachrichten als Zuschauer
 document.getElementById('send-live-chat-btn')?.addEventListener('click', async () => {
     const input = document.getElementById('live-chat-input');
     const text = input.value.trim();
     if(!text || !window.currentLiveStreamId || !currentUser) return;
     
     await addDoc(collection(db, `live_streams/${window.currentLiveStreamId}/chat`), {
-        uid: currentUser.uid,
-        name: currentUser.displayName,
-        text: text,
-        timestamp: Date.now()
+        uid: currentUser.uid, name: currentUser.displayName, text: text, timestamp: Date.now()
     });
     input.value = '';
 });
@@ -3125,7 +3291,6 @@ document.getElementById('live-chat-input')?.addEventListener('keypress', (e) => 
     if(e.key === 'Enter') document.getElementById('send-live-chat-btn').click();
 });
 
-// Geschenk Button Listener für Zuschauer
 document.getElementById('live-gift-btn')?.addEventListener('click', () => {
     if(window.currentLiveStreamId) window.openGiftModal(window.currentLiveStreamId);
 });
