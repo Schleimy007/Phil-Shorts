@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, orderBy, addDoc, limit, arrayUnion, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, orderBy, addDoc, arrayUnion, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const firebaseConfig = { 
     apiKey: "AIzaSyAF-QW_MtVBkImqh1gXwhKrc2pLLCAe3Ek", 
@@ -19,6 +19,10 @@ let startTime = null;
 let durationInterval = null;
 let activeCalls = [];
 
+let audioCtx;
+let audioDestination;
+let micSource;
+let analyser; 
 let localVideoTrack;
 let localAudioTrack;
 let finalStream; 
@@ -40,31 +44,77 @@ window.onload = async () => {
     setupListeners();
     setupContextMenu();
     setupHotkeys();
+    createVisualizerBars();
 };
 
-window.macToast = (msg) => {
-    const toast = document.getElementById('mac-toast');
-    document.getElementById('toast-msg').innerText = msg;
+window.sysToast = (msg) => {
+    const toast = document.getElementById('sys-toast');
+    document.getElementById('toast-text').innerText = msg;
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 3000);
 };
+
+// --- AUDIO & VIDEO ENGINE ---
+async function initMediaEngine() {
+    try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioDestination = audioCtx.createMediaStreamDestination();
+
+        for(let key in sfx) {
+            sfx[key].crossOrigin = "anonymous";
+            let sfxSource = audioCtx.createMediaElementSource(sfx[key]);
+            sfxSource.connect(audioDestination); 
+            sfxSource.connect(audioCtx.destination); 
+        }
+
+        const rawStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: true });
+        localVideoTrack = rawStream.getVideoTracks()[0];
+        localAudioTrack = rawStream.getAudioTracks()[0];
+
+        micSource = audioCtx.createMediaStreamSource(new MediaStream([localAudioTrack]));
+        micSource.connect(audioDestination);
+
+        // TikTok Style Visualizer
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 64;
+        micSource.connect(analyser);
+        
+        finalStream = new MediaStream([localVideoTrack, audioDestination.stream.getAudioTracks()[0]]);
+        document.getElementById('studio-preview').srcObject = new MediaStream([localVideoTrack]);
+
+    } catch (e) { sysToast("Kamera/Mikrofon nicht gefunden"); }
+}
+
+function createVisualizerBars() {
+    const container = document.getElementById('mic-visualizer');
+    for(let i=0; i<8; i++) {
+        let bar = document.createElement('div');
+        bar.className = 'm-bar';
+        container.appendChild(bar);
+    }
+    
+    const dataArray = new Uint8Array(analyser?.frequencyBinCount || 0);
+    function animate() {
+        requestAnimationFrame(animate);
+        if(!analyser || !localAudioTrack?.enabled) {
+            Array.from(container.children).forEach(b => b.style.height = '2px');
+            return;
+        }
+        analyser.getByteFrequencyData(dataArray);
+        Array.from(container.children).forEach((bar, i) => {
+            let val = dataArray[i*2] / 255;
+            bar.style.height = Math.max(2, val * 16) + 'px';
+            bar.style.background = val > 0.8 ? 'var(--ps-pink)' : 'var(--ps-cyan)';
+        });
+    }
+    animate();
+}
 
 window.playEffect = (name) => {
     if(sfx[name]) { sfx[name].currentTime = 0; sfx[name].play().catch(()=>{}); }
 };
 
-async function initMediaEngine() {
-    try {
-        const rawStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: true });
-        localVideoTrack = rawStream.getVideoTracks()[0];
-        localAudioTrack = rawStream.getAudioTracks()[0];
-        finalStream = new MediaStream([localVideoTrack, localAudioTrack]);
-        document.getElementById('studio-preview').srcObject = finalStream;
-    } catch (e) {
-        macToast("Kamera/Mikrofon nicht gefunden");
-    }
-}
-
+// --- UI FEATURES ---
 window.requestPiP = async () => {
     const video = document.getElementById('studio-preview');
     if (document.pictureInPictureElement) await document.exitPictureInPicture();
@@ -76,7 +126,7 @@ window.toggleCinema = () => {
     cinemaMode = !cinemaMode;
     document.getElementById('left-sidebar').style.display = cinemaMode ? 'none' : 'flex';
     document.getElementById('right-sidebar').style.display = cinemaMode ? 'none' : 'flex';
-    macToast(cinemaMode ? "Kino Modus an" : "Kino Modus aus");
+    sysToast(cinemaMode ? "Kino Modus an" : "Kino Modus aus");
 };
 
 window.clearChat = async () => {
@@ -84,17 +134,18 @@ window.clearChat = async () => {
     const q = query(collection(db, `live_streams/${currentUser.uid}/chat`));
     const snaps = await getDocs(q);
     snaps.forEach(d => deleteDoc(d.ref));
-    macToast("Chat geleert");
+    sysToast("Chat geleert");
 };
 
 window.pinMessage = (text) => {
     document.getElementById('pinned-text').innerText = text;
     document.getElementById('pinned-msg-bar').style.display = 'flex';
-    macToast("Nachricht angeheftet");
+    sysToast("Nachricht angeheftet");
 };
 
+// --- STREAM KONTROLLE ---
 window.switchScene = async (type) => {
-    document.querySelectorAll('.discord-item').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.source-item').forEach(c => c.classList.remove('active'));
     document.querySelector(`[data-scene="${type}"]`).classList.add('active');
     
     let newVideoTrack;
@@ -123,17 +174,21 @@ async function startStream() {
     isLive = true;
     startTime = Date.now();
     const btn = document.getElementById('master-live-btn');
-    btn.innerHTML = "<i class='fas fa-phone-slash'></i> Stream beenden";
-    btn.classList.replace('btn-blurple', 'btn-green');
-    btn.style.background = 'var(--red)';
-    document.getElementById('live-dot').style.display = 'flex';
+    btn.innerHTML = "Stream beenden";
+    btn.classList.add('danger');
+    
+    const ind = document.getElementById('live-indicator');
+    ind.classList.add('is-live');
+    ind.innerHTML = '<i class="fas fa-circle"></i> LIVE';
+
+    const title = document.getElementById('stream-title').value || "Live Stream";
 
     peer = new Peer(currentUser.uid, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
     
     peer.on('open', async () => {
         await setDoc(doc(db, "live_streams", currentUser.uid), {
             broadcasterUid: currentUser.uid, broadcasterName: currentUser.displayName, broadcasterPic: currentUser.photoURL,
-            title: "GlassCord Stream", viewers: 0, lastHeartbeat: Date.now(), timestamp: Date.now()
+            title: title, viewers: 0, lastHeartbeat: Date.now(), timestamp: Date.now()
         });
     });
 
@@ -144,7 +199,7 @@ async function startStream() {
     });
 
     durationInterval = setInterval(updateDuration, 1000);
-    macToast("Du bist Live!");
+    sysToast("Stream läuft!");
 }
 
 async function stopStream() {
@@ -154,10 +209,13 @@ async function stopStream() {
     await deleteDoc(doc(db, "live_streams", currentUser.uid));
     
     const btn = document.getElementById('master-live-btn');
-    btn.innerHTML = "<i class='fas fa-satellite-dish'></i> Stream Starten";
-    btn.style.background = '';
-    btn.classList.replace('btn-green', 'btn-blurple');
-    document.getElementById('live-dot').style.display = 'none';
+    btn.innerHTML = "Stream Starten";
+    btn.classList.remove('danger');
+    
+    const ind = document.getElementById('live-indicator');
+    ind.classList.remove('is-live');
+    ind.innerHTML = '<i class="fas fa-circle"></i> Offline';
+    
     activeCalls = [];
 }
 
@@ -166,20 +224,25 @@ function updateDuration() {
     let m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
     let s = (diff % 60).toString().padStart(2, '0');
     document.getElementById('stat-duration').innerText = `${m}:${s}`;
-    if(diff % 5 === 0 && isLive) updateDoc(doc(db, "live_streams", currentUser.uid), { lastHeartbeat: Date.now() }).catch(()=>{});
+    
+    // Update Title if changed
+    const title = document.getElementById('stream-title').value;
+    if(diff % 5 === 0 && isLive) {
+        updateDoc(doc(db, "live_streams", currentUser.uid), { lastHeartbeat: Date.now(), title: title }).catch(()=>{});
+    }
 }
 
 window.toggleMic = () => {
     localAudioTrack.enabled = !localAudioTrack.enabled;
     const btn = document.getElementById('toggle-mic');
-    btn.classList.toggle('danger', !localAudioTrack.enabled);
+    btn.classList.toggle('muted', !localAudioTrack.enabled);
     btn.innerHTML = localAudioTrack.enabled ? '<i class="fas fa-microphone"></i>' : '<i class="fas fa-microphone-slash"></i>';
 };
 
 window.toggleVid = () => {
     localVideoTrack.enabled = !localVideoTrack.enabled;
     const btn = document.getElementById('toggle-vid');
-    btn.classList.toggle('danger', !localVideoTrack.enabled);
+    btn.classList.toggle('muted', !localVideoTrack.enabled);
     btn.innerHTML = localVideoTrack.enabled ? '<i class="fas fa-video"></i>' : '<i class="fas fa-video-slash"></i>';
 };
 
@@ -192,18 +255,18 @@ window.sendHostMessage = async () => {
     input.value = '';
 };
 
-// --- CONTEXT MENU & MODAL LOGIC ---
+// --- CONTEXT MENU & PROFILE MODAL LOGIC ---
 let ctxTargetUid = null;
 let ctxTargetMsgId = null;
 let ctxTargetText = null;
 let ctxTargetName = null;
 
 function setupContextMenu() {
-    const menu = document.getElementById('mac-context-menu');
+    const menu = document.getElementById('tw-context-menu');
     const modal = document.getElementById('profile-modal');
     
     document.addEventListener('contextmenu', (e) => {
-        const msgEl = e.target.closest('.dc-msg');
+        const msgEl = e.target.closest('.tw-msg');
         if(msgEl && msgEl.dataset.uid) {
             e.preventDefault();
             ctxTargetUid = msgEl.dataset.uid;
@@ -212,21 +275,21 @@ function setupContextMenu() {
             ctxTargetName = msgEl.dataset.name;
             
             let x = e.clientX; let y = e.clientY;
-            if (x + 200 > window.innerWidth) x = window.innerWidth - 210;
-            if (y + 250 > window.innerHeight) y = window.innerHeight - 260;
+            if (x + 180 > window.innerWidth) x = window.innerWidth - 190;
+            if (y + 220 > window.innerHeight) y = window.innerHeight - 230;
             menu.style.left = `${x}px`; menu.style.top = `${y}px`;
             menu.classList.add('active');
         }
     });
 
     document.addEventListener('click', (e) => { 
-        if(!e.target.closest('.glass-context')) menu.classList.remove('active'); 
+        if(!e.target.closest('.tw-context')) menu.classList.remove('active'); 
     });
 
     document.getElementById('ctx-open-profile').addEventListener('click', openProfileModal);
     document.getElementById('studio-chat').addEventListener('click', (e) => {
-        if(e.target.tagName === 'STRONG' || e.target.classList.contains('avatar')) {
-            const msgEl = e.target.closest('.dc-msg');
+        if(e.target.tagName === 'STRONG') {
+            const msgEl = e.target.closest('.tw-msg');
             ctxTargetUid = msgEl.dataset.uid;
             ctxTargetName = msgEl.dataset.name;
             openProfileModal();
@@ -237,22 +300,22 @@ function setupContextMenu() {
         menu.classList.remove('active');
         document.getElementById('pm-name').innerText = ctxTargetName;
         document.getElementById('pm-avatar').innerText = ctxTargetName.charAt(0).toUpperCase();
-        document.getElementById('pm-role').innerText = ctxTargetUid === currentUser.uid ? "SERVER OWNER" : "MEMBER";
+        document.getElementById('pm-role').innerText = ctxTargetUid === currentUser.uid ? "Broadcaster" : "Zuschauer";
         modal.classList.add('show');
     }
 
     document.getElementById('ctx-pin').addEventListener('click', () => { pinMessage(ctxTargetText); menu.classList.remove('active'); });
     
     document.getElementById('ctx-delete').addEventListener('click', async () => {
-        if(ctxTargetMsgId && isLive) { await deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, ctxTargetMsgId)); macToast("Nachricht gelöscht"); }
+        if(ctxTargetMsgId && isLive) { await deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, ctxTargetMsgId)); sysToast("Gelöscht"); }
     });
 
-    document.getElementById('ctx-timeout').addEventListener('click', () => { macToast(`${ctxTargetName} ist im Timeout.`); menu.classList.remove('active'); });
+    document.getElementById('ctx-timeout').addEventListener('click', () => { sysToast(`${ctxTargetName} wurde stummgeschaltet`); menu.classList.remove('active'); });
     
     const banLogic = async () => {
         if(ctxTargetUid && confirm(`Willst du ${ctxTargetName} bannen?`)) {
             await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayUnion(ctxTargetUid) });
-            macToast("Gebannt");
+            sysToast("User gebannt");
             modal.classList.remove('show');
         }
     };
@@ -262,7 +325,7 @@ function setupContextMenu() {
     const modLogic = async () => {
         if(ctxTargetUid && isLive) {
             await setDoc(doc(db, `live_streams/${currentUser.uid}/mods`, ctxTargetUid), { uid: ctxTargetUid });
-            macToast(`${ctxTargetName} ist Moderator`);
+            sysToast(`${ctxTargetName} ist nun Mod`);
             modal.classList.remove('show');
         }
     };
@@ -285,26 +348,23 @@ function setupHotkeys() {
 function setupListeners() {
     const chatBox = document.getElementById('studio-chat');
     
-    // Einfaches Hashing für Avatar-Farben (wie in Discord)
+    // Twitch Name Colors
     const stringToColor = (str) => {
+        const colors = ['#FF0000', '#0000FF', '#00FF00', '#B22222', '#FF7F50', '#9ACD32', '#FF4500', '#2E8B57', '#DAA520', '#D2691E', '#5F9EA0', '#1E90FF', '#FF69B4', '#8A2BE2', '#00FF7F'];
         let hash = 0; for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-        const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
-        return '#' + "00000".substring(0, 6 - c.length) + c;
+        return colors[Math.abs(hash) % colors.length];
     };
 
     onSnapshot(query(collection(db, `live_streams/${currentUser.uid}/chat`), orderBy("timestamp", "asc")), snap => {
         chatBox.innerHTML = '';
         snap.forEach(d => {
             const m = d.data();
-            const initial = m.name.charAt(0).toUpperCase();
             const color = stringToColor(m.uid);
+            const isHost = m.uid === currentUser.uid;
+            const badge = isHost ? '<span class="badge host">HOST</span>' : '';
             
-            chatBox.innerHTML += `<div class="dc-msg ${m.uid === 'system' ? 'system' : ''}" data-uid="${m.uid}" data-msgid="${d.id}" data-text="${m.text}" data-name="${m.name}">
-                <div class="avatar" style="background:${color}">${initial}</div>
-                <div>
-                    <div><strong>${m.name}</strong> <span style="font-size:10px; color:var(--text-muted); margin-left:4px;">Heute</span></div>
-                    <div>${m.text}</div>
-                </div>
+            chatBox.innerHTML += `<div class="tw-msg" data-uid="${m.uid}" data-msgid="${d.id}" data-text="${m.text}" data-name="${m.name}">
+                ${badge}<strong style="color:${color}">${m.name}</strong><span style="color:#adadb8">:</span> <span class="msg-text">${m.text}</span>
             </div>`;
         });
         chatBox.scrollTop = chatBox.scrollHeight;
