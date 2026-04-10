@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, orderBy, addDoc, arrayUnion, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, orderBy, addDoc, limit, arrayUnion, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const firebaseConfig = { 
     apiKey: "AIzaSyAF-QW_MtVBkImqh1gXwhKrc2pLLCAe3Ek", authDomain: "phil-shorts.firebaseapp.com", 
@@ -66,7 +66,6 @@ window.addEventListener('mousemove', (e) => {
     facecamOverlay.style.left = `${newLeft}px`;
     facecamOverlay.style.top = `${newTop}px`;
 
-    // Relative Position für den Canvas-Render aktualisieren
     fcState.x = newLeft / wrapper.clientWidth;
     fcState.y = newTop / wrapper.clientHeight;
 });
@@ -96,7 +95,7 @@ window.onload = async () => {
         modsList = snap.docs.map(d => d.id);
     });
 
-    await initBaseCamera(); // Holt nur das Bild zum Anzeigen
+    await initBaseCamera();
     setupExtraUI();
     setupListeners();
     setupContextMenu();
@@ -104,10 +103,13 @@ window.onload = async () => {
     setupGifts();
 };
 
-// 1. Hole zuerst NUR das Bild, bevor wir das Audio-System wecken
 async function initBaseCamera() {
     try {
-        const camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: true });
+        // 🔥 PERFORMANCE FIX: Kamera zwingend auf max. 30 FPS limitieren
+        const camStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } }, 
+            audio: true 
+        });
         localVideoTrack = camStream.getVideoTracks()[0];
         localAudioTrack = camStream.getAudioTracks()[0];
 
@@ -130,7 +132,11 @@ async function populateMics() {
         
         select.onchange = async () => {
             const deviceId = select.value;
-            const newCamStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: { deviceId: { exact: deviceId } } });
+            // 🔥 PERFORMANCE FIX: Auch hier auf 30 FPS limitieren
+            const newCamStream = await navigator.mediaDevices.getUserMedia({ 
+                video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } }, 
+                audio: { deviceId: { exact: deviceId } } 
+            });
             
             localAudioTrack = newCamStream.getAudioTracks()[0];
             localVideoTrack = newCamStream.getVideoTracks()[0];
@@ -151,9 +157,8 @@ async function populateMics() {
     } catch(e) {}
 }
 
-// 2. Initialisiere das Audio-Mixing-System (Wird beim "Live" gehen oder Screen-Share aufgerufen)
 function initAudioMixer() {
-    if(audioCtx) return; // Bereits an
+    if(audioCtx) return;
 
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     audioDestination = audioCtx.createMediaStreamDestination();
@@ -176,8 +181,13 @@ function initAudioMixer() {
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
     const micBar = document.getElementById('mic-level');
 
-    function drawVisualizer() {
+    // 🔥 PERFORMANCE FIX: Die Audio-Pegel Animation CPU-schonend auf ~20 FPS drosseln
+    let lastVisTime = 0;
+    function drawVisualizer(now) {
         requestAnimationFrame(drawVisualizer);
+        if (now - lastVisTime < 50) return; // Überspringt Frame, wenn weniger als 50ms vergangen sind
+        lastVisTime = now;
+
         if(!localAudioTrack.enabled) { micBar.style.width = '0%'; return; }
         analyser.getByteFrequencyData(dataArray);
         let sum = 0; for(let i = 0; i < dataArray.length; i++) sum += dataArray[i];
@@ -185,55 +195,66 @@ function initAudioMixer() {
         let percent = Math.min(100, (avg / 100) * 100);
         micBar.style.width = percent + '%';
     }
-    drawVisualizer();
+    requestAnimationFrame(drawVisualizer);
 
     const canvasStream = canvas.captureStream(30); 
     finalStream = new MediaStream([canvasStream.getVideoTracks()[0], audioDestination.stream.getAudioTracks()[0]]);
     
-    renderCanvas();
+    startCompositor();
 }
 
 
-// === COMPOSITING (MIXER) ===
-function renderCanvas() {
-    animationFrameId = requestAnimationFrame(renderCanvas);
-    
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+// === COMPOSITING (Der Video-Mixer für die Zuschauer) ===
+function startCompositor() {
+    let lastRenderTime = 0;
+    const fpsInterval = 1000 / 30; // 🔥 PERFORMANCE FIX: Strikte 30 FPS Bremse! Verhindert 144Hz-Lags.
 
-    if (isPiPMode) {
-        if (localScreenTrack) ctx.drawImage(previewVideo, 0, 0, canvas.width, canvas.height);
+    function render(now) {
+        animationFrameId = requestAnimationFrame(render);
         
-        if (localVideoTrack) {
-            const camW = canvas.width * fcState.width;
-            const camH = camW * (9/16); 
-            const camX = canvas.width * fcState.x;
-            const camY = canvas.height * fcState.y;
-            
-            ctx.save();
-            ctx.translate(camX + camW, camY);
-            ctx.scale(-1, 1);
-            ctx.drawImage(facecamVideo, 0, 0, camW, camH);
-            ctx.restore();
+        // Prüfen, ob es schon Zeit für das nächste 30fps Frame ist (CPU schonen!)
+        const elapsed = now - lastRenderTime;
+        if (elapsed < fpsInterval) return;
+        lastRenderTime = now - (elapsed % fpsInterval);
 
-            ctx.strokeStyle = '#00f2fe';
-            ctx.lineWidth = 4;
-            ctx.strokeRect(camX, camY, camW, camH);
-        }
-    } else {
-        const sourceVideo = previewVideo; 
-        if (sourceVideo.srcObject) {
-            if(sourceVideo.style.transform.includes('scaleX(-1)')) {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        if (isPiPMode) {
+            if (localScreenTrack) ctx.drawImage(previewVideo, 0, 0, canvas.width, canvas.height);
+            
+            if (localVideoTrack) {
+                const camW = canvas.width * fcState.width;
+                const camH = camW * (9/16); 
+                const camX = canvas.width * fcState.x;
+                const camY = canvas.height * fcState.y;
+                
                 ctx.save();
-                ctx.translate(canvas.width, 0);
+                ctx.translate(camX + camW, camY);
                 ctx.scale(-1, 1);
-                ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
+                ctx.drawImage(facecamVideo, 0, 0, camW, camH);
                 ctx.restore();
-            } else {
-                ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
+
+                ctx.strokeStyle = '#00f2fe';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(camX, camY, camW, camH);
+            }
+        } else {
+            const sourceVideo = previewVideo; 
+            if (sourceVideo.srcObject) {
+                if(sourceVideo.style.transform.includes('scaleX(-1)')) {
+                    ctx.save();
+                    ctx.translate(canvas.width, 0);
+                    ctx.scale(-1, 1);
+                    ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
+                    ctx.restore();
+                } else {
+                    ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
+                }
             }
         }
     }
+    requestAnimationFrame(render);
 }
 
 // --- SZENENSTEUERUNG ---
@@ -244,15 +265,18 @@ window.switchScene = async (type) => {
     isPiPMode = false;
     facecamOverlay.style.display = 'none';
     
-    initAudioMixer(); // Sicherstellen, dass Audio läuft, falls Screen-Audio dazukommt
+    initAudioMixer();
 
     try {
         if (type === 'screen' || type === 'pip') {
             if (!localScreenTrack) {
-                const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                // 🔥 PERFORMANCE FIX: Screen-Capture framerate begrenzen
+                const screenStream = await navigator.mediaDevices.getDisplayMedia({ 
+                    video: { frameRate: { ideal: 30, max: 30 } }, 
+                    audio: true 
+                });
                 localScreenTrack = screenStream.getVideoTracks()[0];
                 
-                // Game Sound in Mixer routen!
                 if(screenStream.getAudioTracks().length > 0) {
                     if(screenAudioSource) screenAudioSource.disconnect();
                     screenAudioSource = audioCtx.createMediaStreamSource(screenStream);
@@ -261,6 +285,7 @@ window.switchScene = async (type) => {
                 
                 localScreenTrack.onended = () => { window.switchScene('cam'); };
             }
+            
             previewVideo.srcObject = new MediaStream([localScreenTrack]);
             previewVideo.style.transform = 'none';
             
@@ -275,7 +300,7 @@ window.switchScene = async (type) => {
     } catch (e) { console.warn("Szenenwechsel abgebrochen", e); }
 };
 
-// ... (Soundboard Logik) ...
+// ... SOUNDBOARD SFX ...
 const sfx = {
     applaus: new Audio('https://cdn.pixabay.com/download/audio/2022/11/22/audio_d1718ab41b.mp3'),
     airhorn: new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_7ce18e2eb5.mp3'),
@@ -308,7 +333,6 @@ function setupExtraUI() {
         }
     });
 
-    // PC Volume (Gameplay-Sound für den Streamer)
     document.getElementById('pc-volume-slider').addEventListener('input', (e) => {
         previewVideo.volume = e.target.value;
     });
@@ -329,16 +353,47 @@ window.toggleCinema = () => {
     sysToast(cinemaMode ? "Kino Modus aktiv" : "Standard Modus");
 };
 
+// --- ADMIN TOOLS ---
+window.clearChat = async () => {
+    if(!confirm("Gesamten Chat löschen?")) return;
+    const q = query(collection(db, `live_streams/${currentUser.uid}/chat`));
+    const snaps = await getDocs(q);
+    snaps.forEach(d => deleteDoc(d.ref));
+    sysToast("Chat wurde geleert!");
+};
+
+window.pinMessage = async (text) => {
+    document.getElementById('pinned-text').innerText = text;
+    document.getElementById('pinned-msg-bar').style.display = 'flex';
+    if(isLive) await updateDoc(doc(db, "live_streams", currentUser.uid), { pinnedMessage: text });
+    sysToast("Nachricht angeheftet!");
+};
+
+window.unpinMessage = async () => {
+    document.getElementById('pinned-msg-bar').style.display = 'none';
+    if(isLive) await updateDoc(doc(db, "live_streams", currentUser.uid), { pinnedMessage: null });
+};
+
+window.updateLiveGoal = async () => {
+    const goalTarget = parseInt(document.getElementById('goal-target').value) || 0;
+    const goalDesc = document.getElementById('goal-desc').value || "Ziel";
+    if(isLive) {
+        await updateDoc(doc(db, "live_streams", currentUser.uid), { goalTarget: goalTarget, goalDesc: goalDesc });
+        sysToast("Live Ziel wurde an Zuschauer gesendet!");
+    } else {
+        sysToast("Wird beim Streamstart übernommen.");
+    }
+};
+
 // --- GO LIVE LOGIK ---
 document.getElementById('master-live-btn').addEventListener('click', () => {
     if(!isLive) startStream(); else stopStream();
 });
 
 async function startStream() {
-    initAudioMixer(); // Falls noch nicht gestartet
-    if(audioCtx.state === 'suspended') await audioCtx.resume();
+    initAudioMixer(); 
+    if(audioCtx.state === 'suspended') await audioCtx.resume(); 
 
-    // 1. Chat resetten
     const q = query(collection(db, `live_streams/${currentUser.uid}/chat`));
     const snaps = await getDocs(q);
     snaps.forEach(d => deleteDoc(d.ref));
@@ -375,7 +430,6 @@ async function startStream() {
         });
     });
 
-    // Wir nehmen den finalen gemischten Stream und schicken ihn an jeden Zuschauer, der fragt
     peer.on('connection', (conn) => {
         conn.on('open', () => {
             const call = peer.call(conn.peer, finalStream);
@@ -418,17 +472,6 @@ function updateDuration() {
         updateDoc(doc(db, "live_streams", currentUser.uid), { lastHeartbeat: Date.now() }).catch(()=>{});
     }
 }
-
-window.updateLiveGoal = async () => {
-    const goalTarget = parseInt(document.getElementById('goal-target').value) || 0;
-    const goalDesc = document.getElementById('goal-desc').value || "Ziel";
-    if(isLive) {
-        await updateDoc(doc(db, "live_streams", currentUser.uid), { goalTarget: goalTarget, goalDesc: goalDesc });
-        sysToast("Live Ziel wurde aktualisiert!");
-    } else {
-        sysToast("Wird beim Stream-Start angewendet.");
-    }
-};
 
 window.toggleMic = () => {
     localAudioTrack.enabled = !localAudioTrack.enabled;
@@ -478,7 +521,6 @@ function setupContextMenu() {
             const isMe = (ctxTargetUid === currentUser.uid);
             const isMod = modsList.includes(ctxTargetUid);
 
-            // Streamer-Schutz 
             document.getElementById('ctx-delete').style.display = isMe ? 'none' : 'flex';
             document.getElementById('ctx-ban').style.display = isMe ? 'none' : 'flex';
             document.getElementById('ctx-timeout').style.display = isMe ? 'none' : 'flex';
@@ -516,7 +558,6 @@ function setupContextMenu() {
         document.getElementById('pm-avatar').innerText = ctxTargetName.charAt(0).toUpperCase();
         document.getElementById('pm-role').innerText = ctxTargetUid === currentUser.uid ? "Broadcaster" : (modsList.includes(ctxTargetUid) ? "Moderator" : "Zuschauer");
         
-        // Hide dangerous buttons if it's the streamer
         const isMe = (ctxTargetUid === currentUser.uid);
         document.getElementById('pm-btn-mod').style.display = isMe ? 'none' : 'flex';
         document.getElementById('pm-btn-timeout').style.display = isMe ? 'none' : 'flex';
@@ -529,14 +570,7 @@ function setupContextMenu() {
         modal.classList.add('show');
     }
 
-    window.clearChat = async () => {
-        if(!confirm("Gesamten Chat leeren?")) return;
-        const q = query(collection(db, `live_streams/${currentUser.uid}/chat`));
-        const snaps = await getDocs(q);
-        snaps.forEach(d => deleteDoc(d.ref));
-        sysToast("Chat wurde geleert!");
-    };
-
+    document.getElementById('ctx-pin').addEventListener('click', () => { window.pinMessage(ctxTargetText); menu.classList.remove('active'); });
     document.getElementById('ctx-whisper').addEventListener('click', () => { window.open(`index.html?dm=${ctxTargetUid}`, '_blank'); menu.classList.remove('active'); });
     
     document.getElementById('ctx-delete').addEventListener('click', async () => {
@@ -628,11 +662,29 @@ let isChatPaused = false;
 function setupListeners() {
     const chatContainer = document.getElementById('studio-chat');
     const scroller = document.getElementById('chat-scroller');
+    const pauseBanner = document.getElementById('chat-paused-banner');
 
     const stringToColor = (str) => {
         const colors = ['#FF453A', '#0A84FF', '#32D74B', '#FF9F0A', '#BF5AF2', '#FF375F', '#5E5CE6', '#FFD60A'];
         let hash = 0; for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
         return colors[Math.abs(hash) % colors.length];
+    };
+
+    scroller.addEventListener('scroll', () => {
+        const isAtBottom = scroller.scrollHeight - scroller.scrollTop <= scroller.clientHeight + 20;
+        if (!isAtBottom && !isChatPaused) {
+            isChatPaused = true;
+            pauseBanner.style.display = 'flex';
+        } else if (isAtBottom && isChatPaused) {
+            isChatPaused = false;
+            pauseBanner.style.display = 'none';
+        }
+    });
+
+    window.resumeChatScroll = () => {
+        isChatPaused = false;
+        pauseBanner.style.display = 'none';
+        scroller.scrollTop = scroller.scrollHeight;
     };
 
     onSnapshot(query(collection(db, `live_streams/${currentUser.uid}/chat`), orderBy("timestamp", "asc")), snap => {
@@ -655,7 +707,7 @@ function setupListeners() {
             </div>`;
         });
         
-        scroller.scrollTop = scroller.scrollHeight;
+        if(!isChatPaused) scroller.scrollTop = scroller.scrollHeight;
     });
 
     onSnapshot(doc(db, "live_streams", currentUser.uid), docSnap => {
