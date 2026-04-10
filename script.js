@@ -2864,53 +2864,90 @@ function initResponsiveLayout() {
     }
 }
 
-// === TIKTOK STYLE: SWIPE TO CLOSE MODALS ===
-let modalStartY = 0;
-let currentSwipeModal = null;
-
-document.querySelectorAll('.modal').forEach(modal => {
-    const header = modal.querySelector('.modal-header');
-    if(!header) return;
-
-    // Wenn der Finger den oberen Teil des Menüs berührt
-    header.addEventListener('touchstart', (e) => {
-        modalStartY = e.touches[0].clientY;
-        currentSwipeModal = modal;
-        currentSwipeModal.style.transition = 'none'; // Fließende Bewegung am Finger
-    }, {passive: true});
-
-    // Wenn der Finger zieht
-    header.addEventListener('touchmove', (e) => {
-        if(!currentSwipeModal) return;
-        let currentY = e.touches[0].clientY;
-        let diff = currentY - modalStartY;
-        
-        // Nur Wischen nach UNTEN erlauben
-        if(diff > 0) { 
-            currentSwipeModal.style.transform = `translateY(${diff}px)`;
-        }
-    }, {passive: true});
-
-    // Wenn der Finger loslässt
-    header.addEventListener('touchend', (e) => {
-        if(!currentSwipeModal) return;
-        let currentY = e.changedTouches[0].clientY;
-        let diff = currentY - modalStartY;
-        
-        // Animation wieder einschalten
-        currentSwipeModal.style.transition = 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)';
-        
-        // Wenn weit genug nach unten gezogen wurde -> Menü schließen
-        if(diff > 80) { 
-            currentSwipeModal.classList.remove('show');
-            setTimeout(() => currentSwipeModal.style.transform = '', 300);
-        } else { 
-            // Nicht weit genug gezogen -> Menü springt zurück nach oben
-            currentSwipeModal.style.transform = 'translateY(0)';
-            setTimeout(() => currentSwipeModal.style.transform = '', 300);
-        }
-        currentSwipeModal = null;
-    }, {passive: true});
-});
-
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
+
+// =========================================================
+// 🔥 LIVE MANAGER: BEHEBT DEN UNENDLICHEN LADEKREIS 🔥
+// =========================================================
+
+window.LiveManager = {
+    unsubscribe: null,
+    init: function() {
+        // Finde den Container in der index.html
+        // Wir suchen nach dem Element, in dem der Ladekreis ist
+        const view = document.getElementById('view-live-list') || document.querySelector('.live-list-view');
+        if(!view) return;
+
+        // Stoppe alte Abfragen, falls man mehrfach hin und her klickt
+        if (this.unsubscribe) this.unsubscribe();
+
+        // Firebase Abfrage: Wer ist gerade live?
+        this.unsubscribe = onSnapshot(collection(db, "live_streams"), (snapshot) => {
+            
+            // 1. LADEKREIS ENTFERNEN (Egal ob Streams da sind oder nicht)
+            const spinner = view.querySelector('.loading-screen') || view.querySelector('i.fa-spinner, i.fa-circle-notch') || view.querySelector('.spinner');
+            if (spinner && spinner.parentElement) spinner.parentElement.style.display = 'none';
+
+            // 2. WENN NIEMAND LIVE IST (Fix für das leere Fenster)
+            if (snapshot.empty) {
+                // Suche nach einem Container, oder nutze die View
+                let container = document.getElementById('live-streams-container');
+                if(!container) {
+                    container = document.createElement('div');
+                    container.id = 'live-streams-container';
+                    view.appendChild(container);
+                }
+                
+                container.innerHTML = `
+                    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height: 60vh; color: #888; text-align: center;">
+                        <div style="width: 80px; height: 80px; border-radius: 50%; background: #111; display:flex; align-items:center; justify-content:center; margin-bottom: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+                            <i class="fas fa-video-slash" style="font-size: 30px; color: #555;"></i>
+                        </div>
+                        <h3 style="color: white; margin-bottom: 8px;">Niemand ist live</h3>
+                        <p style="font-size: 14px; max-width: 80%;">Sobald ein Phil Shorts++ Creator live geht, erscheint er hier.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // 3. WENN LEUTE LIVE SIND -> KARTEN GENERIEREN
+            let container = document.getElementById('live-streams-container');
+            if(!container) {
+                container = document.createElement('div');
+                container.id = 'live-streams-container';
+                view.appendChild(container);
+            }
+
+            let html = '<div class="live-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 15px; padding: 15px;">';
+            
+            snapshot.forEach(docSnap => {
+                const stream = docSnap.data();
+                html += `
+                    <div class="live-stream-card" onclick="joinLiveStream('${docSnap.id}')" style="background: #111; border: 1px solid #222; border-radius: 12px; overflow: hidden; cursor: pointer; position: relative; transition: 0.2s;">
+                        <div style="position: absolute; top: 10px; left: 10px; background: #ff0050; color: white; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; z-index: 2; animation: pulse 2s infinite;">LIVE</div>
+                        <div style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; z-index: 2; backdrop-filter: blur(5px);"><i class="fas fa-eye"></i> ${stream.viewers || 0}</div>
+                        
+                        <div style="height: 180px; background: #1a1a1a; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;">
+                            <img src="${stream.broadcasterPic}" style="width: 60px; height: 60px; border-radius: 50%; border: 2px solid #00f2fe; z-index: 1;">
+                            <div style="position: absolute; width: 100%; height: 100%; background: linear-gradient(to bottom, transparent 50%, #111 100%); z-index: 0;"></div>
+                        </div>
+                        <div style="padding: 12px; border-top: 1px solid #222;">
+                            <strong style="display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: white; margin-bottom: 2px;">${stream.title || 'Live Stream'}</strong>
+                            <span style="font-size: 12px; color: #888;">@${stream.broadcasterName}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            container.innerHTML = html;
+        });
+    }
+};
+
+// Platzhalter-Funktion, falls man auf einen Stream klickt
+window.joinLiveStream = function(streamId) {
+    showToast("Verbinde mit Stream...");
+    // Hier kannst du später den Code einbauen, um als Zuschauer den Stream zu betreten!
+    console.log("Will beitreten: " + streamId);
+};
