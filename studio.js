@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, orderBy, addDoc, arrayUnion, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, orderBy, addDoc, arrayUnion, getDocs, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const firebaseConfig = { 
     apiKey: "AIzaSyAF-QW_MtVBkImqh1gXwhKrc2pLLCAe3Ek", 
@@ -36,7 +36,7 @@ const sfx = {
 
 window.onload = async () => {
     if(!currentUser || currentUser.philPlusTier < 2) {
-        alert("Studio ist exklusiv für Phil Shorts++");
+        alert("Studio ist exklusiv für Phil Shorts++ Creator!");
         window.location.href = "index.html";
         return;
     }
@@ -45,6 +45,7 @@ window.onload = async () => {
     setupContextMenu();
     setupHotkeys();
     createVisualizerBars();
+    setupExtraUI();
 };
 
 window.sysToast = (msg) => {
@@ -74,7 +75,6 @@ async function initMediaEngine() {
         micSource = audioCtx.createMediaStreamSource(new MediaStream([localAudioTrack]));
         micSource.connect(audioDestination);
 
-        // TikTok Style Visualizer
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 64;
         micSource.connect(analyser);
@@ -82,11 +82,12 @@ async function initMediaEngine() {
         finalStream = new MediaStream([localVideoTrack, audioDestination.stream.getAudioTracks()[0]]);
         document.getElementById('studio-preview').srcObject = new MediaStream([localVideoTrack]);
 
-    } catch (e) { sysToast("Kamera/Mikrofon nicht gefunden"); }
+    } catch (e) { sysToast("Fehler: Kamera/Mikrofon blockiert!"); }
 }
 
 function createVisualizerBars() {
     const container = document.getElementById('mic-visualizer');
+    container.innerHTML = '';
     for(let i=0; i<8; i++) {
         let bar = document.createElement('div');
         bar.className = 'm-bar';
@@ -114,7 +115,24 @@ window.playEffect = (name) => {
     if(sfx[name]) { sfx[name].currentTime = 0; sfx[name].play().catch(()=>{}); }
 };
 
-// --- UI FEATURES ---
+// --- ECHTE UI FUNKTIONEN ---
+function setupExtraUI() {
+    // Enter-Taste im Chat
+    const chatInput = document.getElementById('studio-chat-input');
+    chatInput.addEventListener('keypress', (e) => {
+        if(e.key === 'Enter') window.sendHostMessage();
+    });
+
+    // Titel-Sync (Speichert in Firebase wenn man Enter drückt oder das Feld verlässt)
+    const titleInput = document.getElementById('stream-title');
+    titleInput.addEventListener('change', async () => {
+        if(isLive) {
+            await updateDoc(doc(db, "live_streams", currentUser.uid), { title: titleInput.value });
+            sysToast("Stream-Titel aktualisiert!");
+        }
+    });
+}
+
 window.requestPiP = async () => {
     const video = document.getElementById('studio-preview');
     if (document.pictureInPictureElement) await document.exitPictureInPicture();
@@ -126,6 +144,7 @@ window.toggleCinema = () => {
     cinemaMode = !cinemaMode;
     document.getElementById('left-sidebar').style.display = cinemaMode ? 'none' : 'flex';
     document.getElementById('right-sidebar').style.display = cinemaMode ? 'none' : 'flex';
+    document.querySelector('.studio-layout').style.gridTemplateColumns = cinemaMode ? '0px 1fr 0px' : '260px 1fr 340px';
     sysToast(cinemaMode ? "Kino Modus an" : "Kino Modus aus");
 };
 
@@ -134,14 +153,26 @@ window.clearChat = async () => {
     const q = query(collection(db, `live_streams/${currentUser.uid}/chat`));
     const snaps = await getDocs(q);
     snaps.forEach(d => deleteDoc(d.ref));
-    sysToast("Chat geleert");
+    sysToast("Chat wurde geleert!");
 };
 
-window.pinMessage = (text) => {
+window.pinMessage = async (text) => {
     document.getElementById('pinned-text').innerText = text;
     document.getElementById('pinned-msg-bar').style.display = 'flex';
-    sysToast("Nachricht angeheftet");
+    if(isLive) {
+        await updateDoc(doc(db, "live_streams", currentUser.uid), { pinnedMessage: text });
+    }
+    sysToast("Nachricht angeheftet!");
 };
+
+window.unpinMessage = async () => {
+    document.getElementById('pinned-msg-bar').style.display = 'none';
+    if(isLive) {
+        await updateDoc(doc(db, "live_streams", currentUser.uid), { pinnedMessage: null });
+    }
+}
+// An das X binden
+document.querySelector('.pinned-msg .fa-times').onclick = window.unpinMessage;
 
 // --- STREAM KONTROLLE ---
 window.switchScene = async (type) => {
@@ -174,7 +205,7 @@ async function startStream() {
     isLive = true;
     startTime = Date.now();
     const btn = document.getElementById('master-live-btn');
-    btn.innerHTML = "Stream beenden";
+    btn.innerHTML = "<i class='fas fa-stop'></i> Stream beenden";
     btn.classList.add('danger');
     
     const ind = document.getElementById('live-indicator');
@@ -187,8 +218,13 @@ async function startStream() {
     
     peer.on('open', async () => {
         await setDoc(doc(db, "live_streams", currentUser.uid), {
-            broadcasterUid: currentUser.uid, broadcasterName: currentUser.displayName, broadcasterPic: currentUser.photoURL,
-            title: title, viewers: 0, lastHeartbeat: Date.now(), timestamp: Date.now()
+            broadcasterUid: currentUser.uid, 
+            broadcasterName: currentUser.displayName, 
+            broadcasterPic: currentUser.photoURL,
+            title: title, 
+            viewers: 0, 
+            lastHeartbeat: Date.now(), 
+            timestamp: Date.now()
         });
     });
 
@@ -199,7 +235,7 @@ async function startStream() {
     });
 
     durationInterval = setInterval(updateDuration, 1000);
-    sysToast("Stream läuft!");
+    sysToast("Du bist jetzt Live!");
 }
 
 async function stopStream() {
@@ -225,10 +261,8 @@ function updateDuration() {
     let s = (diff % 60).toString().padStart(2, '0');
     document.getElementById('stat-duration').innerText = `${m}:${s}`;
     
-    // Update Title if changed
-    const title = document.getElementById('stream-title').value;
     if(diff % 5 === 0 && isLive) {
-        updateDoc(doc(db, "live_streams", currentUser.uid), { lastHeartbeat: Date.now(), title: title }).catch(()=>{});
+        updateDoc(doc(db, "live_streams", currentUser.uid), { lastHeartbeat: Date.now() }).catch(()=>{});
     }
 }
 
@@ -250,12 +284,15 @@ window.sendHostMessage = async () => {
     const input = document.getElementById('studio-chat-input');
     if(!input.value.trim() || !isLive) return;
     await addDoc(collection(db, `live_streams/${currentUser.uid}/chat`), {
-        uid: currentUser.uid, name: currentUser.displayName, text: input.value, timestamp: Date.now()
+        uid: currentUser.uid, 
+        name: currentUser.displayName, 
+        text: input.value, 
+        timestamp: Date.now()
     });
     input.value = '';
 };
 
-// --- CONTEXT MENU & PROFILE MODAL LOGIC ---
+// --- ECHTE MODERATIONS-FUNKTIONEN ---
 let ctxTargetUid = null;
 let ctxTargetMsgId = null;
 let ctxTargetText = null;
@@ -304,51 +341,83 @@ function setupContextMenu() {
         modal.classList.add('show');
     }
 
-    document.getElementById('ctx-pin').addEventListener('click', () => { pinMessage(ctxTargetText); menu.classList.remove('active'); });
+    // Aktionen anbinden
+    document.getElementById('ctx-pin').addEventListener('click', () => { window.pinMessage(ctxTargetText); menu.classList.remove('active'); });
     
+    // Nachricht löschen (Echt)
     document.getElementById('ctx-delete').addEventListener('click', async () => {
-        if(ctxTargetMsgId && isLive) { await deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, ctxTargetMsgId)); sysToast("Gelöscht"); }
+        if(ctxTargetMsgId && isLive) { 
+            await deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, ctxTargetMsgId)); 
+            sysToast("Nachricht gelöscht!"); 
+        }
     });
 
-    document.getElementById('ctx-timeout').addEventListener('click', () => { sysToast(`${ctxTargetName} wurde stummgeschaltet`); menu.classList.remove('active'); });
+    // Timeout (Echt - Speichert in Firebase)
+    const timeoutLogic = async () => {
+        if(ctxTargetUid && isLive) {
+            const expire = Date.now() + (5 * 60 * 1000); // 5 Minuten
+            await setDoc(doc(db, `live_streams/${currentUser.uid}/timeouts`, ctxTargetUid), { expire: expire });
+            sysToast(`${ctxTargetName} hat 5 Minuten Timeout.`);
+            menu.classList.remove('active');
+            modal.classList.remove('show');
+        }
+    };
+    document.getElementById('ctx-timeout').addEventListener('click', timeoutLogic);
+    document.getElementById('pm-btn-timeout').addEventListener('click', timeoutLogic);
     
+    // Bannen (Echt)
     const banLogic = async () => {
-        if(ctxTargetUid && confirm(`Willst du ${ctxTargetName} bannen?`)) {
+        if(ctxTargetUid && confirm(`Willst du ${ctxTargetName} dauerhaft bannen?`)) {
             await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayUnion(ctxTargetUid) });
-            sysToast("User gebannt");
+            sysToast("User dauerhaft gebannt!");
             modal.classList.remove('show');
         }
     };
     document.getElementById('ctx-ban').addEventListener('click', banLogic);
     document.getElementById('pm-btn-ban').addEventListener('click', banLogic);
 
+    // Mod machen (Echt)
     const modLogic = async () => {
         if(ctxTargetUid && isLive) {
             await setDoc(doc(db, `live_streams/${currentUser.uid}/mods`, ctxTargetUid), { uid: ctxTargetUid });
-            sysToast(`${ctxTargetName} ist nun Mod`);
+            sysToast(`${ctxTargetName} ist nun Moderator!`);
             modal.classList.remove('show');
         }
     };
     document.getElementById('ctx-mod').addEventListener('click', modLogic);
     document.getElementById('pm-btn-mod').addEventListener('click', modLogic);
+
+    // Flüstern (Öffnet Haupt-App im Posteingang)
+    document.querySelector('.vc-actions .vc-btn:first-child').addEventListener('click', () => {
+        if(ctxTargetUid) {
+            window.open(`index.html?dm=${ctxTargetUid}`, '_blank');
+            modal.classList.remove('show');
+        }
+    });
 }
 
 function setupHotkeys() {
     window.addEventListener('keydown', (e) => {
         if(document.activeElement.tagName === 'INPUT') return;
         switch(e.key.toLowerCase()) {
-            case 'm': e.preventDefault(); toggleMic(); break;
-            case 'v': e.preventDefault(); toggleVid(); break;
-            case 'p': e.preventDefault(); requestPiP(); break;
-            case 'f': e.preventDefault(); toggleCinema(); break;
+            case 'm': e.preventDefault(); window.toggleMic(); break;
+            case 'v': e.preventDefault(); window.toggleVid(); break;
+            case 'p': e.preventDefault(); window.requestPiP(); break;
+            case 'f': e.preventDefault(); window.toggleCinema(); break;
         }
     });
 }
 
 function setupListeners() {
     const chatBox = document.getElementById('studio-chat');
+    let modsList = [];
+
+    // Lade Mods
+    onSnapshot(collection(db, `live_streams/${currentUser.uid}/mods`), snap => {
+        modsList = snap.docs.map(d => d.id);
+    });
     
-    // Twitch Name Colors
+    // Twitch Name Colors Generator
     const stringToColor = (str) => {
         const colors = ['#FF0000', '#0000FF', '#00FF00', '#B22222', '#FF7F50', '#9ACD32', '#FF4500', '#2E8B57', '#DAA520', '#D2691E', '#5F9EA0', '#1E90FF', '#FF69B4', '#8A2BE2', '#00FF7F'];
         let hash = 0; for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -361,7 +430,11 @@ function setupListeners() {
             const m = d.data();
             const color = stringToColor(m.uid);
             const isHost = m.uid === currentUser.uid;
-            const badge = isHost ? '<span class="badge host">HOST</span>' : '';
+            const isMod = modsList.includes(m.uid);
+            
+            let badge = '';
+            if(isHost) badge = '<span class="badge host">HOST</span>';
+            else if(isMod) badge = '<span class="badge mod">MOD</span>';
             
             chatBox.innerHTML += `<div class="tw-msg" data-uid="${m.uid}" data-msgid="${d.id}" data-text="${m.text}" data-name="${m.name}">
                 ${badge}<strong style="color:${color}">${m.name}</strong><span style="color:#adadb8">:</span> <span class="msg-text">${m.text}</span>
@@ -371,6 +444,13 @@ function setupListeners() {
     });
 
     onSnapshot(doc(db, "live_streams", currentUser.uid), docSnap => {
-        if(docSnap.exists()) document.getElementById('stat-viewers').innerText = docSnap.data().viewers || 0;
+        if(docSnap.exists()) {
+            const data = docSnap.data();
+            document.getElementById('stat-viewers').innerText = data.viewers || 0;
+            if(data.pinnedMessage) {
+                document.getElementById('pinned-text').innerText = data.pinnedMessage;
+                document.getElementById('pinned-msg-bar').style.display = 'flex';
+            }
+        }
     });
 }
