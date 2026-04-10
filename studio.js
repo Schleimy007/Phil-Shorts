@@ -1,10 +1,13 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, orderBy, addDoc, limit, arrayUnion, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, orderBy, addDoc, arrayUnion, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const firebaseConfig = { 
-    apiKey: "AIzaSyAF-QW_MtVBkImqh1gXwhKrc2pLLCAe3Ek", authDomain: "phil-shorts.firebaseapp.com", 
-    projectId: "phil-shorts", storageBucket: "phil-shorts.firebasestorage.app", 
-    messagingSenderId: "785802511451", appId: "1:785802511451:web:c7aabd40a4a8ea89616b7e"
+    apiKey: "AIzaSyAF-QW_MtVBkImqh1gXwhKrc2pLLCAe3Ek", 
+    authDomain: "phil-shorts.firebaseapp.com", 
+    projectId: "phil-shorts", 
+    storageBucket: "phil-shorts.firebasestorage.app", 
+    messagingSenderId: "785802511451", 
+    appId: "1:785802511451:web:c7aabd40a4a8ea89616b7e"
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -33,13 +36,17 @@ let mode = 'cam';
 let isPiPMode = false;
 let animationFrameId;
 
+// 🔥 NEU: FPS Einstellungen
+let targetFPS = 30;
+let fpsInterval = 1000 / targetFPS;
+let thenRenderTime = Date.now();
+
 const canvas = document.getElementById('composite-canvas');
 const ctx = canvas.getContext('2d');
 const previewVideo = document.getElementById('studio-preview');
 const facecamVideo = document.getElementById('facecam-video');
 const facecamOverlay = document.getElementById('facecam-container');
 
-// Facecam Position & Größe (relativ zum Canvas, 0-1)
 let fcState = { x: 0.75, y: 0.05, width: 0.23 }; 
 
 // --- DRAG & DROP FÜR FACECAM OVERLAY ---
@@ -103,11 +110,24 @@ window.onload = async () => {
     setupGifts();
 };
 
+window.changeFPS = async () => {
+    const val = parseInt(document.getElementById('fps-select').value);
+    targetFPS = val;
+    fpsInterval = 1000 / targetFPS;
+    
+    if (localVideoTrack) {
+        try { await localVideoTrack.applyConstraints({ frameRate: { ideal: targetFPS, max: targetFPS } }); } catch(e) {}
+    }
+    if (localScreenTrack) {
+        try { await localScreenTrack.applyConstraints({ frameRate: { ideal: targetFPS, max: targetFPS } }); } catch(e) {}
+    }
+    sysToast(`Stream-Qualität auf ${targetFPS} FPS gesetzt!`);
+};
+
 async function initBaseCamera() {
     try {
-        // 🔥 PERFORMANCE FIX: Kamera zwingend auf max. 30 FPS limitieren
         const camStream = await navigator.mediaDevices.getUserMedia({ 
-            video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } }, 
+            video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: targetFPS, max: targetFPS } }, 
             audio: true 
         });
         localVideoTrack = camStream.getVideoTracks()[0];
@@ -132,9 +152,8 @@ async function populateMics() {
         
         select.onchange = async () => {
             const deviceId = select.value;
-            // 🔥 PERFORMANCE FIX: Auch hier auf 30 FPS limitieren
             const newCamStream = await navigator.mediaDevices.getUserMedia({ 
-                video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } }, 
+                video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: targetFPS, max: targetFPS } }, 
                 audio: { deviceId: { exact: deviceId } } 
             });
             
@@ -181,11 +200,11 @@ function initAudioMixer() {
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
     const micBar = document.getElementById('mic-level');
 
-    // 🔥 PERFORMANCE FIX: Die Audio-Pegel Animation CPU-schonend auf ~20 FPS drosseln
+    // CPU-schonende Audio-Animation (ca 20fps statt 144fps)
     let lastVisTime = 0;
     function drawVisualizer(now) {
         requestAnimationFrame(drawVisualizer);
-        if (now - lastVisTime < 50) return; // Überspringt Frame, wenn weniger als 50ms vergangen sind
+        if (now - lastVisTime < 50) return;
         lastVisTime = now;
 
         if(!localAudioTrack.enabled) { micBar.style.width = '0%'; return; }
@@ -197,64 +216,66 @@ function initAudioMixer() {
     }
     requestAnimationFrame(drawVisualizer);
 
-    const canvasStream = canvas.captureStream(30); 
+    // Initialisiere captureStream mit 60 (Maximal-Cap), die eigentliche FPS regelt unser renderCanvas Loop!
+    const canvasStream = canvas.captureStream(60); 
     finalStream = new MediaStream([canvasStream.getVideoTracks()[0], audioDestination.stream.getAudioTracks()[0]]);
     
+    thenRenderTime = Date.now();
     startCompositor();
 }
 
 
 // === COMPOSITING (Der Video-Mixer für die Zuschauer) ===
 function startCompositor() {
-    let lastRenderTime = 0;
-    const fpsInterval = 1000 / 30; // 🔥 PERFORMANCE FIX: Strikte 30 FPS Bremse! Verhindert 144Hz-Lags.
-
-    function render(now) {
-        animationFrameId = requestAnimationFrame(render);
+    function renderCanvas() {
+        animationFrameId = requestAnimationFrame(renderCanvas);
         
-        // Prüfen, ob es schon Zeit für das nächste 30fps Frame ist (CPU schonen!)
-        const elapsed = now - lastRenderTime;
-        if (elapsed < fpsInterval) return;
-        lastRenderTime = now - (elapsed % fpsInterval);
+        let now = Date.now();
+        let elapsed = now - thenRenderTime;
 
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // 🔥 DIE FRAME-BREMSE (Verhindert Lags!)
+        if (elapsed > fpsInterval) {
+            thenRenderTime = now - (elapsed % fpsInterval);
 
-        if (isPiPMode) {
-            if (localScreenTrack) ctx.drawImage(previewVideo, 0, 0, canvas.width, canvas.height);
-            
-            if (localVideoTrack) {
-                const camW = canvas.width * fcState.width;
-                const camH = camW * (9/16); 
-                const camX = canvas.width * fcState.x;
-                const camY = canvas.height * fcState.y;
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (isPiPMode) {
+                if (localScreenTrack) ctx.drawImage(previewVideo, 0, 0, canvas.width, canvas.height);
                 
-                ctx.save();
-                ctx.translate(camX + camW, camY);
-                ctx.scale(-1, 1);
-                ctx.drawImage(facecamVideo, 0, 0, camW, camH);
-                ctx.restore();
-
-                ctx.strokeStyle = '#00f2fe';
-                ctx.lineWidth = 4;
-                ctx.strokeRect(camX, camY, camW, camH);
-            }
-        } else {
-            const sourceVideo = previewVideo; 
-            if (sourceVideo.srcObject) {
-                if(sourceVideo.style.transform.includes('scaleX(-1)')) {
+                if (localVideoTrack) {
+                    const camW = canvas.width * fcState.width;
+                    const camH = camW * (9/16); 
+                    const camX = canvas.width * fcState.x;
+                    const camY = canvas.height * fcState.y;
+                    
                     ctx.save();
-                    ctx.translate(canvas.width, 0);
+                    ctx.translate(camX + camW, camY);
                     ctx.scale(-1, 1);
-                    ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(facecamVideo, 0, 0, camW, camH);
                     ctx.restore();
-                } else {
-                    ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
+
+                    ctx.strokeStyle = '#00f2fe';
+                    ctx.lineWidth = 4;
+                    ctx.strokeRect(camX, camY, camW, camH);
+                }
+            } else {
+                const sourceVideo = previewVideo; 
+                if (sourceVideo.srcObject) {
+                    if(sourceVideo.style.transform.includes('scaleX(-1)')) {
+                        ctx.save();
+                        ctx.translate(canvas.width, 0);
+                        ctx.scale(-1, 1);
+                        ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
+                        ctx.restore();
+                    } else {
+                        ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
+                    }
                 }
             }
         }
     }
-    requestAnimationFrame(render);
+    requestAnimationFrame(renderCanvas);
 }
 
 // --- SZENENSTEUERUNG ---
@@ -270,9 +291,8 @@ window.switchScene = async (type) => {
     try {
         if (type === 'screen' || type === 'pip') {
             if (!localScreenTrack) {
-                // 🔥 PERFORMANCE FIX: Screen-Capture framerate begrenzen
                 const screenStream = await navigator.mediaDevices.getDisplayMedia({ 
-                    video: { frameRate: { ideal: 30, max: 30 } }, 
+                    video: { frameRate: { ideal: targetFPS, max: targetFPS } }, 
                     audio: true 
                 });
                 localScreenTrack = screenStream.getVideoTracks()[0];
@@ -394,6 +414,7 @@ async function startStream() {
     initAudioMixer(); 
     if(audioCtx.state === 'suspended') await audioCtx.resume(); 
 
+    // CHAT RESET VOR DEM START!
     const q = query(collection(db, `live_streams/${currentUser.uid}/chat`));
     const snaps = await getDocs(q);
     snaps.forEach(d => deleteDoc(d.ref));
