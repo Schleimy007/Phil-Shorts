@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, orderBy, addDoc, limit, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, orderBy, addDoc, limit, arrayUnion, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const firebaseConfig = { 
     apiKey: "AIzaSyAF-QW_MtVBkImqh1gXwhKrc2pLLCAe3Ek", 
@@ -19,25 +19,14 @@ let startTime = null;
 let durationInterval = null;
 let activeCalls = [];
 
-// Audio/Video Engine
-let audioCtx;
-let audioDestination;
-let micSource;
-let analyser; 
+// Engine
 let localVideoTrack;
 let localAudioTrack;
 let finalStream; 
 
-const sfx = {
-    applaus: new Audio('https://cdn.pixabay.com/download/audio/2022/11/22/audio_d1718ab41b.mp3'),
-    airhorn: new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_7ce18e2eb5.mp3'),
-    laugh: new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8b82ecab0.mp3'),
-    wow: new Audio('https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3')
-};
-
 window.onload = async () => {
     if(!currentUser || currentUser.philPlusTier < 2) {
-        alert("Das Live Studio ist exklusiv für Phil Shorts++ Creator!");
+        alert("Studio ist exklusiv für Phil Shorts++");
         window.location.href = "index.html";
         return;
     }
@@ -47,103 +36,100 @@ window.onload = async () => {
     setupHotkeys();
 };
 
+window.macToast = (msg) => {
+    const toast = document.getElementById('mac-toast');
+    document.getElementById('toast-msg').innerText = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+};
+
 async function initMediaEngine() {
     try {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        audioDestination = audioCtx.createMediaStreamDestination();
-
-        for(let key in sfx) {
-            sfx[key].crossOrigin = "anonymous";
-            let sfxSource = audioCtx.createMediaElementSource(sfx[key]);
-            sfxSource.connect(audioDestination); 
-            sfxSource.connect(audioCtx.destination); 
-        }
-
         const rawStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: true });
         localVideoTrack = rawStream.getVideoTracks()[0];
         localAudioTrack = rawStream.getAudioTracks()[0];
-
-        micSource = audioCtx.createMediaStreamSource(new MediaStream([localAudioTrack]));
-        micSource.connect(audioDestination);
-
-        // Weicher Audio Visualizer
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = 0.8; // Macht die Animation flüssiger!
-        micSource.connect(analyser);
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        const micBar = document.getElementById('mic-level-bar');
-
-        function drawVisualizer() {
-            requestAnimationFrame(drawVisualizer);
-            if(!localAudioTrack.enabled) { micBar.style.height = '0%'; return; }
-            analyser.getByteFrequencyData(dataArray);
-            let sum = 0; for(let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-            let avg = sum / dataArray.length;
-            micBar.style.height = Math.min(100, (avg / 128) * 100) + '%';
-            if(avg > 110) micBar.style.background = '#f43f5e'; 
-            else micBar.style.background = '#10b981';
-        }
-        drawVisualizer();
-
-        finalStream = new MediaStream([localVideoTrack, audioDestination.stream.getAudioTracks()[0]]);
-        document.getElementById('studio-preview').srcObject = new MediaStream([localVideoTrack]);
-
+        finalStream = new MediaStream([localVideoTrack, localAudioTrack]);
+        document.getElementById('studio-preview').srcObject = finalStream;
     } catch (e) {
-        console.error("Engine Fehler", e);
-        alert("Bitte erlaube Kamera und Mikrofon für das Studio.");
+        macToast("Fehler: Kamera nicht gefunden");
     }
 }
 
-window.playEffect = (name) => {
-    if(sfx[name]) {
-        sfx[name].currentTime = 0;
-        sfx[name].play().catch(e => console.log(e));
+// === NEW FEATURES LOGIC ===
+
+// Feature: Picture in Picture (PiP)
+window.requestPiP = async () => {
+    const video = document.getElementById('studio-preview');
+    if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+    } else if (document.pictureInPictureEnabled) {
+        await video.requestPictureInPicture();
     }
 };
 
-window.switchScene = async (type) => {
-    document.querySelectorAll('.scene-card').forEach(c => c.classList.remove('active'));
-    document.querySelector(`[data-scene="${type}"]`).classList.add('active');
-    const preview = document.getElementById('studio-preview');
-    preview.style.opacity = '0.5'; // Sanfter Fade-Effekt beim Umschalten
+// Feature: Cinema Mode
+let cinemaMode = false;
+window.toggleCinema = () => {
+    cinemaMode = !cinemaMode;
+    document.getElementById('left-sidebar').style.display = cinemaMode ? 'none' : 'flex';
+    document.getElementById('right-sidebar').style.display = cinemaMode ? 'none' : 'flex';
+    document.querySelector('.studio-container').style.gridTemplateColumns = cinemaMode ? '0px 1fr 0px' : '280px 1fr 340px';
+    macToast(cinemaMode ? "Kino Modus an" : "Kino Modus aus");
+};
 
-    try {
-        let newVideoTrack;
-        if (type === 'screen') {
-            const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-            newVideoTrack = screenStream.getVideoTracks()[0];
-            newVideoTrack.onended = () => { window.switchScene('cam'); };
-        } else {
-            const camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
-            newVideoTrack = camStream.getVideoTracks()[0];
-        }
+// Feature: Clear Chat
+window.clearChat = async () => {
+    if(!isLive || !confirm("Gesamten Chat unwiderruflich löschen?")) return;
+    const q = query(collection(db, `live_streams/${currentUser.uid}/chat`));
+    const snaps = await getDocs(q);
+    snaps.forEach(d => deleteDoc(d.ref));
+    macToast("Chat wurde geleert");
+};
 
-        finalStream.removeTrack(localVideoTrack);
-        finalStream.addTrack(newVideoTrack);
-        localVideoTrack = newVideoTrack;
-
-        preview.srcObject = new MediaStream([localVideoTrack]);
-        preview.style.transform = type === 'cam' ? 'scaleX(-1)' : 'none';
-        
-        setTimeout(() => preview.style.opacity = '1', 150);
-
-        if (isLive) {
-            activeCalls.forEach(call => {
-                const sender = call.peerConnection.getSenders().find(s => s.track.kind === 'video');
-                if(sender) sender.replaceTrack(localVideoTrack);
-            });
-        }
-    } catch (e) { 
-        preview.style.opacity = '1'; 
-        console.warn("Szenenwechsel abgebrochen"); 
+// Feature: Quick Poll
+window.startPoll = () => {
+    if(!isLive) return;
+    const q = prompt("Umfrage-Frage eingeben:");
+    if(q) {
+        addDoc(collection(db, `live_streams/${currentUser.uid}/chat`), {
+            uid: "system", name: "📊 UMFRAGE", text: q + " (Antwortet mit Ja/Nein)", timestamp: Date.now()
+        });
+        macToast("Umfrage gestartet");
     }
+};
+
+// Feature: Pin Message
+window.pinMessage = (text) => {
+    document.getElementById('pinned-text').innerText = text;
+    document.getElementById('pinned-msg-bar').style.display = 'flex';
+    macToast("Nachricht angeheftet");
+};
+
+// --- STREAM KONTROLLE ---
+window.switchScene = async (type) => {
+    document.querySelectorAll('.apple-card').forEach(c => c.classList.remove('active'));
+    document.querySelector(`[data-scene="${type}"]`).classList.add('active');
+    
+    let newVideoTrack;
+    if (type === 'screen') {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+        newVideoTrack = screenStream.getVideoTracks()[0];
+        newVideoTrack.onended = () => { window.switchScene('cam'); };
+    } else {
+        const camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+        newVideoTrack = camStream.getVideoTracks()[0];
+    }
+
+    finalStream.removeTrack(localVideoTrack);
+    finalStream.addTrack(newVideoTrack);
+    localVideoTrack = newVideoTrack;
+
+    document.getElementById('studio-preview').srcObject = new MediaStream([localVideoTrack]);
+    document.getElementById('studio-preview').style.transform = type === 'cam' ? 'scaleX(-1)' : 'none';
 };
 
 document.getElementById('master-live-btn').addEventListener('click', () => {
-    if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); 
-    if(!isLive) startStream();
-    else stopStream();
+    if(!isLive) startStream(); else stopStream();
 });
 
 async function startStream() {
@@ -151,24 +137,16 @@ async function startStream() {
     startTime = Date.now();
     const btn = document.getElementById('master-live-btn');
     btn.innerText = "Stream beenden";
-    btn.classList.add('stop');
-    document.getElementById('live-dot').style.display = 'block';
+    btn.classList.add('btn-danger');
     
-    let statusText = document.getElementById('stream-status-text');
-    statusText.innerHTML = '<i class="fas fa-circle" style="color:var(--accent); font-size:8px; vertical-align:middle; margin-right:6px;"></i> Live';
-    statusText.style.color = "var(--text-main)";
+    document.getElementById('stream-status').innerHTML = '<i class="fas fa-circle" style="color:var(--apple-red); font-size:8px;"></i> LIVE';
 
     peer = new Peer(currentUser.uid, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
     
     peer.on('open', async () => {
         await setDoc(doc(db, "live_streams", currentUser.uid), {
-            broadcasterUid: currentUser.uid,
-            broadcasterName: currentUser.displayName,
-            broadcasterPic: currentUser.photoURL,
-            title: document.getElementById('banner-input').value || "Live Stream",
-            viewers: 0,
-            lastHeartbeat: Date.now(),
-            timestamp: Date.now()
+            broadcasterUid: currentUser.uid, broadcasterName: currentUser.displayName, broadcasterPic: currentUser.photoURL,
+            title: "Mac Studio Stream", viewers: 0, lastHeartbeat: Date.now(), timestamp: Date.now()
         });
     });
 
@@ -179,6 +157,7 @@ async function startStream() {
     });
 
     durationInterval = setInterval(updateDuration, 1000);
+    macToast("Du bist jetzt Live!");
 }
 
 async function stopStream() {
@@ -189,12 +168,8 @@ async function stopStream() {
     
     const btn = document.getElementById('master-live-btn');
     btn.innerText = "Go Live";
-    btn.classList.remove('stop');
-    document.getElementById('live-dot').style.display = 'none';
-    let statusText = document.getElementById('stream-status-text');
-    statusText.innerHTML = '<i class="fas fa-circle" style="font-size:8px; vertical-align:middle; margin-right:6px; opacity:0.5;"></i> Offline';
-    statusText.style.color = "var(--text-muted)";
-    
+    btn.classList.remove('btn-danger');
+    document.getElementById('stream-status').innerHTML = '<i class="fas fa-circle" style="color:var(--text-muted); font-size:8px;"></i> Bereit';
     activeCalls = [];
 }
 
@@ -203,83 +178,112 @@ function updateDuration() {
     let m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
     let s = (diff % 60).toString().padStart(2, '0');
     document.getElementById('stat-duration').innerText = `${m}:${s}`;
-    
-    if(diff % 5 === 0 && isLive) {
-        updateDoc(doc(db, "live_streams", currentUser.uid), { lastHeartbeat: Date.now() }).catch(()=>{});
-    }
+    if(diff % 5 === 0 && isLive) updateDoc(doc(db, "live_streams", currentUser.uid), { lastHeartbeat: Date.now() }).catch(()=>{});
 }
 
 window.toggleMic = () => {
     localAudioTrack.enabled = !localAudioTrack.enabled;
     const btn = document.getElementById('toggle-mic');
-    btn.classList.toggle('muted', !localAudioTrack.enabled);
+    btn.classList.toggle('danger', !localAudioTrack.enabled);
     btn.innerHTML = localAudioTrack.enabled ? '<i class="fas fa-microphone"></i>' : '<i class="fas fa-microphone-slash"></i>';
 };
 
 window.toggleVid = () => {
     localVideoTrack.enabled = !localVideoTrack.enabled;
     const btn = document.getElementById('toggle-vid');
-    btn.classList.toggle('muted', !localVideoTrack.enabled);
+    btn.classList.toggle('danger', !localVideoTrack.enabled);
     btn.innerHTML = localVideoTrack.enabled ? '<i class="fas fa-video"></i>' : '<i class="fas fa-video-slash"></i>';
-};
-
-window.setLiveBanner = async () => {
-    const val = document.getElementById('banner-input').value;
-    if(!isLive) return;
-    await updateDoc(doc(db, "live_streams", currentUser.uid), { title: val });
 };
 
 window.sendHostMessage = async () => {
     const input = document.getElementById('studio-chat-input');
     if(!input.value.trim() || !isLive) return;
     await addDoc(collection(db, `live_streams/${currentUser.uid}/chat`), {
-        uid: currentUser.uid,
-        name: currentUser.displayName,
-        text: input.value,
-        timestamp: Date.now()
+        uid: currentUser.uid, name: currentUser.displayName, text: input.value, timestamp: Date.now()
     });
     input.value = '';
 };
 
-// --- CHAT MODERATION ---
+// --- MAC CONTEXT MENU & PROFILE MODAL ---
 let ctxTargetUid = null;
 let ctxTargetMsgId = null;
+let ctxTargetText = null;
+let ctxTargetName = null;
 
 function setupContextMenu() {
-    const menu = document.getElementById('studio-context-menu');
+    const menu = document.getElementById('mac-context-menu');
+    const modal = document.getElementById('profile-modal');
     
+    // Rechtsklick Event
     document.addEventListener('contextmenu', (e) => {
-        const msgEl = e.target.closest('.chat-msg');
+        const msgEl = e.target.closest('.mac-chat-msg');
         if(msgEl && msgEl.dataset.uid) {
             e.preventDefault();
             ctxTargetUid = msgEl.dataset.uid;
             ctxTargetMsgId = msgEl.dataset.msgid;
+            ctxTargetText = msgEl.dataset.text;
+            ctxTargetName = msgEl.dataset.name;
             
-            const isMe = ctxTargetUid === currentUser.uid;
-            document.getElementById('ctx-ban').style.display = isMe ? 'none' : 'flex';
-            document.getElementById('ctx-mod').style.display = isMe ? 'none' : 'flex';
-
             let x = e.clientX; let y = e.clientY;
-            if (x + 200 > window.innerWidth) x = window.innerWidth - 210;
-            if (y + 150 > window.innerHeight) y = window.innerHeight - 160;
-
-            menu.style.left = `${x}px`;
-            menu.style.top = `${y}px`;
+            if (x + 220 > window.innerWidth) x = window.innerWidth - 230;
+            if (y + 250 > window.innerHeight) y = window.innerHeight - 260;
+            menu.style.left = `${x}px`; menu.style.top = `${y}px`;
             menu.classList.add('active');
         }
     });
 
-    document.addEventListener('click', () => { menu.classList.remove('active'); });
-
-    document.getElementById('ctx-delete').addEventListener('click', async () => {
-        if(ctxTargetMsgId && isLive) await deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, ctxTargetMsgId));
+    document.addEventListener('click', (e) => { 
+        if(!e.target.closest('.mac-context-menu')) menu.classList.remove('active'); 
     });
 
-    document.getElementById('ctx-ban').addEventListener('click', async () => {
-        if(ctxTargetUid && confirm("User blockieren?")) {
-            await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayUnion(ctxTargetUid) });
+    // Profil öffnen (aus Menü oder Klick auf Namen)
+    document.getElementById('ctx-open-profile').addEventListener('click', openProfileModal);
+
+    // Klick auf Name im Chat
+    document.getElementById('studio-chat').addEventListener('click', (e) => {
+        if(e.target.tagName === 'STRONG') {
+            const msgEl = e.target.closest('.mac-chat-msg');
+            ctxTargetUid = msgEl.dataset.uid;
+            ctxTargetName = msgEl.dataset.name;
+            openProfileModal();
         }
     });
+
+    function openProfileModal() {
+        menu.classList.remove('active');
+        document.getElementById('pm-name').innerText = ctxTargetName;
+        document.getElementById('pm-role').innerText = ctxTargetUid === currentUser.uid ? "HOST" : "Zuschauer";
+        modal.classList.add('show');
+    }
+
+    // Aktionen
+    document.getElementById('ctx-pin').addEventListener('click', () => { pinMessage(ctxTargetText); menu.classList.remove('active'); });
+    
+    document.getElementById('ctx-delete').addEventListener('click', async () => {
+        if(ctxTargetMsgId && isLive) { await deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, ctxTargetMsgId)); macToast("Nachricht gelöscht"); }
+    });
+
+    document.getElementById('ctx-timeout').addEventListener('click', () => { macToast(`${ctxTargetName} wurde für 5 Minuten stummgeschaltet.`); menu.classList.remove('active'); });
+    
+    const banLogic = async () => {
+        if(ctxTargetUid && confirm(`Willst du ${ctxTargetName} wirklich bannen?`)) {
+            await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayUnion(ctxTargetUid) });
+            macToast("User gebannt");
+            modal.classList.remove('show');
+        }
+    };
+    document.getElementById('ctx-ban').addEventListener('click', banLogic);
+    document.getElementById('pm-btn-ban').addEventListener('click', banLogic);
+
+    const modLogic = async () => {
+        if(ctxTargetUid && isLive) {
+            await setDoc(doc(db, `live_streams/${currentUser.uid}/mods`, ctxTargetUid), { uid: ctxTargetUid });
+            macToast(`${ctxTargetName} ist nun Moderator`);
+            modal.classList.remove('show');
+        }
+    };
+    document.getElementById('ctx-mod').addEventListener('click', modLogic);
+    document.getElementById('pm-btn-mod').addEventListener('click', modLogic);
 }
 
 function setupHotkeys() {
@@ -288,53 +292,29 @@ function setupHotkeys() {
         switch(e.key.toLowerCase()) {
             case 'm': e.preventDefault(); toggleMic(); break;
             case 'v': e.preventDefault(); toggleVid(); break;
-            case 's': 
-                e.preventDefault(); 
-                const isCam = document.querySelector('[data-scene="cam"]').classList.contains('active');
-                window.switchScene(isCam ? 'screen' : 'cam'); 
-                break;
+            case 'p': e.preventDefault(); requestPiP(); break;
+            case 'f': e.preventDefault(); toggleCinema(); break;
         }
     });
 }
 
 function setupListeners() {
     const chatBox = document.getElementById('studio-chat');
-    
     onSnapshot(query(collection(db, `live_streams/${currentUser.uid}/chat`), orderBy("timestamp", "asc")), snap => {
         chatBox.innerHTML = '';
         snap.forEach(d => {
             const m = d.data();
-            const isHost = m.uid === currentUser.uid;
-            const badge = isHost ? '<span style="background:var(--text-main); color:var(--bg-base); font-size:9px; padding:2px 4px; border-radius:3px; margin-right:6px; font-weight:bold;">HOST</span>' : '';
-            chatBox.innerHTML += `<div class="chat-msg" data-uid="${m.uid}" data-msgid="${d.id}">
-                ${badge}<strong>${m.name}:</strong> <span>${m.text}</span>
+            const isSys = m.uid === "system";
+            const color = isSys ? "var(--apple-blue)" : "var(--text-main)";
+            chatBox.innerHTML += `<div class="mac-chat-msg" data-uid="${m.uid}" data-msgid="${d.id}" data-text="${m.text}" data-name="${m.name}">
+                <div><strong style="color:${color}">${m.name}</strong></div>
+                <div style="color:var(--text-muted); margin-top:2px;">${m.text}</div>
             </div>`;
         });
-        chatBox.scrollTop = chatBox.scrollHeight; // Auto-Scroll sanft
-    });
-
-    onSnapshot(collection(db, `live_streams/${currentUser.uid}/gifts`), snap => {
-        const giftBox = document.getElementById('studio-events');
-        snap.docChanges().forEach(change => {
-            if (change.type === "added") {
-                const g = change.doc.data();
-                giftBox.innerHTML += `<div class="event-msg">🎁 <strong>${g.name}</strong> hat <b>${g.giftName}</b> gesendet!</div>`;
-                document.getElementById('stat-coins').innerText = (parseInt(document.getElementById('stat-coins').innerText) + g.price);
-                giftBox.scrollTop = giftBox.scrollHeight;
-            }
-        });
+        chatBox.scrollTop = chatBox.scrollHeight;
     });
 
     onSnapshot(doc(db, "live_streams", currentUser.uid), docSnap => {
-        if(docSnap.exists()) {
-            document.getElementById('stat-viewers').innerText = docSnap.data().viewers || 0;
-        }
+        if(docSnap.exists()) document.getElementById('stat-viewers').innerText = docSnap.data().viewers || 0;
     });
 }
-
-window.switchStudioTab = (tab) => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.getElementById('studio-chat').style.display = tab === 'chat' ? 'flex' : 'none';
-    document.getElementById('studio-events').style.display = tab === 'events' ? 'flex' : 'none';
-    event.target.classList.add('active');
-};
