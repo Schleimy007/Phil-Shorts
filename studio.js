@@ -1,7 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getFirestore, doc, setDoc, updateDoc, deleteDoc, onSnapshot, collection, query, orderBy, addDoc, limit, arrayUnion } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-// === FIREBASE KONFIG ===
 const firebaseConfig = { 
     apiKey: "AIzaSyAF-QW_MtVBkImqh1gXwhKrc2pLLCAe3Ek", 
     authDomain: "phil-shorts.firebaseapp.com", 
@@ -20,11 +19,11 @@ let startTime = null;
 let durationInterval = null;
 let activeCalls = [];
 
-// === AUDIO & VIDEO ENGINE PRO ===
+// Audio/Video Engine
 let audioCtx;
 let audioDestination;
 let micSource;
-let analyser; // FÜR DEN VISUALIZER
+let analyser; 
 let localVideoTrack;
 let localAudioTrack;
 let finalStream; 
@@ -67,9 +66,10 @@ async function initMediaEngine() {
         micSource = audioCtx.createMediaStreamSource(new MediaStream([localAudioTrack]));
         micSource.connect(audioDestination);
 
-        // === ECHTZEIT AUDIO VISUALIZER ===
+        // Weicher Audio Visualizer
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.8; // Macht die Animation flüssiger!
         micSource.connect(analyser);
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         const micBar = document.getElementById('mic-level-bar');
@@ -81,8 +81,8 @@ async function initMediaEngine() {
             let sum = 0; for(let i = 0; i < dataArray.length; i++) sum += dataArray[i];
             let avg = sum / dataArray.length;
             micBar.style.height = Math.min(100, (avg / 128) * 100) + '%';
-            if(avg > 100) micBar.style.background = '#ff0050'; // Rot wenn zu laut
-            else micBar.style.background = '#39ff14';
+            if(avg > 110) micBar.style.background = '#f43f5e'; 
+            else micBar.style.background = '#10b981';
         }
         drawVisualizer();
 
@@ -95,7 +95,6 @@ async function initMediaEngine() {
     }
 }
 
-// --- SOUNDBOARD KONTROLLE ---
 window.playEffect = (name) => {
     if(sfx[name]) {
         sfx[name].currentTime = 0;
@@ -103,10 +102,11 @@ window.playEffect = (name) => {
     }
 };
 
-// --- SZENENSTEUERUNG ---
 window.switchScene = async (type) => {
     document.querySelectorAll('.scene-card').forEach(c => c.classList.remove('active'));
     document.querySelector(`[data-scene="${type}"]`).classList.add('active');
+    const preview = document.getElementById('studio-preview');
+    preview.style.opacity = '0.5'; // Sanfter Fade-Effekt beim Umschalten
 
     try {
         let newVideoTrack;
@@ -123,8 +123,10 @@ window.switchScene = async (type) => {
         finalStream.addTrack(newVideoTrack);
         localVideoTrack = newVideoTrack;
 
-        document.getElementById('studio-preview').srcObject = new MediaStream([localVideoTrack]);
-        document.getElementById('studio-preview').style.transform = type === 'cam' ? 'scaleX(-1)' : 'none';
+        preview.srcObject = new MediaStream([localVideoTrack]);
+        preview.style.transform = type === 'cam' ? 'scaleX(-1)' : 'none';
+        
+        setTimeout(() => preview.style.opacity = '1', 150);
 
         if (isLive) {
             activeCalls.forEach(call => {
@@ -132,10 +134,12 @@ window.switchScene = async (type) => {
                 if(sender) sender.replaceTrack(localVideoTrack);
             });
         }
-    } catch (e) { console.warn("Szenenwechsel abgebrochen"); }
+    } catch (e) { 
+        preview.style.opacity = '1'; 
+        console.warn("Szenenwechsel abgebrochen"); 
+    }
 };
 
-// --- STREAM START / STOP ---
 document.getElementById('master-live-btn').addEventListener('click', () => {
     if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); 
     if(!isLive) startStream();
@@ -146,12 +150,13 @@ async function startStream() {
     isLive = true;
     startTime = Date.now();
     const btn = document.getElementById('master-live-btn');
-    btn.innerText = "STREAM BEENDEN";
+    btn.innerText = "Stream beenden";
     btn.classList.add('stop');
     document.getElementById('live-dot').style.display = 'block';
     
     let statusText = document.getElementById('stream-status-text');
-    statusText.innerHTML = '<i class="fas fa-circle" style="color:#ff0050; font-size:8px; vertical-align:middle; margin-right:5px;"></i> LIVE (PRO)';
+    statusText.innerHTML = '<i class="fas fa-circle" style="color:var(--accent); font-size:8px; vertical-align:middle; margin-right:6px;"></i> Live';
+    statusText.style.color = "var(--text-main)";
 
     peer = new Peer(currentUser.uid, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
     
@@ -160,7 +165,7 @@ async function startStream() {
             broadcasterUid: currentUser.uid,
             broadcasterName: currentUser.displayName,
             broadcasterPic: currentUser.photoURL,
-            title: "Pro Creator Stream",
+            title: document.getElementById('banner-input').value || "Live Stream",
             viewers: 0,
             lastHeartbeat: Date.now(),
             timestamp: Date.now()
@@ -183,28 +188,27 @@ async function stopStream() {
     await deleteDoc(doc(db, "live_streams", currentUser.uid));
     
     const btn = document.getElementById('master-live-btn');
-    btn.innerText = "STREAM STARTEN";
+    btn.innerText = "Go Live";
     btn.classList.remove('stop');
     document.getElementById('live-dot').style.display = 'none';
     let statusText = document.getElementById('stream-status-text');
-    statusText.innerHTML = '<i class="fas fa-circle" style="color:#444; font-size:8px; vertical-align:middle; margin-right:5px;"></i> OFFLINE';
+    statusText.innerHTML = '<i class="fas fa-circle" style="font-size:8px; vertical-align:middle; margin-right:6px; opacity:0.5;"></i> Offline';
+    statusText.style.color = "var(--text-muted)";
     
     activeCalls = [];
 }
 
 function updateDuration() {
     let diff = Math.floor((Date.now() - startTime) / 1000);
-    let h = Math.floor(diff / 3600).toString().padStart(2, '0');
     let m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
     let s = (diff % 60).toString().padStart(2, '0');
-    document.getElementById('stat-duration').innerText = `${h}:${m}:${s}`;
+    document.getElementById('stat-duration').innerText = `${m}:${s}`;
     
     if(diff % 5 === 0 && isLive) {
         updateDoc(doc(db, "live_streams", currentUser.uid), { lastHeartbeat: Date.now() }).catch(()=>{});
     }
 }
 
-// --- INTERAKTIONS FUNKTIONEN ---
 window.toggleMic = () => {
     localAudioTrack.enabled = !localAudioTrack.enabled;
     const btn = document.getElementById('toggle-mic');
@@ -219,20 +223,10 @@ window.toggleVid = () => {
     btn.innerHTML = localVideoTrack.enabled ? '<i class="fas fa-video"></i>' : '<i class="fas fa-video-slash"></i>';
 };
 
-window.updateGoal = async () => {
-    const val = document.getElementById('goal-input').value;
-    if(!val || !isLive) return;
-    await updateDoc(doc(db, "live_streams", currentUser.uid), {
-        goalTarget: parseInt(val), goalCurrent: 0, goalDesc: "Creator Goal"
-    });
-    document.getElementById('goal-input').value = '';
-};
-
 window.setLiveBanner = async () => {
     const val = document.getElementById('banner-input').value;
     if(!isLive) return;
     await updateDoc(doc(db, "live_streams", currentUser.uid), { title: val });
-    document.getElementById('banner-input').value = '';
 };
 
 window.sendHostMessage = async () => {
@@ -247,7 +241,7 @@ window.sendHostMessage = async () => {
     input.value = '';
 };
 
-// --- CUSTOM CONTEXT MENU FÜR MODERATION ---
+// --- CHAT MODERATION ---
 let ctxTargetUid = null;
 let ctxTargetMsgId = null;
 
@@ -261,7 +255,6 @@ function setupContextMenu() {
             ctxTargetUid = msgEl.dataset.uid;
             ctxTargetMsgId = msgEl.dataset.msgid;
             
-            // Eigene Nachrichten kann man nicht bannen/modden
             const isMe = ctxTargetUid === currentUser.uid;
             document.getElementById('ctx-ban').style.display = isMe ? 'none' : 'flex';
             document.getElementById('ctx-mod').style.display = isMe ? 'none' : 'flex';
@@ -279,30 +272,19 @@ function setupContextMenu() {
     document.addEventListener('click', () => { menu.classList.remove('active'); });
 
     document.getElementById('ctx-delete').addEventListener('click', async () => {
-        if(ctxTargetMsgId && isLive) {
-            await deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, ctxTargetMsgId));
-        }
+        if(ctxTargetMsgId && isLive) await deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, ctxTargetMsgId));
     });
 
     document.getElementById('ctx-ban').addEventListener('click', async () => {
-        if(ctxTargetUid && confirm("User bannen?")) {
+        if(ctxTargetUid && confirm("User blockieren?")) {
             await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayUnion(ctxTargetUid) });
-        }
-    });
-
-    document.getElementById('ctx-mod').addEventListener('click', async () => {
-        if(ctxTargetUid && isLive) {
-            await setDoc(doc(db, `live_streams/${currentUser.uid}/mods`, ctxTargetUid), { uid: ctxTargetUid });
-            alert("Zum Moderator ernannt!");
         }
     });
 }
 
-// --- PRO KEYBOARD HOTKEYS ---
 function setupHotkeys() {
     window.addEventListener('keydown', (e) => {
         if(document.activeElement.tagName === 'INPUT') return;
-        
         switch(e.key.toLowerCase()) {
             case 'm': e.preventDefault(); toggleMic(); break;
             case 'v': e.preventDefault(); toggleVid(); break;
@@ -311,24 +293,24 @@ function setupHotkeys() {
                 const isCam = document.querySelector('[data-scene="cam"]').classList.contains('active');
                 window.switchScene(isCam ? 'screen' : 'cam'); 
                 break;
-            case 'c': e.preventDefault(); document.getElementById('studio-chat-input').focus(); break;
         }
     });
 }
 
-// --- FIREBASE REALTIME LISTENERS ---
 function setupListeners() {
-    onSnapshot(query(collection(db, `live_streams/${currentUser.uid}/chat`), orderBy("timestamp", "desc"), limit(40)), snap => {
-        const box = document.getElementById('studio-chat');
-        box.innerHTML = '';
+    const chatBox = document.getElementById('studio-chat');
+    
+    onSnapshot(query(collection(db, `live_streams/${currentUser.uid}/chat`), orderBy("timestamp", "asc")), snap => {
+        chatBox.innerHTML = '';
         snap.forEach(d => {
             const m = d.data();
             const isHost = m.uid === currentUser.uid;
-            const hostBadge = isHost ? '<span style="background:#ff0050; color:white; font-size:10px; padding:2px 4px; border-radius:3px; margin-right:5px; vertical-align:middle;">HOST</span>' : '';
-            box.innerHTML += `<div class="chat-msg" data-uid="${m.uid}" data-msgid="${d.id}">
-                ${hostBadge}<strong>${m.name}:</strong> <span style="color:#ddd;">${m.text}</span>
+            const badge = isHost ? '<span style="background:var(--text-main); color:var(--bg-base); font-size:9px; padding:2px 4px; border-radius:3px; margin-right:6px; font-weight:bold;">HOST</span>' : '';
+            chatBox.innerHTML += `<div class="chat-msg" data-uid="${m.uid}" data-msgid="${d.id}">
+                ${badge}<strong>${m.name}:</strong> <span>${m.text}</span>
             </div>`;
         });
+        chatBox.scrollTop = chatBox.scrollHeight; // Auto-Scroll sanft
     });
 
     onSnapshot(collection(db, `live_streams/${currentUser.uid}/gifts`), snap => {
@@ -336,14 +318,9 @@ function setupListeners() {
         snap.docChanges().forEach(change => {
             if (change.type === "added") {
                 const g = change.doc.data();
-                giftBox.innerHTML = `<div class="event-msg">
-                    <span style="font-size:24px; float:left; margin-right:10px;">${g.emoji}</span>
-                    <div>
-                        <strong style="color:#ffd700;">${g.name}</strong> hat <b>${g.giftName}</b> gesendet!
-                        <div style="color:#888; font-size:10px; margin-top:2px;">+${g.price} Coins</div>
-                    </div>
-                </div>` + giftBox.innerHTML;
+                giftBox.innerHTML += `<div class="event-msg">🎁 <strong>${g.name}</strong> hat <b>${g.giftName}</b> gesendet!</div>`;
                 document.getElementById('stat-coins').innerText = (parseInt(document.getElementById('stat-coins').innerText) + g.price);
+                giftBox.scrollTop = giftBox.scrollHeight;
             }
         });
     });
