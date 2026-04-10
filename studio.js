@@ -19,10 +19,16 @@ let startTime = null;
 let durationInterval = null;
 let activeCalls = [];
 
-// Engine
 let localVideoTrack;
 let localAudioTrack;
 let finalStream; 
+
+const sfx = {
+    applaus: new Audio('https://cdn.pixabay.com/download/audio/2022/11/22/audio_d1718ab41b.mp3'),
+    airhorn: new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_7ce18e2eb5.mp3'),
+    laugh: new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8b82ecab0.mp3'),
+    wow: new Audio('https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3')
+};
 
 window.onload = async () => {
     if(!currentUser || currentUser.philPlusTier < 2) {
@@ -43,6 +49,10 @@ window.macToast = (msg) => {
     setTimeout(() => toast.classList.remove('show'), 3000);
 };
 
+window.playEffect = (name) => {
+    if(sfx[name]) { sfx[name].currentTime = 0; sfx[name].play().catch(()=>{}); }
+};
+
 async function initMediaEngine() {
     try {
         const rawStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: true });
@@ -51,63 +61,40 @@ async function initMediaEngine() {
         finalStream = new MediaStream([localVideoTrack, localAudioTrack]);
         document.getElementById('studio-preview').srcObject = finalStream;
     } catch (e) {
-        macToast("Fehler: Kamera nicht gefunden");
+        macToast("Kamera/Mikrofon nicht gefunden");
     }
 }
 
-// === NEW FEATURES LOGIC ===
-
-// Feature: Picture in Picture (PiP)
 window.requestPiP = async () => {
     const video = document.getElementById('studio-preview');
-    if (document.pictureInPictureElement) {
-        await document.exitPictureInPicture();
-    } else if (document.pictureInPictureEnabled) {
-        await video.requestPictureInPicture();
-    }
+    if (document.pictureInPictureElement) await document.exitPictureInPicture();
+    else if (document.pictureInPictureEnabled) await video.requestPictureInPicture();
 };
 
-// Feature: Cinema Mode
 let cinemaMode = false;
 window.toggleCinema = () => {
     cinemaMode = !cinemaMode;
     document.getElementById('left-sidebar').style.display = cinemaMode ? 'none' : 'flex';
     document.getElementById('right-sidebar').style.display = cinemaMode ? 'none' : 'flex';
-    document.querySelector('.studio-container').style.gridTemplateColumns = cinemaMode ? '0px 1fr 0px' : '280px 1fr 340px';
     macToast(cinemaMode ? "Kino Modus an" : "Kino Modus aus");
 };
 
-// Feature: Clear Chat
 window.clearChat = async () => {
-    if(!isLive || !confirm("Gesamten Chat unwiderruflich löschen?")) return;
+    if(!isLive || !confirm("Gesamten Chat löschen?")) return;
     const q = query(collection(db, `live_streams/${currentUser.uid}/chat`));
     const snaps = await getDocs(q);
     snaps.forEach(d => deleteDoc(d.ref));
-    macToast("Chat wurde geleert");
+    macToast("Chat geleert");
 };
 
-// Feature: Quick Poll
-window.startPoll = () => {
-    if(!isLive) return;
-    const q = prompt("Umfrage-Frage eingeben:");
-    if(q) {
-        addDoc(collection(db, `live_streams/${currentUser.uid}/chat`), {
-            uid: "system", name: "📊 UMFRAGE", text: q + " (Antwortet mit Ja/Nein)", timestamp: Date.now()
-        });
-        macToast("Umfrage gestartet");
-    }
-};
-
-// Feature: Pin Message
 window.pinMessage = (text) => {
     document.getElementById('pinned-text').innerText = text;
     document.getElementById('pinned-msg-bar').style.display = 'flex';
     macToast("Nachricht angeheftet");
 };
 
-// --- STREAM KONTROLLE ---
 window.switchScene = async (type) => {
-    document.querySelectorAll('.apple-card').forEach(c => c.classList.remove('active'));
+    document.querySelectorAll('.discord-item').forEach(c => c.classList.remove('active'));
     document.querySelector(`[data-scene="${type}"]`).classList.add('active');
     
     let newVideoTrack;
@@ -136,17 +123,17 @@ async function startStream() {
     isLive = true;
     startTime = Date.now();
     const btn = document.getElementById('master-live-btn');
-    btn.innerText = "Stream beenden";
-    btn.classList.add('btn-danger');
-    
-    document.getElementById('stream-status').innerHTML = '<i class="fas fa-circle" style="color:var(--apple-red); font-size:8px;"></i> LIVE';
+    btn.innerHTML = "<i class='fas fa-phone-slash'></i> Stream beenden";
+    btn.classList.replace('btn-blurple', 'btn-green');
+    btn.style.background = 'var(--red)';
+    document.getElementById('live-dot').style.display = 'flex';
 
     peer = new Peer(currentUser.uid, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
     
     peer.on('open', async () => {
         await setDoc(doc(db, "live_streams", currentUser.uid), {
             broadcasterUid: currentUser.uid, broadcasterName: currentUser.displayName, broadcasterPic: currentUser.photoURL,
-            title: "Mac Studio Stream", viewers: 0, lastHeartbeat: Date.now(), timestamp: Date.now()
+            title: "GlassCord Stream", viewers: 0, lastHeartbeat: Date.now(), timestamp: Date.now()
         });
     });
 
@@ -157,7 +144,7 @@ async function startStream() {
     });
 
     durationInterval = setInterval(updateDuration, 1000);
-    macToast("Du bist jetzt Live!");
+    macToast("Du bist Live!");
 }
 
 async function stopStream() {
@@ -167,9 +154,10 @@ async function stopStream() {
     await deleteDoc(doc(db, "live_streams", currentUser.uid));
     
     const btn = document.getElementById('master-live-btn');
-    btn.innerText = "Go Live";
-    btn.classList.remove('btn-danger');
-    document.getElementById('stream-status').innerHTML = '<i class="fas fa-circle" style="color:var(--text-muted); font-size:8px;"></i> Bereit';
+    btn.innerHTML = "<i class='fas fa-satellite-dish'></i> Stream Starten";
+    btn.style.background = '';
+    btn.classList.replace('btn-green', 'btn-blurple');
+    document.getElementById('live-dot').style.display = 'none';
     activeCalls = [];
 }
 
@@ -204,7 +192,7 @@ window.sendHostMessage = async () => {
     input.value = '';
 };
 
-// --- MAC CONTEXT MENU & PROFILE MODAL ---
+// --- CONTEXT MENU & MODAL LOGIC ---
 let ctxTargetUid = null;
 let ctxTargetMsgId = null;
 let ctxTargetText = null;
@@ -214,9 +202,8 @@ function setupContextMenu() {
     const menu = document.getElementById('mac-context-menu');
     const modal = document.getElementById('profile-modal');
     
-    // Rechtsklick Event
     document.addEventListener('contextmenu', (e) => {
-        const msgEl = e.target.closest('.mac-chat-msg');
+        const msgEl = e.target.closest('.dc-msg');
         if(msgEl && msgEl.dataset.uid) {
             e.preventDefault();
             ctxTargetUid = msgEl.dataset.uid;
@@ -225,7 +212,7 @@ function setupContextMenu() {
             ctxTargetName = msgEl.dataset.name;
             
             let x = e.clientX; let y = e.clientY;
-            if (x + 220 > window.innerWidth) x = window.innerWidth - 230;
+            if (x + 200 > window.innerWidth) x = window.innerWidth - 210;
             if (y + 250 > window.innerHeight) y = window.innerHeight - 260;
             menu.style.left = `${x}px`; menu.style.top = `${y}px`;
             menu.classList.add('active');
@@ -233,16 +220,13 @@ function setupContextMenu() {
     });
 
     document.addEventListener('click', (e) => { 
-        if(!e.target.closest('.mac-context-menu')) menu.classList.remove('active'); 
+        if(!e.target.closest('.glass-context')) menu.classList.remove('active'); 
     });
 
-    // Profil öffnen (aus Menü oder Klick auf Namen)
     document.getElementById('ctx-open-profile').addEventListener('click', openProfileModal);
-
-    // Klick auf Name im Chat
     document.getElementById('studio-chat').addEventListener('click', (e) => {
-        if(e.target.tagName === 'STRONG') {
-            const msgEl = e.target.closest('.mac-chat-msg');
+        if(e.target.tagName === 'STRONG' || e.target.classList.contains('avatar')) {
+            const msgEl = e.target.closest('.dc-msg');
             ctxTargetUid = msgEl.dataset.uid;
             ctxTargetName = msgEl.dataset.name;
             openProfileModal();
@@ -252,23 +236,23 @@ function setupContextMenu() {
     function openProfileModal() {
         menu.classList.remove('active');
         document.getElementById('pm-name').innerText = ctxTargetName;
-        document.getElementById('pm-role').innerText = ctxTargetUid === currentUser.uid ? "HOST" : "Zuschauer";
+        document.getElementById('pm-avatar').innerText = ctxTargetName.charAt(0).toUpperCase();
+        document.getElementById('pm-role').innerText = ctxTargetUid === currentUser.uid ? "SERVER OWNER" : "MEMBER";
         modal.classList.add('show');
     }
 
-    // Aktionen
     document.getElementById('ctx-pin').addEventListener('click', () => { pinMessage(ctxTargetText); menu.classList.remove('active'); });
     
     document.getElementById('ctx-delete').addEventListener('click', async () => {
         if(ctxTargetMsgId && isLive) { await deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, ctxTargetMsgId)); macToast("Nachricht gelöscht"); }
     });
 
-    document.getElementById('ctx-timeout').addEventListener('click', () => { macToast(`${ctxTargetName} wurde für 5 Minuten stummgeschaltet.`); menu.classList.remove('active'); });
+    document.getElementById('ctx-timeout').addEventListener('click', () => { macToast(`${ctxTargetName} ist im Timeout.`); menu.classList.remove('active'); });
     
     const banLogic = async () => {
-        if(ctxTargetUid && confirm(`Willst du ${ctxTargetName} wirklich bannen?`)) {
+        if(ctxTargetUid && confirm(`Willst du ${ctxTargetName} bannen?`)) {
             await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayUnion(ctxTargetUid) });
-            macToast("User gebannt");
+            macToast("Gebannt");
             modal.classList.remove('show');
         }
     };
@@ -278,7 +262,7 @@ function setupContextMenu() {
     const modLogic = async () => {
         if(ctxTargetUid && isLive) {
             await setDoc(doc(db, `live_streams/${currentUser.uid}/mods`, ctxTargetUid), { uid: ctxTargetUid });
-            macToast(`${ctxTargetName} ist nun Moderator`);
+            macToast(`${ctxTargetName} ist Moderator`);
             modal.classList.remove('show');
         }
     };
@@ -300,15 +284,27 @@ function setupHotkeys() {
 
 function setupListeners() {
     const chatBox = document.getElementById('studio-chat');
+    
+    // Einfaches Hashing für Avatar-Farben (wie in Discord)
+    const stringToColor = (str) => {
+        let hash = 0; for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+        const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+        return '#' + "00000".substring(0, 6 - c.length) + c;
+    };
+
     onSnapshot(query(collection(db, `live_streams/${currentUser.uid}/chat`), orderBy("timestamp", "asc")), snap => {
         chatBox.innerHTML = '';
         snap.forEach(d => {
             const m = d.data();
-            const isSys = m.uid === "system";
-            const color = isSys ? "var(--apple-blue)" : "var(--text-main)";
-            chatBox.innerHTML += `<div class="mac-chat-msg" data-uid="${m.uid}" data-msgid="${d.id}" data-text="${m.text}" data-name="${m.name}">
-                <div><strong style="color:${color}">${m.name}</strong></div>
-                <div style="color:var(--text-muted); margin-top:2px;">${m.text}</div>
+            const initial = m.name.charAt(0).toUpperCase();
+            const color = stringToColor(m.uid);
+            
+            chatBox.innerHTML += `<div class="dc-msg ${m.uid === 'system' ? 'system' : ''}" data-uid="${m.uid}" data-msgid="${d.id}" data-text="${m.text}" data-name="${m.name}">
+                <div class="avatar" style="background:${color}">${initial}</div>
+                <div>
+                    <div><strong>${m.name}</strong> <span style="font-size:10px; color:var(--text-muted); margin-left:4px;">Heute</span></div>
+                    <div>${m.text}</div>
+                </div>
             </div>`;
         });
         chatBox.scrollTop = chatBox.scrollHeight;
