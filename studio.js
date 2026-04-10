@@ -18,38 +18,120 @@ let isLive = false;
 let startTime = null;
 let durationInterval = null;
 let activeCalls = [];
+let modsList = [];
 
-let audioCtx, audioDestination, micSource, analyser; 
-let localVideoTrack, localAudioTrack, finalStream; 
+// === AUDIO & VIDEO ENGINE PRO ===
+let audioCtx;
+let audioDestination;
+let micSource;
+let screenAudioSource;
+let musicSource;
+let analyser;
+let localVideoTrack = null;
+let localScreenTrack = null;
+let localAudioTrack = null;
+let finalStream; 
+let isPiPMode = false;
+let animationFrameId;
 
-const sfx = {
-    applaus: new Audio('https://cdn.pixabay.com/download/audio/2022/11/22/audio_d1718ab41b.mp3'),
-    airhorn: new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_7ce18e2eb5.mp3'),
-    laugh: new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8b82ecab0.mp3'),
-    wow: new Audio('https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3')
-};
+const canvas = document.getElementById('composite-canvas');
+const ctx = canvas.getContext('2d');
+const previewVideo = document.getElementById('studio-preview');
+const facecamVideo = document.getElementById('facecam-preview');
+const facecamOverlay = document.getElementById('facecam-container');
+const bgMusicPlayer = document.getElementById('bg-music-player');
 
+let fcState = { x: 0.75, y: 0.05, width: 0.23 }; 
+
+// --- DRAG & DROP FÜR FACECAM OVERLAY ---
+let isDragging = false;
+let startX, startY, initialLeft, initialTop;
+
+facecamOverlay.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    initialLeft = facecamOverlay.offsetLeft;
+    initialTop = facecamOverlay.offsetTop;
+    facecamOverlay.style.cursor = 'grabbing';
+});
+
+window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    
+    const wrapper = document.getElementById('preview-viewport');
+    let newLeft = initialLeft + dx;
+    let newTop = initialTop + dy;
+    
+    newLeft = Math.max(0, Math.min(newLeft, wrapper.clientWidth - facecamOverlay.offsetWidth));
+    newTop = Math.max(0, Math.min(newTop, wrapper.clientHeight - facecamOverlay.offsetHeight));
+
+    facecamOverlay.style.left = `${newLeft}px`;
+    facecamOverlay.style.top = `${newTop}px`;
+
+    fcState.x = newLeft / wrapper.clientWidth;
+    fcState.y = newTop / wrapper.clientHeight;
+});
+
+window.addEventListener('mouseup', () => {
+    isDragging = false;
+    facecamOverlay.style.cursor = 'move';
+});
+
+const resizeObserver = new ResizeObserver(entries => {
+    for (let entry of entries) {
+        const wrapper = document.getElementById('preview-viewport');
+        fcState.width = entry.contentRect.width / wrapper.clientWidth;
+    }
+});
+resizeObserver.observe(facecamOverlay);
+
+
+// --- INIT ENGINE ---
 window.onload = async () => {
     if(!currentUser || currentUser.philPlusTier < 2) {
         alert("Studio ist exklusiv für Phil Shorts++ Creator!");
         window.location.href = "index.html";
         return;
     }
+    
+    onSnapshot(collection(db, `live_streams/${currentUser.uid}/mods`), snap => {
+        modsList = snap.docs.map(d => d.id);
+    });
+
+    await getMicrophones();
     await initMediaEngine();
     setupListeners();
     setupContextMenu();
     setupHotkeys();
     setupExtraUI();
+    setupGifts();
+    loadMusicLibrary();
 };
 
-window.sysToast = (msg) => {
-    const toast = document.getElementById('sys-toast');
-    document.getElementById('toast-text').innerText = msg;
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 3000);
-};
+async function getMicrophones() {
+    try {
+        await navigator.mediaDevices.getUserMedia({ audio: true }); 
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(d => d.kind === 'audioinput');
+        const select = document.getElementById('mic-select');
+        select.innerHTML = audioInputs.map(d => `<option value="${d.deviceId}">${d.label || 'Mikrofon ' + (select.length + 1)}</option>`).join('');
+        
+        select.onchange = async () => {
+            const deviceId = select.value;
+            camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: { deviceId: { exact: deviceId } } });
+            facecamVideo.srcObject = camStream;
+            if(!isPiPMode && document.getElementById('toggle-vid').classList.contains('active')) previewVideo.srcObject = camStream;
+            
+            if(micSource) micSource.disconnect();
+            micSource = audioCtx.createMediaStreamSource(new MediaStream([camStream.getAudioTracks()[0]]));
+            micSource.connect(audioDestination);
+        };
+    } catch(e) { console.log("Mic-Fehler", e); }
+}
 
-// --- AUDIO/VIDEO ENGINE (WITH ECHTEM OBS METER) ---
 async function initMediaEngine() {
     try {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -61,42 +143,144 @@ async function initMediaEngine() {
             sfxSource.connect(audioDestination); 
             sfxSource.connect(audioCtx.destination); 
         }
+        
+        // Background Music in Mixer
+        musicSource = audioCtx.createMediaElementSource(bgMusicPlayer);
+        musicSource.connect(audioDestination);
+        musicSource.connect(audioCtx.destination); // Streamer hört es auch
 
-        const rawStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: true });
-        localVideoTrack = rawStream.getVideoTracks()[0];
-        localAudioTrack = rawStream.getAudioTracks()[0];
+        const camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: true });
+        localVideoTrack = camStream.getVideoTracks()[0];
+        localAudioTrack = camStream.getAudioTracks()[0];
 
         micSource = audioCtx.createMediaStreamSource(new MediaStream([localAudioTrack]));
         micSource.connect(audioDestination);
 
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = 0.85; // Butterweich
         micSource.connect(analyser);
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const micBar = document.getElementById('mic-level');
+
+        function drawVisualizer() {
+            requestAnimationFrame(drawVisualizer);
+            if(!localAudioTrack.enabled) { micBar.style.width = '0%'; return; }
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0; for(let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            let avg = sum / dataArray.length;
+            micBar.style.width = Math.min(100, (avg / 128) * 100) + '%';
+        }
+        drawVisualizer();
+
+        const canvasStream = canvas.captureStream(30);
+        finalStream = new MediaStream([canvasStream.getVideoTracks()[0], audioDestination.stream.getAudioTracks()[0]]);
         
-        finalStream = new MediaStream([localVideoTrack, audioDestination.stream.getAudioTracks()[0]]);
-        document.getElementById('studio-preview').srcObject = new MediaStream([localVideoTrack]);
+        previewVideo.srcObject = new MediaStream([localVideoTrack]);
+        facecamVideo.srcObject = new MediaStream([localVideoTrack]);
+        previewVideo.style.transform = 'scaleX(-1)';
+        
+        renderCanvas();
 
-        animateDBMeter();
-    } catch (e) { sysToast("Kamera/Mikrofon blockiert!"); }
-}
-
-function animateDBMeter() {
-    const meter = document.getElementById('mic-level');
-    const dataArray = new Uint8Array(analyser.frequencyBinCount);
-    
-    function draw() {
-        requestAnimationFrame(draw);
-        if(!localAudioTrack?.enabled) { meter.style.width = '0%'; return; }
-        analyser.getByteFrequencyData(dataArray);
-        let sum = 0; for(let i=0; i<dataArray.length; i++) sum += dataArray[i];
-        let avg = sum / dataArray.length;
-        // Map average to percentage (0 to ~150 mapped to 0-100%)
-        let percent = Math.min(100, (avg / 100) * 100);
-        meter.style.width = percent + '%';
+    } catch (e) {
+        console.error("Engine Fehler", e);
+        alert("Bitte erlaube Kamera und Mikrofon für das Studio.");
     }
-    draw();
 }
+
+// === COMPOSITING (MIXER) ===
+function renderCanvas() {
+    animationFrameId = requestAnimationFrame(renderCanvas);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (isPiPMode) {
+        if (localScreenTrack) ctx.drawImage(previewVideo, 0, 0, canvas.width, canvas.height);
+        if (localVideoTrack) {
+            const camW = canvas.width * fcState.width;
+            const camH = camW * (9/16); 
+            const camX = canvas.width * fcState.x;
+            const camY = canvas.height * fcState.y;
+            
+            ctx.save();
+            ctx.translate(camX + camW, camY);
+            ctx.scale(-1, 1);
+            ctx.drawImage(facecamVideo, 0, 0, camW, camH);
+            ctx.restore();
+
+            ctx.strokeStyle = '#00f2fe';
+            ctx.lineWidth = 4;
+            ctx.strokeRect(camX, camY, camW, camH);
+        }
+    } else {
+        const sourceVideo = previewVideo; 
+        if (sourceVideo.srcObject) {
+            if(sourceVideo.style.transform.includes('scaleX(-1)')) {
+                ctx.save();
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
+                ctx.restore();
+            } else {
+                ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
+            }
+        }
+    }
+}
+
+window.switchScene = async (type) => {
+    document.querySelectorAll('.source-btn').forEach(c => c.classList.remove('active'));
+    document.querySelector(`[data-scene="${type}"]`).classList.add('active');
+    
+    isPiPMode = false;
+    facecamOverlay.style.display = 'none';
+
+    try {
+        if (type === 'screen' || type === 'pip') {
+            if (!localScreenTrack) {
+                // PC Audio einfangen!
+                const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                localScreenTrack = screenStream.getVideoTracks()[0];
+                
+                // Game-Audio zum Stream mixen
+                if(screenStream.getAudioTracks().length > 0) {
+                    if(screenAudioSource) screenAudioSource.disconnect();
+                    screenAudioSource = audioCtx.createMediaStreamSource(screenStream);
+                    screenAudioSource.connect(audioDestination);
+                }
+                
+                localScreenTrack.onended = () => { window.switchScene('cam'); };
+            }
+            previewVideo.srcObject = new MediaStream([localScreenTrack]);
+            previewVideo.style.transform = 'none';
+            
+            if(type === 'pip') {
+                isPiPMode = true;
+                facecamOverlay.style.display = 'block';
+            }
+        } else {
+            if (!localVideoTrack) {
+                 const camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+                 localVideoTrack = camStream.getVideoTracks()[0];
+            }
+            previewVideo.srcObject = new MediaStream([localVideoTrack]);
+            previewVideo.style.transform = 'scaleX(-1)';
+        }
+    } catch (e) { console.warn("Szenenwechsel abgebrochen", e); }
+};
+
+const sfx = {
+    applaus: new Audio('https://cdn.pixabay.com/download/audio/2022/11/22/audio_d1718ab41b.mp3'),
+    airhorn: new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_7ce18e2eb5.mp3'),
+    laugh: new Audio('https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8b82ecab0.mp3'),
+    wow: new Audio('https://cdn.pixabay.com/download/audio/2021/08/04/audio_bb630cc098.mp3')
+};
+
+window.sysToast = (msg) => {
+    const toast = document.getElementById('sys-toast');
+    document.getElementById('toast-text').innerText = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 3000);
+};
 
 window.playEffect = (name) => {
     if(sfx[name]) { sfx[name].currentTime = 0; sfx[name].play().catch(()=>{}); }
@@ -113,6 +297,11 @@ function setupExtraUI() {
             await updateDoc(doc(db, "live_streams", currentUser.uid), { title: e.target.value });
             sysToast("Stream-Titel aktualisiert!");
         }
+    });
+    
+    // PC Volume für Preview
+    document.getElementById('pc-volume-slider').addEventListener('input', (e) => {
+        previewVideo.volume = e.target.value;
     });
 }
 
@@ -132,7 +321,7 @@ window.toggleCinema = () => {
 };
 
 window.clearChat = async () => {
-    if(!isLive || !confirm("Gesamten Chat löschen?")) return;
+    if(!confirm("Gesamten Chat löschen?")) return;
     const q = query(collection(db, `live_streams/${currentUser.uid}/chat`));
     const snaps = await getDocs(q);
     snaps.forEach(d => deleteDoc(d.ref));
@@ -151,47 +340,31 @@ window.unpinMessage = async () => {
     if(isLive) await updateDoc(doc(db, "live_streams", currentUser.uid), { pinnedMessage: null });
 };
 
-window.switchScene = async (type) => {
-    document.querySelectorAll('.source-btn').forEach(c => c.classList.remove('active'));
-    document.querySelector(`[data-scene="${type}"]`).classList.add('active');
-    
-    let newVideoTrack;
-    if (type === 'screen') {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-        newVideoTrack = screenStream.getVideoTracks()[0];
-        newVideoTrack.onended = () => { window.switchScene('cam'); };
-    } else {
-        const camStream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
-        newVideoTrack = camStream.getVideoTracks()[0];
-    }
-
-    finalStream.removeTrack(localVideoTrack);
-    finalStream.addTrack(newVideoTrack);
-    localVideoTrack = newVideoTrack;
-
-    document.getElementById('studio-preview').srcObject = new MediaStream([localVideoTrack]);
-    document.getElementById('studio-preview').style.transform = type === 'cam' ? 'scaleX(-1)' : 'none';
-};
-
 // --- GO LIVE LOGIK ---
 document.getElementById('master-live-btn').addEventListener('click', () => {
     if(!isLive) startStream(); else stopStream();
 });
 
 async function startStream() {
+    // 1. Alten Chat leeren!
+    const q = query(collection(db, `live_streams/${currentUser.uid}/chat`));
+    const snaps = await getDocs(q);
+    snaps.forEach(d => deleteDoc(d.ref));
+
     isLive = true;
     startTime = Date.now();
     const btn = document.getElementById('master-live-btn');
-    btn.innerHTML = "Stream beenden";
-    btn.classList.add('danger');
+    btn.innerHTML = "STREAM BEENDEN";
+    btn.classList.add('active');
     
     const ind = document.getElementById('live-indicator');
-    ind.classList.add('active');
-    ind.innerHTML = '<i class="fas fa-circle"></i> LIVE';
+    ind.style.display = 'block';
 
     const title = document.getElementById('stream-title').value || "Live Stream";
+    const goalTarget = parseInt(document.getElementById('goal-target').value) || 0;
+    const goalDesc = document.getElementById('goal-desc').value || "Ziel";
 
-    if(peer) peer.destroy(); // Wichtig: Alte Verbindungen killen
+    if(peer) peer.destroy();
     
     peer = new Peer(currentUser.uid, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
     
@@ -202,12 +375,14 @@ async function startStream() {
             broadcasterPic: currentUser.photoURL,
             title: title, 
             viewers: 0, 
+            goalTarget: goalTarget,
+            goalCurrent: 0,
+            goalDesc: goalDesc,
             lastHeartbeat: Date.now(), 
             timestamp: Date.now()
         });
     });
 
-    // 🔥 FIX: Wenn ein Zuschauer anklopft, rufen WIR ihn mit dem Stream an!
     peer.on('connection', (conn) => {
         conn.on('open', () => {
             const call = peer.call(conn.peer, finalStream);
@@ -216,7 +391,6 @@ async function startStream() {
         });
     });
 
-    // Fallback: Falls ein Anruf über die alte Methode reinkommt
     peer.on('call', call => {
         call.answer(finalStream);
         activeCalls.push(call);
@@ -234,12 +408,9 @@ async function stopStream() {
     await deleteDoc(doc(db, "live_streams", currentUser.uid));
     
     const btn = document.getElementById('master-live-btn');
-    btn.innerHTML = "Stream Starten";
-    btn.classList.remove('danger');
-    
-    const ind = document.getElementById('live-indicator');
-    ind.classList.remove('active');
-    ind.innerHTML = '<i class="fas fa-circle"></i> Offline';
+    btn.innerHTML = "STREAM STARTEN";
+    btn.classList.remove('active');
+    document.getElementById('live-indicator').style.display = 'none';
     
     activeCalls = [];
 }
@@ -254,6 +425,14 @@ function updateDuration() {
         updateDoc(doc(db, "live_streams", currentUser.uid), { lastHeartbeat: Date.now() }).catch(()=>{});
     }
 }
+
+window.updateLiveGoal = async () => {
+    if(!isLive) return sysToast("Starte zuerst den Stream!");
+    const goalTarget = parseInt(document.getElementById('goal-target').value) || 0;
+    const goalDesc = document.getElementById('goal-desc').value || "Ziel";
+    await updateDoc(doc(db, "live_streams", currentUser.uid), { goalTarget: goalTarget, goalDesc: goalDesc });
+    sysToast("Live Ziel aktualisiert!");
+};
 
 window.toggleMic = () => {
     localAudioTrack.enabled = !localAudioTrack.enabled;
@@ -300,6 +479,19 @@ function setupContextMenu() {
             ctxTargetText = msgEl.dataset.text;
             ctxTargetName = msgEl.dataset.name;
             
+            const isHost = (ctxTargetUid === currentUser.uid);
+            const isMod = modsList.includes(ctxTargetUid);
+
+            // Streamer-Schutz
+            document.getElementById('ctx-delete').style.display = isHost ? 'none' : 'flex';
+            document.getElementById('ctx-ban').style.display = isHost ? 'none' : 'flex';
+            document.getElementById('ctx-timeout').style.display = isHost ? 'none' : 'flex';
+            document.getElementById('ctx-mod').style.display = isHost ? 'none' : 'flex';
+            
+            if(!isHost) {
+                document.getElementById('ctx-mod').innerHTML = isMod ? '<i class="fas fa-user-minus"></i> Mod-Status entfernen' : '<i class="fas fa-shield-alt"></i> Moderator machen';
+            }
+
             let x = e.clientX; let y = e.clientY;
             if (x + 200 > window.innerWidth) x = window.innerWidth - 210;
             if (y + 220 > window.innerHeight) y = window.innerHeight - 230;
@@ -332,6 +524,11 @@ function setupContextMenu() {
 
     document.getElementById('ctx-pin').addEventListener('click', () => { window.pinMessage(ctxTargetText); menu.classList.remove('active'); });
     
+    document.getElementById('ctx-whisper').addEventListener('click', () => { 
+        window.open(`index.html?dm=${ctxTargetUid}`, '_blank'); 
+        menu.classList.remove('active'); 
+    });
+    
     document.getElementById('ctx-delete').addEventListener('click', async () => {
         if(ctxTargetMsgId && isLive) { 
             await deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, ctxTargetMsgId)); 
@@ -341,10 +538,13 @@ function setupContextMenu() {
 
     const timeoutLogic = async () => {
         if(ctxTargetUid && isLive) {
-            await setDoc(doc(db, `live_streams/${currentUser.uid}/timeouts`, ctxTargetUid), { expire: Date.now() + 300000 });
-            sysToast(`${ctxTargetName} hat 5m Timeout.`);
-            menu.classList.remove('active');
-            modal.classList.remove('show');
+            let mins = prompt(`Wie viele Minuten Timeout für ${ctxTargetName}?`, "5");
+            if(mins && !isNaN(mins)) {
+                await setDoc(doc(db, `live_streams/${currentUser.uid}/timeouts`, ctxTargetUid), { expire: Date.now() + (parseInt(mins) * 60000) });
+                sysToast(`${ctxTargetName} hat ${mins}m Timeout.`);
+                menu.classList.remove('active');
+                modal.classList.remove('show');
+            }
         }
     };
     document.getElementById('ctx-timeout').addEventListener('click', timeoutLogic);
@@ -355,6 +555,7 @@ function setupContextMenu() {
             await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayUnion(ctxTargetUid) });
             sysToast("Gebannt!");
             modal.classList.remove('show');
+            menu.classList.remove('active');
         }
     };
     document.getElementById('ctx-ban').addEventListener('click', banLogic);
@@ -362,9 +563,16 @@ function setupContextMenu() {
 
     const modLogic = async () => {
         if(ctxTargetUid && isLive) {
-            await setDoc(doc(db, `live_streams/${currentUser.uid}/mods`, ctxTargetUid), { uid: ctxTargetUid });
-            sysToast(`${ctxTargetName} ist nun Mod!`);
+            const isMod = modsList.includes(ctxTargetUid);
+            if(isMod) {
+                await deleteDoc(doc(db, `live_streams/${currentUser.uid}/mods`, ctxTargetUid));
+                sysToast(`Mod-Rechte von ${ctxTargetName} entfernt.`);
+            } else {
+                await setDoc(doc(db, `live_streams/${currentUser.uid}/mods`, ctxTargetUid), { uid: ctxTargetUid });
+                sysToast(`${ctxTargetName} ist nun Mod!`);
+            }
             modal.classList.remove('show');
+            menu.classList.remove('active');
         }
     };
     document.getElementById('ctx-mod').addEventListener('click', modLogic);
@@ -383,6 +591,53 @@ function setupHotkeys() {
     });
 }
 
+// --- TIKTOK GIFTS ANIMATION IM STUDIO ---
+function setupGifts() {
+    let currentCoins = 0;
+    onSnapshot(collection(db, `live_streams/${currentUser.uid}/gifts`), snap => {
+        snap.docChanges().forEach(change => {
+            if(change.type === 'added') {
+                const g = change.doc.data();
+                currentCoins += g.price;
+                document.getElementById('stat-coins').innerText = currentCoins;
+                
+                const animZone = document.getElementById('gift-overlay-zone');
+                const el = document.createElement('div');
+                el.className = 'gift-overlay';
+                el.innerHTML = `<span>${g.emoji}</span><strong>${g.name} hat ${g.giftName} gesendet!</strong>`;
+                animZone.appendChild(el);
+                setTimeout(() => el.remove(), 3000);
+            }
+        });
+    });
+}
+
+// --- MUSIK BIBLIOTHEK ---
+async function loadMusicLibrary() {
+    const list = document.getElementById('music-list');
+    const snap = await getDocs(query(collection(db, "official_sounds"), orderBy("timestamp", "desc")));
+    list.innerHTML = '';
+    snap.forEach(docSnap => {
+        const s = docSnap.data();
+        list.innerHTML += `<div class="song-item">
+            <i class="fas fa-music" style="color:var(--ps-cyan); font-size:20px;"></i>
+            <div style="flex:1;">
+                <strong style="display:block; color:white; font-size:14px;">${s.title}</strong>
+            </div>
+            <button onclick="playBackgroundMusic('${s.url}')">Abspielen</button>
+        </div>`;
+    });
+}
+
+window.playBackgroundMusic = (url) => {
+    bgMusicPlayer.src = url;
+    bgMusicPlayer.volume = document.getElementById('music-volume').value;
+    bgMusicPlayer.play();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+};
+window.stopMusic = () => { bgMusicPlayer.pause(); bgMusicPlayer.src = ''; };
+document.getElementById('music-volume').addEventListener('input', (e) => bgMusicPlayer.volume = e.target.value);
+
 // --- TWITCH CHAT SCROLL PHYSICS ---
 let isChatPaused = false;
 
@@ -390,21 +645,14 @@ function setupListeners() {
     const chatContainer = document.getElementById('studio-chat');
     const scroller = document.getElementById('chat-scroller');
     const pauseBanner = document.getElementById('chat-paused-banner');
-    let modsList = [];
 
-    onSnapshot(collection(db, `live_streams/${currentUser.uid}/mods`), snap => {
-        modsList = snap.docs.map(d => d.id);
-    });
-    
     const stringToColor = (str) => {
         const colors = ['#FF453A', '#0A84FF', '#32D74B', '#FF9F0A', '#BF5AF2', '#FF375F', '#5E5CE6', '#FFD60A'];
         let hash = 0; for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
         return colors[Math.abs(hash) % colors.length];
     };
 
-    // Scroll Logic
     scroller.addEventListener('scroll', () => {
-        // Wenn man hochscrollt (nicht mehr ganz unten ist)
         const isAtBottom = scroller.scrollHeight - scroller.scrollTop <= scroller.clientHeight + 20;
         if (!isAtBottom && !isChatPaused) {
             isChatPaused = true;
@@ -441,9 +689,7 @@ function setupListeners() {
             </div>`;
         });
         
-        if(!isChatPaused) {
-            scroller.scrollTop = scroller.scrollHeight;
-        }
+        if(!isChatPaused) scroller.scrollTop = scroller.scrollHeight;
     });
 
     onSnapshot(doc(db, "live_streams", currentUser.uid), docSnap => {

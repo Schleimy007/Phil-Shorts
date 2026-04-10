@@ -60,7 +60,7 @@
         .btn-live.danger:hover { background: rgba(255,0,80,0.2); border-color: var(--ps-pink); }
 
         /* === LEFT SIDEBAR === */
-        .left-panel { background: var(--bg-panel); display: flex; flex-direction: column; }
+        .left-panel { background: var(--bg-panel); display: flex; flex-direction: column; overflow-y: auto; }
         .panel-header { padding: 16px 20px 8px; font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
         
         .source-grid { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -80,13 +80,31 @@
         .pad-btn:active { background: var(--text-main); color: var(--bg-deep); transform: scale(0.95); }
         .pad-btn:active i { color: var(--bg-deep); }
 
+        .clean-input { width: 100%; background: var(--bg-deep); border: 1px solid var(--border-dim); color: white; padding: 10px; border-radius: var(--radius-md); font-size: 13px; outline: none; margin-bottom: 8px; }
+        .clean-input:focus { border-color: var(--ps-cyan); }
+
         /* === CENTER (OBS STYLE MIXER & PREVIEW) === */
         .main-stage { display: flex; flex-direction: column; position: relative; }
         .stats-hud { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; z-index: 10; pointer-events: none; }
         .hud-pill { background: rgba(0,0,0,0.75); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         
-        .video-container { flex: 1; padding: 24px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .video-container { flex: 1; padding: 24px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
         #studio-preview { width: 100%; max-height: 100%; object-fit: contain; background: #000; border-radius: var(--radius-lg); box-shadow: 0 20px 50px rgba(0,0,0,0.8); border: 1px solid var(--border-dim); transform: scaleX(-1); }
+
+        /* Draggable Facecam Overlay */
+        #facecam-container {
+            position: absolute; top: 30px; right: 30px; width: 250px; aspect-ratio: 16/9;
+            border: 2px solid var(--ps-cyan); border-radius: 8px; overflow: hidden;
+            cursor: move; z-index: 500; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            resize: both; 
+        }
+        #facecam-video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); pointer-events: none; }
+
+        /* TikTok Gifty Animations Overlay */
+        .gift-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; pointer-events: none; display: flex; flex-direction: column; align-items: center; text-align: center; animation: popIn 3s ease forwards; }
+        .gift-overlay span { font-size: 80px; filter: drop-shadow(0 0 20px rgba(255,215,0,0.8)); }
+        .gift-overlay strong { font-size: 18px; color: white; text-shadow: 0 2px 10px black; margin-top: 10px; background: rgba(0,0,0,0.7); padding: 5px 15px; border-radius: 20px; border: 1px solid #ffd700; }
+        @keyframes popIn { 0% { opacity:0; transform: translate(-50%, 50%) scale(0.5); } 15% { opacity:1; transform: translate(-50%, -50%) scale(1.2); } 25% { transform: translate(-50%, -50%) scale(1); } 80% { opacity:1; transform: translate(-50%, -50%) scale(1); } 100% { opacity:0; transform: translate(-50%, -150%) scale(0.8); } }
 
         /* PRO AUDIO MIXER */
         .obs-mixer { background: var(--bg-panel); border-top: 1px solid var(--border-dim); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 -10px 30px rgba(0,0,0,0.3); }
@@ -96,7 +114,6 @@
         .track-btn:hover { background: var(--bg-hover); }
         .track-btn.muted { color: var(--ps-pink); border-color: rgba(255,0,80,0.3); background: rgba(255,0,80,0.1); }
         
-        /* Echter OBS dB Meter */
         .db-meter-container { flex: 1; background: var(--bg-deep); height: 12px; border-radius: 6px; padding: 2px; border: 1px solid var(--border-dim); position: relative; overflow: hidden; }
         .db-meter-fill { height: 100%; width: 0%; border-radius: 4px; background: linear-gradient(90deg, #10b981 0%, #10b981 60%, #eab308 80%, #ef4444 100%); transition: width 0.05s linear; }
         .db-markers { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: space-between; pointer-events: none; opacity: 0.2; }
@@ -114,7 +131,6 @@
         .pinned-box { background: rgba(0, 242, 254, 0.08); padding: 12px 16px; border-bottom: 1px solid rgba(0,242,254,0.2); font-size: 12px; display: none; align-items: flex-start; gap: 10px; border-left: 3px solid var(--ps-cyan); }
         .pinned-box .fa-thumbtack { color: var(--ps-cyan); margin-top: 2px; }
         
-        /* Chat Pause Banner */
         .chat-paused-banner { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); border: 1px solid var(--border-dim); padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; color: white; cursor: pointer; display: none; align-items: center; gap: 8px; z-index: 50; transition: 0.2s; }
         .chat-paused-banner:hover { background: var(--bg-hover); }
 
@@ -122,7 +138,7 @@
         
         .tw-msg { padding: 6px 20px; font-size: 13px; line-height: 1.5; word-wrap: break-word; transition: background 0.1s; position: relative; }
         .tw-msg:nth-child(even) { background: rgba(255,255,255,0.01); }
-        .tw-msg:hover { background: rgba(255,255,255,0.04); }
+        .tw-msg:hover { background: rgba(255,255,255,0.04); cursor: context-menu; }
         .tw-msg .timestamp { font-size: 10px; color: var(--text-muted); margin-right: 6px; }
         .tw-msg .badge { display: inline-block; padding: 2px 5px; border-radius: 3px; font-size: 9px; font-weight: 800; color: white; margin-right: 6px; vertical-align: baseline; letter-spacing: 0.5px; }
         .tw-msg .badge.host { background: var(--ps-pink); }
@@ -138,7 +154,7 @@
         .chat-input-box button { background: var(--twitch-purp); color: white; border: none; border-radius: 4px; padding: 0 16px; font-weight: 600; cursor: pointer; transition: 0.2s; }
         .chat-input-box button:hover { background: #772ce8; }
 
-        /* === CONTEXT MENU & MODALS === */
+        /* === CONTEXT MENU === */
         .glass-menu { position: fixed; background: rgba(24, 24, 27, 0.95); backdrop-filter: blur(16px); border: 1px solid var(--border-dim); border-radius: var(--radius-md); padding: 6px; min-width: 200px; box-shadow: 0 12px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05); z-index: 10000; display: none; opacity: 0; transform: scale(0.95); transition: 0.15s var(--easing); }
         .glass-menu.active { display: block; opacity: 1; transform: scale(1); }
         .menu-item { padding: 8px 12px; font-size: 13px; font-weight: 600; color: var(--text-main); cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 10px; }
@@ -147,22 +163,14 @@
         .menu-item i { width: 16px; text-align: center; opacity: 0.8; }
         .menu-divider { height: 1px; background: var(--border-dim); margin: 4px 0; }
 
-        #viewer-card { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.7); z-index: 20000; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
-        #viewer-card.show { display: flex; }
-        .vc-inner { background: var(--bg-panel); border: 1px solid var(--border-dim); border-radius: var(--radius-lg); width: 320px; overflow: hidden; box-shadow: var(--shadow-panel); animation: slideUp 0.3s var(--easing); }
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        
-        .vc-header { background: var(--bg-deep); padding: 20px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid var(--border-dim); }
-        .vc-avatar { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, var(--ps-cyan), var(--twitch-purp)); display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
-        .vc-info h3 { margin: 0 0 4px 0; font-size: 18px; color: white; }
-        .vc-info span { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
-        
-        .vc-body { padding: 12px; display: flex; flex-direction: column; gap: 4px; }
-        .vc-btn { background: transparent; border: none; color: var(--text-main); padding: 10px 16px; font-size: 13px; font-weight: 600; text-align: left; cursor: pointer; border-radius: var(--radius-md); display: flex; align-items: center; gap: 12px; transition: 0.15s; }
-        .vc-btn:hover { background: var(--bg-hover); }
-
         .system-toast { position: fixed; top: 24px; right: 24px; background: var(--bg-panel); border: 1px solid var(--border-dim); border-left: 4px solid var(--ps-cyan); padding: 16px 20px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; z-index: 30000; transform: translateX(120%); transition: 0.4s var(--easing); box-shadow: 0 8px 24px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 12px; }
         .system-toast.show { transform: translateX(0); }
+
+        /* MUSIK MODAL */
+        .music-modal { position: fixed; top:50%; left:50%; transform:translate(-50%, -50%); background: var(--bg-panel); border: 1px solid var(--border-dim); padding: 20px; border-radius: var(--radius-lg); z-index: 20000; width: 400px; max-height: 80vh; display: none; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
+        .music-modal.show { display: flex; }
+        .song-item { display: flex; align-items: center; gap: 10px; padding: 10px; background: var(--bg-deep); border: 1px solid var(--border-dim); border-radius: var(--radius-md); margin-bottom: 8px; }
+        .song-item button { background: var(--ps-cyan); border: none; color: black; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -170,31 +178,29 @@
 <div id="sys-toast" class="system-toast"><i class="fas fa-info-circle" style="color:var(--ps-cyan)"></i> <span id="toast-text"></span></div>
 
 <div id="ctx-menu" class="glass-menu">
-    <div class="menu-item" id="ctx-profile"><i class="fas fa-id-card"></i> Zuschauer Info</div>
+    <div class="menu-item" id="ctx-whisper"><i class="fas fa-envelope"></i> Flüstern (DMs)</div>
+    <div class="menu-item" id="ctx-profile"><i class="fas fa-id-card"></i> Profil ansehen</div>
     <div class="menu-item" id="ctx-pin"><i class="fas fa-thumbtack"></i> Nachricht anheften</div>
     <div class="menu-divider"></div>
     <div class="menu-item" id="ctx-mod" style="color:#10b981"><i class="fas fa-shield-alt"></i> Moderator machen</div>
-    <div class="menu-item" id="ctx-timeout" style="color:#f59e0b"><i class="fas fa-clock"></i> Timeout (5 Min)</div>
+    <div class="menu-item" id="ctx-timeout" style="color:#f59e0b"><i class="fas fa-clock"></i> Timeout geben</div>
     <div class="menu-divider"></div>
     <div class="menu-item danger" id="ctx-delete"><i class="fas fa-trash"></i> Löschen</div>
     <div class="menu-item danger" id="ctx-ban"><i class="fas fa-ban"></i> Bannen</div>
 </div>
 
-<div id="viewer-card" onclick="if(event.target===this) this.classList.remove('show')">
-    <div class="vc-inner">
-        <div class="vc-header">
-            <div class="vc-avatar" id="pm-avatar">U</div>
-            <div class="vc-info">
-                <h3 id="pm-name">Username</h3>
-                <span id="pm-role">Zuschauer</span>
-            </div>
-        </div>
-        <div class="vc-body">
-            <button class="vc-btn" onclick="sysToast('DMs öffnen...')"><i class="fas fa-envelope"></i> Flüstern</button>
-            <button class="vc-btn" id="pm-btn-mod"><i class="fas fa-shield-alt" style="color:#10b981"></i> Als Mod ernennen</button>
-            <button class="vc-btn" id="pm-btn-timeout"><i class="fas fa-clock" style="color:#f59e0b"></i> Timeout (5 Min)</button>
-            <button class="vc-btn" id="pm-btn-ban" style="color:var(--ps-pink)"><i class="fas fa-ban"></i> Aus Stream bannen</button>
-        </div>
+<div id="music-modal" class="music-modal">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <h3 style="margin:0;"><i class="fas fa-music" style="color:var(--ps-cyan)"></i> Musik Bibliothek</h3>
+        <i class="fas fa-times" style="cursor:pointer; color:#888;" onclick="document.getElementById('music-modal').classList.remove('show')"></i>
+    </div>
+    <div id="music-list" style="flex:1; overflow-y:auto;">
+        <p style="text-align:center; color:#888;">Lade Musik...</p>
+    </div>
+    <div style="margin-top:15px; border-top: 1px solid #333; padding-top: 10px;">
+        <label style="font-size:12px; color:#aaa;">Musik-Lautstärke für Stream:</label>
+        <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.2" style="width:100%;">
+        <button class="source-btn" style="width:100%; justify-content:center; margin-top:10px; color:#ff4444;" onclick="stopMusic()">Musik stoppen</button>
     </div>
 </div>
 
@@ -210,12 +216,17 @@
             <input type="text" id="stream-title" placeholder="Titel deines Streams..." value="Mein Live Stream">
         </div>
         <div class="live-controls">
-            <div class="status-dot" id="live-indicator"><i class="fas fa-circle"></i> Offline</div>
+            <div class="status-dot" id="live-indicator" style="display:none;"><i class="fas fa-circle"></i> Offline</div>
             <button class="btn-live" id="master-live-btn">Stream Starten</button>
         </div>
     </header>
 
     <aside class="left-panel" id="left-sidebar">
+        <div class="panel-header">Mikrofon Auswahl</div>
+        <select id="mic-select" class="clean-input" style="cursor:pointer;">
+            <option>Standard Mikrofon</option>
+        </select>
+
         <div class="panel-header">Szenen & Quellen</div>
         <div class="source-grid">
             <div class="source-btn active" data-scene="cam" onclick="switchScene('cam')">
@@ -226,7 +237,22 @@
                 <i class="fas fa-display"></i>
                 <div class="source-info"><strong>Bildschirm</strong><span>Display Capture</span></div>
             </div>
+            <div class="source-btn" data-scene="pip" onclick="switchScene('pip')">
+                <i class="fas fa-th-large"></i>
+                <div class="source-info"><strong>Game + Facecam</strong><span>PiP Modus</span></div>
+            </div>
         </div>
+
+        <div class="panel-header">Live Ziele</div>
+        <div style="background: rgba(255,215,0,0.05); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,215,0,0.2);">
+            <input type="number" id="goal-target" class="clean-input" placeholder="Menge (z.B. 1000)" style="margin-bottom:5px;">
+            <input type="text" id="goal-desc" class="clean-input" placeholder="Belohnung (z.B. Chili)" style="margin-bottom:5px;">
+            <button class="source-btn" style="width:100%; justify-content:center; margin:0;" onclick="updateLiveGoal()">Ziel updaten</button>
+        </div>
+
+        <div class="panel-header">Admin Tools</div>
+        <button class="source-btn" onclick="document.getElementById('music-modal').classList.add('show')"><i class="fas fa-music"></i> Musik Bibliothek</button>
+        <button class="source-btn" onclick="clearChat()"><i class="fas fa-trash"></i> Chat leeren</button>
 
         <div class="panel-header" style="margin-top:auto;">Audio Pad</div>
         <div class="pad-grid">
@@ -244,8 +270,13 @@
             <div class="hud-pill"><i class="fas fa-clock" style="color:var(--text-muted)"></i> <span id="stat-duration">00:00</span></div>
         </div>
 
-        <div class="video-container">
+        <div id="gift-overlay-zone" style="position:absolute; width:100%; height:100%; top:0; left:0; pointer-events:none; z-index:1000; overflow:hidden;"></div>
+
+        <div class="video-container" id="preview-viewport">
             <video id="studio-preview" autoplay muted playsinline></video>
+            <div id="facecam-container" style="display: none;">
+                <video id="facecam-video" autoplay muted playsinline></video>
+            </div>
         </div>
 
         <div class="obs-mixer">
@@ -261,7 +292,9 @@
             </div>
             
             <div class="toolbar">
-                <button class="tool-btn" onclick="clearChat()" title="Chat leeren"><i class="fas fa-broom"></i></button>
+                <i class="fas fa-volume-up" style="color:#aaa; font-size:12px;"></i>
+                <input type="range" id="pc-volume-slider" min="0" max="1" step="0.05" value="0.5" title="PC Lautstärke für dich" style="width: 80px;">
+                <div style="width:1px; background:#333; height:20px; margin: 0 10px;"></div>
                 <button class="tool-btn" onclick="toggleCinema()" title="Kino Modus (F)"><i class="fas fa-expand"></i></button>
                 <button class="tool-btn" onclick="requestPiP()" title="Abkoppeln (P)"><i class="fas fa-clone"></i></button>
             </div>
@@ -306,6 +339,9 @@
     </aside>
 
 </div>
+
+<canvas id="composite-canvas" width="1280" height="720" style="display:none;"></canvas>
+<audio id="bg-music-player" style="display:none;"></audio>
 
 <script type="module" src="studio.js"></script>
 </body>
