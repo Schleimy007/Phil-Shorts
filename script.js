@@ -2867,95 +2867,12 @@ function initResponsiveLayout() {
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initResponsiveLayout); else initResponsiveLayout();
 
 // =========================================================================
-// 🔥 ULTRA PREMIUM LIVE MANAGER & VIEWER LOGIK (FEHLTE VORHER) 🔥
+// 🔥 VIEWER WEBRTC LOGIC (Kollabiert nicht mehr im Ladebildschirm) 🔥
 // =========================================================================
-import { getDoc, increment } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-// 1. DYNAMISCHES PREMIUM CSS FÜR DIE KARTEN INJIZIEREN
-if (!document.getElementById('premium-live-styles')) {
-    const style = document.createElement('style');
-    style.id = 'premium-live-styles';
-    style.innerHTML = `
-        .ultra-live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; }
-        .premium-live-card { background: #111; border-radius: 16px; overflow: hidden; cursor: pointer; position: relative; border: 1px solid rgba(255,255,255,0.05); transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .premium-live-card:hover { transform: translateY(-5px) scale(1.02); border-color: #00f2fe; box-shadow: 0 15px 40px rgba(0, 242, 254, 0.2); }
-        
-        .card-thumbnail { position: relative; height: 280px; width: 100%; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center; }
-        .thumb-bg { position: absolute; width: 100%; height: 100%; background-size: cover; background-position: center; filter: blur(20px) brightness(0.5); transform: scale(1.2); }
-        .card-thumbnail img { position: relative; z-index: 1; height: 100%; width: 100%; object-fit: cover; }
-        
-        .live-badge-glow { position: absolute; top: 12px; left: 12px; background: rgba(255, 0, 80, 0.9); backdrop-filter: blur(10px); color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; letter-spacing: 1px; z-index: 2; display: flex; align-items: center; gap: 6px; box-shadow: 0 0 15px rgba(255,0,80,0.6); }
-        .live-badge-glow i { animation: pulseLive 2s infinite; }
-        .viewer-count { position: absolute; top: 12px; right: 12px; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(10px); color: white; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 700; z-index: 2; border: 1px solid rgba(255,255,255,0.1); }
-        
-        .play-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 40px; color: rgba(255,255,255,0.8); z-index: 2; opacity: 0; transition: 0.2s; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5)); }
-        .premium-live-card:hover .play-overlay { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
-        
-        .card-info { padding: 15px; background: linear-gradient(to top, rgba(10,10,10,1) 0%, rgba(20,20,20,0.8) 100%); position: absolute; bottom: 0; left: 0; width: 100%; z-index: 3; display: flex; gap: 12px; align-items: center; backdrop-filter: blur(10px); border-top: 1px solid rgba(255,255,255,0.05); }
-        .card-info .avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #00f2fe; object-fit: cover; }
-        .card-info .text-info { flex: 1; min-width: 0; }
-        .card-info h4 { margin: 0; font-size: 14px; font-weight: 700; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
-        .card-info span { font-size: 12px; color: #aaa; font-weight: 500; }
-    `;
-    document.head.appendChild(style);
-}
-
-// 2. DER LIVE MANAGER (Rendert die Liste)
-window.LiveManager = {
-    unsubscribe: null,
-    init: function() {
-        const grid = document.getElementById('live-streams-grid');
-        if(!grid) return;
-
-        if (this.unsubscribe) this.unsubscribe();
-
-        this.unsubscribe = onSnapshot(collection(db, "live_streams"), (snapshot) => {
-            grid.innerHTML = ''; // Entfernt den Ladekreis
-
-            if (snapshot.empty) {
-                grid.innerHTML = `
-                    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height: 60vh; text-align: center;">
-                        <div style="width: 80px; height: 80px; border-radius: 50%; background: #111; display:flex; align-items:center; justify-content:center; margin-bottom: 20px; box-shadow: inset 0 0 20px rgba(0,0,0,0.8); border: 1px solid #222;">
-                            <i class="fas fa-video-slash" style="font-size: 30px; color: #444;"></i>
-                        </div>
-                        <h3 style="color: white; margin-bottom: 8px;">Niemand ist live</h3>
-                        <p style="font-size: 14px; color: #888;">Die Creator schlafen wahrscheinlich gerade. Zzz...</p>
-                    </div>
-                `;
-                return;
-            }
-
-            let html = '<div class="ultra-live-grid">';
-            snapshot.forEach(docSnap => {
-                const stream = docSnap.data();
-                html += `
-                    <div class="premium-live-card" onclick="joinLiveStream('${docSnap.id}')">
-                        <div class="card-thumbnail">
-                            <div class="thumb-bg" style="background-image: url('${stream.broadcasterPic}')"></div>
-                            <img src="${stream.broadcasterPic}">
-                            <div class="live-badge-glow"><i class="fas fa-circle" style="font-size:8px;"></i> LIVE</div>
-                            <div class="viewer-count"><i class="fas fa-eye"></i> ${stream.viewers || 0}</div>
-                            <i class="fas fa-play-circle play-overlay"></i>
-                            <div class="card-info">
-                                <img src="${stream.broadcasterPic}" class="avatar">
-                                <div class="text-info">
-                                    <h4>${stream.title || 'Live Stream'}</h4>
-                                    <span>@${stream.broadcasterName}</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-            html += '</div>';
-            grid.innerHTML = html;
-        });
-    }
-};
-
-// 3. ALS ZUSCHAUER DEM STREAM BEITRETEN (WebRTC)
 let viewerPeer = null;
 window.currentLiveStreamId = null;
+window.currentLiveStreamerUid = null;
 window.liveRoomUnsubscribes = [];
 
 window.joinLiveStream = async function(streamId) {
@@ -2964,52 +2881,64 @@ window.joinLiveStream = async function(streamId) {
     window.currentLiveStreamId = streamId;
     switchView('live-room');
     
-    // UI Reset
+    // UI Zurücksetzen
     const videoEl = document.getElementById('live-video-player');
     if(videoEl) videoEl.srcObject = null;
     
     const offlineText = document.getElementById('live-stream-offline-text');
     if(offlineText) {
         offlineText.style.display = 'flex';
-        offlineText.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:30px; margin-bottom:10px; color:#00f2fe;"></i><span>Verbinde mit Stream...</span>';
+        offlineText.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:50px; color:#00f2fe; margin-bottom:15px;"></i><span>Lade Video-Signal...</span>';
     }
     
-    // Check if stream exists
+    // Stream Daten holen
     const streamSnap = await getDoc(doc(db, "live_streams", streamId));
     if(!streamSnap.exists()) {
-        showToast("Stream ist bereits offline.");
-        switchView('live-list');
+        showToast("Stream ist nicht mehr aktiv.");
+        leaveLiveRoom();
         return;
     }
     const streamData = streamSnap.data();
+    window.currentLiveStreamerUid = streamData.broadcasterUid;
     
     // HUD updaten
-    document.getElementById('live-broadcaster-pic').src = streamData.broadcasterPic;
-    document.getElementById('live-broadcaster-name').innerText = streamData.broadcasterName;
+    document.getElementById('live-broadcaster-pic').src = streamData.broadcasterPic || 'https://i.imgur.com/JDPRzCc.png';
+    document.getElementById('live-broadcaster-name').innerText = streamData.broadcasterName || 'Creator';
     
-    // Viewer Count hochzählen
+    // Zuschauerzahl erhöhen
     await updateDoc(doc(db, "live_streams", streamId), { viewers: increment(1) }).catch(()=>{});
     
-    // WebRTC PeerJS Verbindung aufbauen
+    // WebRTC Verbindung aufbauen
     if(viewerPeer) viewerPeer.destroy();
     viewerPeer = new Peer(currentUser.uid, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
     
+    // TIMEOUT: Wenn nach 10 Sek kein Video kommt = Abbruch
+    let connectionTimeout = setTimeout(() => {
+        if(offlineText && !videoEl.srcObject) {
+            offlineText.innerHTML = '<i class="fas fa-satellite-dish" style="font-size:50px; color:#ff4444; margin-bottom:15px;"></i><span style="color:#ff4444;">Signal verloren. Streamer ist offline.</span>';
+        }
+    }, 10000);
+
     viewerPeer.on('open', () => {
-        // Ruft den Broadcaster an (wir schicken einen leeren Stream, da wir nur zuschauen)
+        // Wir rufen den Host an
         const call = viewerPeer.call(streamData.broadcasterUid, new MediaStream());
         
         call.on('stream', (remoteStream) => {
+            clearTimeout(connectionTimeout); // Signal ist da, Timeout stoppen!
             if(offlineText) offlineText.style.display = 'none';
-            if(videoEl) videoEl.srcObject = remoteStream;
             
-            // Browser blockieren Autoplay mit Ton. Wir brauchen das Overlay:
+            if(videoEl) {
+                videoEl.srcObject = remoteStream;
+                videoEl.muted = true; // Browser-Zwang für Autoplay
+                videoEl.play().catch(e=>console.log("Autoplay blockiert"));
+            }
+            
+            // "Ton anschalten" Overlay zeigen
             const unmuteOverlay = document.getElementById('live-unmute-overlay');
-            if(unmuteOverlay) unmuteOverlay.style.display = 'flex';
-            
             if(unmuteOverlay) {
+                unmuteOverlay.style.display = 'flex';
                 unmuteOverlay.onclick = () => {
                     videoEl.muted = false;
-                    videoEl.play().catch(e=>console.error(e));
                     unmuteOverlay.style.display = 'none';
                 };
             }
@@ -3018,27 +2947,21 @@ window.joinLiveStream = async function(streamId) {
         call.on('close', () => {
             if(offlineText) {
                 offlineText.style.display = 'flex';
-                offlineText.innerHTML = '<i class="fas fa-broadcast-tower" style="font-size:30px; margin-bottom:10px; color:#ff4444;"></i><span>Stream beendet</span>';
+                offlineText.innerHTML = '<i class="fas fa-broadcast-tower" style="font-size:50px; color:#ff4444; margin-bottom:15px;"></i><span>Stream beendet</span>';
             }
         });
     });
     
-    // Lade Chat für diesen Stream
     initLiveRoomListeners(streamId);
 };
 
-// 4. STREAM VERLASSEN
 window.leaveLiveRoom = async function() {
     if(window.currentLiveStreamId && currentUser) {
-        // Viewer Count runterzählen
         await updateDoc(doc(db, "live_streams", window.currentLiveStreamId), { viewers: increment(-1) }).catch(()=>{});
     }
     if(viewerPeer) viewerPeer.destroy();
     const videoEl = document.getElementById('live-video-player');
-    if(videoEl) {
-        videoEl.pause();
-        videoEl.srcObject = null;
-    }
+    if(videoEl) { videoEl.pause(); videoEl.srcObject = null; }
     
     if(window.liveRoomUnsubscribes) {
         window.liveRoomUnsubscribes.forEach(unsub => unsub());
@@ -3049,7 +2972,6 @@ window.leaveLiveRoom = async function() {
     switchView('live-list');
 };
 
-// 5. CHAT & GESCHENKE ALS ZUSCHAUER LADEN
 function initLiveRoomListeners(streamId) {
     if(window.liveRoomUnsubscribes) window.liveRoomUnsubscribes.forEach(unsub => unsub());
     window.liveRoomUnsubscribes = [];
@@ -3064,9 +2986,9 @@ function initLiveRoomListeners(streamId) {
         snap.forEach(d => {
             const m = d.data();
             const isHost = m.uid === streamId;
-            const hostBadge = isHost ? '<span style="background:#ff0050; color:white; font-size:9px; padding:2px 4px; border-radius:3px; margin-right:5px;">HOST</span>' : '';
-            chatBox.innerHTML += `<div class="live-chat-msg" style="background:rgba(0,0,0,0.5); padding:8px 12px; border-radius:10px; margin-bottom:5px; color:white; font-size:13px; backdrop-filter:blur(5px); width:fit-content; max-width:80%; pointer-events:auto;">
-                ${hostBadge}<strong style="color:#00f2fe; margin-right:5px; cursor:pointer;" onclick="openProfile('${m.uid}')">${m.name}:</strong> <span style="word-wrap: break-word;">${m.text}</span>
+            const hostBadge = isHost ? '<span style="background:#ff0050; color:white; font-size:10px; padding:2px 4px; border-radius:3px; margin-right:5px;">HOST</span>' : '';
+            chatBox.innerHTML += `<div class="lr-chat-msg">
+                ${hostBadge}<strong onclick="openProfile('${m.uid}')">${m.name}:</strong> <span>${m.text}</span>
             </div>`;
         });
     });
@@ -3079,7 +3001,6 @@ function initLiveRoomListeners(streamId) {
             const viewerEl = document.getElementById('live-viewer-count');
             if(viewerEl) viewerEl.innerText = data.viewers || 0;
             
-            // Wenn ein Live-Ziel gesetzt ist
             if(data.goalTarget && data.goalTarget > 0) {
                 document.getElementById('live-goal-container').style.display = 'block';
                 document.getElementById('live-goal-desc').innerText = data.goalDesc || "Ziel";
@@ -3095,22 +3016,23 @@ function initLiveRoomListeners(streamId) {
     window.liveRoomUnsubscribes.push(metaUnsub);
 }
 
-// Senden von Chat-Nachrichten als Zuschauer
+// Chat Input Buttons
 document.getElementById('send-live-chat-btn')?.addEventListener('click', async () => {
     const input = document.getElementById('live-chat-input');
     const text = input.value.trim();
     if(!text || !window.currentLiveStreamId || !currentUser) return;
     
     await addDoc(collection(db, `live_streams/${window.currentLiveStreamId}/chat`), {
-        uid: currentUser.uid,
-        name: currentUser.displayName,
-        text: text,
-        timestamp: Date.now()
+        uid: currentUser.uid, name: currentUser.displayName, text: text, timestamp: Date.now()
     });
     input.value = '';
 });
 
-// Geschenk Button Listener für Zuschauer
+// Enter-Taste im Chat
+document.getElementById('live-chat-input')?.addEventListener('keypress', (e) => {
+    if(e.key === 'Enter') document.getElementById('send-live-chat-btn').click();
+});
+
 document.getElementById('live-gift-btn')?.addEventListener('click', () => {
     if(window.currentLiveStreamId) window.openGiftModal(window.currentLiveStreamId);
 });
