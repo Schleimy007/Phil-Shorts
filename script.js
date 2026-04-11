@@ -25,18 +25,16 @@ const GIPHY_API_KEY = "Vj2uCqfOmAT1sXEKQgQvneGy60VIxgCk";
 
 // === LIVEKIT TOKEN GENERATOR (Client-Side) ===
 async function generateLiveKitToken(roomName, participantName, isBroadcaster = false) {
-    // ⚠️ WICHTIG: Trage hier deine LiveKit API Key und Secret ein!
     const apiKey = "APIabumFsfYCfwJ"; 
     const apiSecret = "vh0kN1T3RwCahxLF520Zy00geWxeRbnWGmofgvb3woGA";
 
     const header = { alg: "HS256", typ: "JWT" };
     
-    // LiveKit verlangt zwingend, dass 'room' in den Video-Grants steht
     const payload = {
         iss: apiKey,
-        sub: participantName, // Dies muss ein String sein! currentUser.uid ist perfekt.
-        nbf: Math.floor(Date.now() / 1000) - 5, // -5 Sekunden Puffer wegen Server-Zeit-Differenzen
-        exp: Math.floor(Date.now() / 1000) + (6 * 60 * 60), // 6 Stunden gültig
+        sub: participantName,
+        nbf: Math.floor(Date.now() / 1000) - 5,
+        exp: Math.floor(Date.now() / 1000) + (6 * 60 * 60),
         video: {
             roomJoin: true,
             room: roomName,
@@ -48,7 +46,6 @@ async function generateLiveKitToken(roomName, participantName, isBroadcaster = f
     };
 
     const base64UrlEncode = (obj) => {
-        // Fallback für Browser, die btoa mit Umlauten nicht mögen
         const str = unescape(encodeURIComponent(JSON.stringify(obj)));
         return btoa(str).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
     };
@@ -73,30 +70,11 @@ async function generateLiveKitToken(roomName, participantName, isBroadcaster = f
 
         return `${unsignedToken}.${encodedSignature}`;
     } catch(e) {
-        console.error("Token Generierung fehlgeschlagen! (Bist du auf HTTPS / localhost?)", e);
-        showCustomAlert("Verbindungsfehler", "LiveKit Token konnte nicht erstellt werden. Nutzt du HTTPS oder localhost?");
+        console.error("Token Generierung fehlgeschlagen:", e);
+        showCustomAlert("Verbindungsfehler", "LiveKit Token konnte nicht erstellt werden.");
         throw e;
     }
 }
-
-    const base64UrlEncode = (obj) => btoa(JSON.stringify(obj)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-    
-    const encodedHeader = base64UrlEncode(header);
-    const encodedPayload = base64UrlEncode(payload);
-    const unsignedToken = `${encodedHeader}.${encodedPayload}`;
-
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-        "raw", encoder.encode(apiSecret),
-        { name: "HMAC", hash: "SHA-256" },
-        false, ["sign"]
-    );
-
-    const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(unsignedToken));
-    const encodedSignature = btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-
-    return `${unsignedToken}.${encodedSignature}`;
-
 
 // === GLOBALE VARIABLEN & ALGORITHMUS TRACKER ===
 let allVideosData = [];
