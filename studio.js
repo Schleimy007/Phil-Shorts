@@ -512,8 +512,15 @@ async function startStream() {
             const videoTrack = finalStream.getVideoTracks()[0];
             const audioTrack = finalStream.getAudioTracks()[0];
 
-            if(videoTrack) await currentRoom.localParticipant.publishTrack(videoTrack);
-            if(audioTrack) await currentRoom.localParticipant.publishTrack(audioTrack);
+    if(videoTrack) {
+            await currentRoom.localParticipant.publishTrack(videoTrack, {
+                videoEncoding: {
+                    maxBitrate: 3500000, // Zwingt LiveKit, fette 3.5 Mbit/s für HD zu nutzen
+                    maxFramerate: targetFPS
+                },
+                simulcast: false // 🔥 ABSOLUT WICHTIG: Verhindert, dass der Server das Canvas-Video zerschneidet und runterskaliert!
+            });
+        }            if(audioTrack) await currentRoom.localParticipant.publishTrack(audioTrack);
 
         } catch (e) {
             console.error("LiveKit Fehler:", e);
