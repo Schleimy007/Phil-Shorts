@@ -26,7 +26,7 @@
 
     <script>
         (function(){
-            // HIER deine EmailJS Public Key einfügen, wenn du dich bei emailjs.com anmeldest
+            // HIER deine EmailJS Public Key einfügen
             emailjs.init("1GBVFdSAqzftqj2WE");
         })();
 
@@ -261,7 +261,39 @@
                 .lr-send-btn { background: #00f2fe; color: black; }
                 .lr-gift-btn { background: #ff0050; color: white; }
                 .lr-send-btn:active, .lr-gift-btn:active { transform: scale(0.9); }
-                
+
+                /* Lautstärke-Regler für PC Zuschauer */
+                .live-volume-ctrl { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.6); padding: 5px 12px; border-radius: 30px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); pointer-events: auto;}
+                .live-volume-slider { width: 80px; accent-color: #00f2fe; cursor: pointer; }
+
+                /* Chat Badges (Twitch Style) */
+                .chat-badge { padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 900; margin-right: 6px; letter-spacing: 0.5px; color: white; display: inline-block; vertical-align: middle; }
+                .badge-host { background: #ff0050; }
+                .badge-mod { background: #10b981; }
+                .badge-admin { background: #ffd700; color: black; }
+
+                /* Admin Chat Context Menü */
+                .live-ctx-menu { position: fixed; background: rgba(20, 20, 23, 0.95); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 6px; min-width: 200px; box-shadow: 0 15px 40px rgba(0,0,0,0.7); z-index: 100000; display: none; opacity: 0; transform: scale(0.95); transition: 0.15s cubic-bezier(0.16, 1, 0.3, 1); }
+                .live-ctx-menu.active { display: block; opacity: 1; transform: scale(1); }
+                .live-ctx-item { padding: 10px 14px; font-size: 13px; font-weight: 600; color: #f4f4f5; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 12px; transition: 0.1s; }
+                .live-ctx-item:hover { background: rgba(255,255,255,0.1); }
+                .live-ctx-item.danger { color: #ff0050; }
+                .live-ctx-item.danger:hover { background: #ff0050; color: white; }
+                .live-ctx-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 6px 0; }
+
+                /* 🔥 TIKTOK MASSIVE GIFT ANIMATION 🔥 */
+                .viewer-gift-overlay { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); z-index: 99999; pointer-events: none; display: flex; flex-direction: column; align-items: center; text-align: center; animation: popInGift 3.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+                .viewer-gift-overlay .gift-icon { font-size: 140px; filter: drop-shadow(0 0 40px rgba(255,215,0,0.9)); margin-bottom: 10px; }
+                .viewer-gift-overlay .gift-text { font-size: 16px; color: white; text-shadow: 0 2px 10px black; background: rgba(0,0,0,0.7); backdrop-filter: blur(10px); padding: 10px 30px; border-radius: 30px; border: 2px solid #ffd700; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
+                .viewer-gift-overlay .gift-sender { color: #00f2fe; font-weight: 900; font-size: 20px; display: block; margin-bottom: 4px; text-transform: uppercase;}
+                @keyframes popInGift { 
+                    0% { opacity:0; transform: translate(-50%, 50%) scale(0.3); } 
+                    10% { opacity:1; transform: translate(-50%, -50%) scale(1.2); } 
+                    20% { transform: translate(-50%, -50%) scale(1); } 
+                    80% { opacity:1; transform: translate(-50%, -50%) scale(1); } 
+                    100% { opacity:0; transform: translate(-50%, -150%) scale(0.8); } 
+                }
+
                 @media (max-width: 768px) {
                     .lr-layout { flex-direction: column; }
                     .lr-video-col { flex: none; height: 35vh; }
@@ -304,20 +336,18 @@
                         <span style="font-size: 20px;">Tippen, um Ton zu aktivieren</span>
                     </div>
 
+                    <div id="live-goal-container" style="display:none; position:absolute; top:20px; left:20px; z-index:100; background:rgba(0,0,0,0.6); padding:10px 15px; border-radius:15px; border:1px solid rgba(255,215,0,0.5); backdrop-filter:blur(10px);">
+                        <div style="color:#ffd700; font-weight:800; font-size:14px; margin-bottom:6px;"><i class="fas fa-star"></i> <span id="live-goal-desc">Ziel</span></div>
+                        <div style="font-size:12px; color:white; margin-bottom:4px; font-weight:600;"><span id="live-goal-current">0</span> / <span id="live-goal-target">0</span></div>
+                        <div style="width:140px; background:rgba(255,255,255,0.2); height:6px; border-radius:3px; overflow:hidden;">
+                            <div id="live-goal-progress" style="width:0%; background:linear-gradient(90deg, #f59e0b, #ffd700); height:100%; transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+
                     <div id="live-gift-animation-zone" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:90000; overflow:hidden;"></div>
                     
                     <video id="live-video-player" autoplay playsinline style="width: 100%; height: 100%; object-fit: contain; z-index: 1;"></video>
                 </div>
-
-                <div id="live-goal-container" style="display:none; position:absolute; top:20px; left:20px; z-index:100; background:rgba(0,0,0,0.6); padding:10px 15px; border-radius:15px; border:1px solid rgba(255,215,0,0.5); backdrop-filter:blur(10px);">
-    <div style="color:#ffd700; font-weight:800; font-size:14px; margin-bottom:6px;"><i class="fas fa-star"></i> <span id="live-goal-desc">Ziel</span></div>
-    <div style="font-size:12px; color:white; margin-bottom:4px; font-weight:600;"><span id="live-goal-current">0</span> / <span id="live-goal-target">0</span></div>
-    <div style="width:140px; background:rgba(255,255,255,0.2); height:6px; border-radius:3px; overflow:hidden;">
-        <div id="live-goal-progress" style="width:0%; background:linear-gradient(90deg, #f59e0b, #ffd700); height:100%; transition: width 0.3s;"></div>
-    </div>
-</div>
-
-<div id="live-gift-animation-zone" style="position:absolute; width:100%; height:100%; top:0; left:0; pointer-events:none; z-index:99999; overflow:hidden;"></div>
                 
                 <div class="lr-chat-col">
                     <div class="lr-chat-header">
@@ -329,16 +359,6 @@
                         <div style="font-size: 11px; color: #00f2fe; font-weight: bold; margin-bottom: 3px;"><i class="fas fa-thumbtack"></i> Angeheftet</div>
                         <div id="live-pinned-text" style="font-size: 13px; color: white;"></div>
                         <i class="fas fa-times" id="live-unpin-btn" style="display:none; position: absolute; right: 10px; top: 10px; cursor: pointer; color: #888;" onclick="unpinLiveMessage()"></i>
-                    </div>
-                    
-                    <div id="live-goal-container" style="display:none; background: rgba(255,215,0,0.05); border-bottom: 1px solid rgba(255,215,0,0.1); padding: 15px; font-size: 13px;">
-                        <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 8px;">
-                            <span id="live-goal-desc" style="color: white;">Ziel</span>
-                            <span style="color: #ffd700;"><span id="live-goal-current">0</span> / <span id="live-goal-target">0</span> <i class="fas fa-coins"></i></span>
-                        </div>
-                        <div style="width: 100%; height: 8px; background: #222; border-radius: 4px; overflow: hidden;">
-                            <div id="live-goal-progress" style="height: 100%; background: linear-gradient(90deg, #ff0050, #ffd700); width: 0%; transition: 0.3s;"></div>
-                        </div>
                     </div>
 
                     <div id="live-chat-box" class="lr-chat-area"></div>
@@ -355,15 +375,14 @@
             <div id="live-ctx-menu" class="live-ctx-menu">
                 <div class="live-ctx-item" id="lctx-whisper"><i class="fas fa-envelope"></i> Flüstern (DMs)</div>
                 <div class="live-ctx-divider"></div>
-                <div class="live-ctx-item" id="lctx-pin"><i class="fas fa-thumbtack"></i> Nachricht anheften</div>
-                <div class="live-ctx-item" id="lctx-pin"><i class="fas fa-thumbtack"></i> Nachricht anheften</div>
-                <div class="live-ctx-item" id="lctx-mod" style="color:#10b981"><i class="fas fa-shield-alt"></i> Moderator machen</div>
-                <div class="live-ctx-item danger" id="lctx-timeout"><i class="fas fa-clock"></i> Timeout geben</div>
-                <div class="live-ctx-divider"></div>
-                <div class="live-ctx-item danger" id="lctx-delete"><i class="fas fa-trash"></i> Nachricht Löschen</div>
-                <div class="live-ctx-item danger" id="lctx-ban"><i class="fas fa-ban"></i> Aus Stream Bannen</div>
+                <div class="live-ctx-item" id="lctx-pin" style="display:none;"><i class="fas fa-thumbtack"></i> Nachricht anheften</div>
+                <div class="live-ctx-item" id="lctx-mod" style="display:none;"><i class="fas fa-shield-alt"></i> Moderator machen</div>
+                <div class="live-ctx-item" id="lctx-timeout" style="display:none;"><i class="fas fa-clock"></i> Timeout (5m)</div>
+                <div class="live-ctx-item danger" id="lctx-ban" style="display:none;"><i class="fas fa-ban"></i> Aus Stream bannen</div>
+                <div class="live-ctx-item danger" id="lctx-delete" style="display:none;"><i class="fas fa-trash"></i> Nachricht löschen</div>
             </div>
         </div>
+
         <div id="view-search" class="view">
             <div class="top-bar glass-nav">
                 <h3 style="white-space: nowrap;">Entdecken</h3>
@@ -615,18 +634,39 @@
             </div>
         </div>
 
-        <div id="mod-panel-modal" class="modal" style="z-index: 100005; height: 60%;">
-        <div class="modal-header">
-            <h4><i class="fas fa-shield-alt"></i> Mod Panel</h4>
-            <i class="fas fa-times close-modal" onclick="document.getElementById('mod-panel-modal').classList.remove('show')"></i>
-        </div>
-        <div class="modal-body" style="display:flex; flex-direction:column; gap:15px;">
-            <button class="profile-action-btn edit-btn" style="width:100%;" onclick="clearLiveChat()"><i class="fas fa-trash"></i> Gesamten Chat leeren</button>
-            <button class="profile-action-btn edit-btn" style="width:100%;" onclick="showCustomAlert('Info', 'Weitere Mod-Funktionen folgen bald.')"><i class="fas fa-cog"></i> Stream Einstellungen</button>
-        </div>
-    </div>
+        <div id="mod-panel-modal" class="modal" style="z-index: 100005; height: auto; max-height: 80%; padding-bottom: 20px;">
+            <div class="modal-header">
+                <h4><i class="fas fa-shield-alt" style="color: #10b981;"></i> Mod Panel</h4>
+                <i class="fas fa-times close-modal" onclick="document.getElementById('mod-panel-modal').classList.remove('show')"></i>
+            </div>
+            <div class="modal-body" style="display:flex; flex-direction:column; gap:15px;">
+                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; display: flex; flex-direction: column; gap: 15px;">
+                    <h5 style="color: #aaa; margin-bottom: 5px; text-transform: uppercase; font-size: 12px;">Chat-Modi (Twitch Style)</h5>
+                    
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size: 14px; color: white;"><i class="fas fa-user-friends" style="width:20px; color:#00f2fe;"></i> Follower-Only Chat</span>
+                        <label class="switch"><input type="checkbox" id="mod-follower-only-toggle" onchange="toggleStreamSetting('followerOnly', this.checked)"><span class="slider round"></span></label>
+                    </div>
+                    
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size: 14px; color: white;"><i class="fas fa-hourglass-half" style="width:20px; color:#ffd700;"></i> Slow Mode (5s)</span>
+                        <label class="switch"><input type="checkbox" id="mod-slow-mode-toggle" onchange="toggleStreamSetting('slowMode', this.checked)"><span class="slider round"></span></label>
+                    </div>
 
-    <div id="analytics-modal" class="modal" style="height: 50%; z-index: 300;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size: 14px; color: white;"><i class="fas fa-lock" style="width:20px; color:#ff4444;"></i> Chat komplett sperren</span>
+                        <label class="switch"><input type="checkbox" id="mod-lock-chat-toggle" onchange="toggleStreamSetting('chatLocked', this.checked)"><span class="slider round"></span></label>
+                    </div>
+                </div>
+
+                <div style="background: rgba(255,68,68,0.1); padding: 15px; border-radius: 10px; border: 1px solid rgba(255,68,68,0.2);">
+                    <h5 style="color: #ff4444; margin-bottom: 10px; text-transform: uppercase; font-size: 12px;">Gefahrenzone</h5>
+                    <button class="profile-action-btn" style="width:100%; background: #ff4444; color: white; border:none;" onclick="clearLiveChat()"><i class="fas fa-trash"></i> Gesamten Chat leeren</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="analytics-modal" class="modal" style="height: 50%; z-index: 300;">
             <div class="modal-header">
                 <h4><i class="fas fa-chart-line" style="color: #00f2fe;"></i> Video Analytics</h4>
                 <i class="fas fa-times close-modal" onclick="document.getElementById('analytics-modal').classList.remove('show')"></i>
@@ -986,389 +1026,6 @@
             </div>
         </div>
 
-        <div id="settings-modal" class="modal">
-            <div class="modal-header">
-                <h4>Profil bearbeiten</h4><i class="fas fa-times close-modal" id="close-settings"></i>
-            </div>
-            <div class="modal-body upload-body">
-                <label style="color:#888; font-size:12px; margin-left:5px;">Profilbild URL oder Hochladen</label>
-                <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center;">
-                    <input type="text" id="edit-pic-input" class="comment-input" placeholder="https://..." style="border-radius:15px; flex: 1;">
-                    <input type="file" id="edit-pic-file" accept="image/*" style="display: none;">
-                    <button id="edit-pic-upload-btn" class="profile-action-btn edit-btn" style="border-radius: 15px; padding: 0 15px; height: 46px; min-width: 50px;"><i class="fas fa-upload"></i></button>
-                </div>
-
-                <label style="color:#888; font-size:12px; margin-left:5px;">Anzeigename</label>
-                <input type="text" id="edit-displayname-input" class="comment-input" placeholder="Dein Name" maxlength="30" style="border-radius:15px; margin-bottom:10px; width: 100%;">
-                <label style="color:#888; font-size:12px; margin-left:5px;">Benutzername</label>
-                <input type="text" id="edit-username-input" class="comment-input" placeholder="benutzername" maxlength="20" style="border-radius:15px; margin-bottom:10px; width: 100%;">
-                <label style="color:#888; font-size:12px; margin-left:5px;">Bio</label>
-                <textarea id="edit-bio-input" class="comment-input" placeholder="Etwas über dich..." rows="4" style="resize:none; border-radius:15px; width:100%; margin-bottom: 10px;"></textarea>
-
-                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 15px;">
-                    <h5 style="margin-bottom: 10px; color: #00f2fe;"><i class="fas fa-link"></i> Social Media Links</h5>
-                    <input type="text" id="edit-social-ig" class="comment-input" placeholder="Instagram Username" style="border-radius:10px; margin-bottom:10px; width: 100%; padding: 10px;">
-                    <input type="text" id="edit-social-yt" class="comment-input" placeholder="YouTube Username" style="border-radius:10px; margin-bottom:10px; width: 100%; padding: 10px;">
-                    <input type="text" id="edit-social-tt" class="comment-input" placeholder="TikTok Username" style="border-radius:10px; margin-bottom:10px; width: 100%; padding: 10px;">
-                    <input type="text" id="edit-social-tw" class="comment-input" placeholder="Twitch Username" style="border-radius:10px; width: 100%; padding: 10px;">
-                </div>
-
-                <div id="tier3-settings-area" style="display:none; background: rgba(255,215,0,0.05); padding: 15px; border-radius: 15px; border: 1px solid #ffd700;">
-                    <h5 style="color: #ffd700; margin-bottom: 10px;"><i class="fas fa-crown"></i> Plus+++ Einstellungen</h5>
-                    <label style="color:#888; font-size:12px; margin-left:5px;">Profil Song (MP3/WAV URL)</label>
-                    <input type="text" id="edit-song-input" class="comment-input" placeholder="https://..." style="border-radius:15px; margin-bottom:10px; width: 100%; border-color: #ffd700;">
-                    <label style="color:#888; font-size:12px; margin-left:5px;">Custom Profile Color (Hex)</label>
-                    <input type="color" id="edit-color-input" style="width: 100%; height: 40px; border-radius: 10px; border: 1px solid #ffd700; background: none; margin-bottom: 10px; cursor: pointer;">
-                </div>
-
-                <button id="save-settings-btn" class="profile-action-btn" style="width:100%; margin-top: 15px; min-height: 56px; font-size:16px;">Profil Speichern</button>
-            </div>
-        </div>
-
-        <div id="app-settings-modal" class="modal">
-            <div class="modal-header">
-                <h4>Einstellungen</h4><i class="fas fa-times close-modal" id="close-app-settings"></i>
-            </div>
-            <div class="modal-body">
-                
-                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
-                    <h5 style="margin-bottom: 15px; color: #ffd700;"><i class="fas fa-user-shield"></i> Konto & Sicherheit</h5>
-                    
-                    <label style="color:#888; font-size:12px; margin-left:5px;">E-Mail Adresse ändern</label>
-                    <input type="email" id="settings-email-input" class="comment-input" style="width: 100%; margin-bottom: 15px;" placeholder="neue-email@beispiel.de">
-
-                    <label style="color:#888; font-size:12px; margin-left:5px;">App-Passwort / PIN vergeben</label>
-                    <input type="password" id="settings-pass-input" class="comment-input" style="width: 100%; margin-bottom: 10px;" placeholder="Neues Passwort">
-                    <input type="password" id="settings-pass-confirm" class="comment-input" style="width: 100%; margin-bottom: 15px;" placeholder="Passwort bestätigen">
-                    
-                    <button class="profile-action-btn" onclick="updateAccountSecurity()" style="width: 100%; background: #222; border: 1px solid #ffd700; color: #ffd700; min-height: 40px; font-size: 13px;">Konto-Daten aktualisieren</button>
-                </div>
-
-                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
-                    <h5 style="margin-bottom: 15px; color: #ff0050;"><i class="fas fa-lock"></i> Privatsphäre</h5>
-                    <label style="color:#888; font-size:12px; margin-left:5px;">Wer darf dir Nachrichten (DMs) senden?</label>
-                    <select id="dm-privacy-select" class="comment-input" style="width: 100%; background: #111; color: white; margin-bottom: 5px;">
-                        <option value="everyone">Jeder</option>
-                        <option value="friends">Nur Freunde (Gegenseitiges Folgen)</option>
-                        <option value="off">Niemand (Ausgeschaltet)</option>
-                    </select>
-                </div>
-
-                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
-                    <h5 style="margin-bottom: 15px; color: #00f2fe;"><i class="fas fa-palette"></i> App Design (Plus++)</h5>
-                    <select id="app-theme-select" class="comment-input" style="width: 100%; background: #111; color: white; margin-bottom: 15px;">
-                        <option value="default">Standard (Dunkel)</option>
-                        <option value="deep-blue">Deep Blue</option>
-                        <option value="neon-pink">Neon Pink</option>
-                    </select>
-
-                    <h5 style="margin-bottom: 15px; color: #ffd700;"><i class="fas fa-icons"></i> App Icon (Plus+++)</h5>
-                    <select id="app-icon-select" class="comment-input" style="width: 100%; background: #111; color: white;">
-                        <option value="default">Standard Icon</option>
-                        <option value="gold">Goldenes Icon</option>
-                        <option value="dark">Dark Mode Icon</option>
-                    </select>
-                </div>
-
-                <div class="setting-toggle-row" style="margin-bottom: 5px;">
-                    <span style="font-weight: bold; font-size: 16px;">Desktop Benachrichtigungen</span>
-                    <label class="switch"><input type="checkbox" id="notif-master"><span class="slider round"></span></label>
-                </div>
-                <p style="font-size: 11px; color: #888; margin-bottom: 15px;">Erlaube Benachrichtigungen in deinem Browser.</p>
-
-                <div id="notif-sub-settings" class="sub-settings-box">
-                    <div class="setting-toggle-row">
-                        <span>Kommentare</span>
-                        <label class="switch"><input type="checkbox" id="notif-comments"><span class="slider round"></span></label>
-                    </div>
-                    <div class="setting-toggle-row">
-                        <span>Likes & Geschenke</span>
-                        <label class="switch"><input type="checkbox" id="notif-likes"><span class="slider round"></span></label>
-                    </div>
-                    <div class="setting-toggle-row">
-                        <span>Nachrichten (DMs)</span>
-                        <label class="switch"><input type="checkbox" id="notif-dms"><span class="slider round"></span></label>
-                    </div>
-                    <div class="setting-toggle-row">
-                        <span>Neue Follower</span>
-                        <label class="switch"><input type="checkbox" id="notif-follows"><span class="slider round"></span></label>
-                    </div>
-                </div>
-
-                <hr style="border:0; border-top:1px solid #222; margin: 25px 0;">
-
-                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
-                    <h5 style="margin-bottom: 10px; color: #ff4444;"><i class="fas fa-user-slash"></i> Blockierte Nutzer</h5>
-                    <div id="blocked-users-list" style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;">
-                    </div>
-                </div>
-
-                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
-                    <h5 style="margin-bottom: 10px; color: #888;">Support-Ticket eröffnen</h5>
-                    <textarea id="support-msg" class="comment-input" placeholder="Beschreibe dein Problem..." rows="3" style="resize:none; width:100%; margin-bottom:10px; border-color: #ffd700;"></textarea>
-                    <button class="profile-action-btn" onclick="sendSupport()" style="width:100%; background: #ffd700; color: black;"><i class="fas fa-ticket-alt"></i> Ticket erstellen</button>
-                </div>
-
-                <div id="account-switcher-area" style="display:none; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #333; margin-bottom: 20px;">
-                    <h5 style="margin-bottom: 10px; color: #ffd700;"><i class="fas fa-users"></i> Multi-Account Fast Switch (Plus+++)</h5>
-                    <button class="profile-action-btn edit-btn" onclick="document.getElementById('logout-btn').click()" style="width: 100%; margin-bottom: 10px;">Anderen Account hinzufügen</button>
-                </div>
-
-                <button id="logout-btn" class="profile-action-btn" style="width:100%; background: transparent; border: 1px solid #ff0050; color: #ff0050; min-height: 56px; font-size: 17px;">Abmelden</button>
-            </div>
-        </div>
-
-        <div id="admin-plus-modal" class="modal" style="height: 50%; z-index: 6000;">
-            <div class="modal-header">
-                <h4>👑 Phil Shorts+ Verwalten</h4>
-                <i class="fas fa-times close-modal" onclick="document.getElementById('admin-plus-modal').classList.remove('show')"></i>
-            </div>
-            <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;">
-                <p style="color:#aaa; font-size:13px; text-align:center;">Wähle eine Aktion für diesen Nutzer:</p>
-                <button class="profile-action-btn" style="background:#ffd700; color:black;" onclick="adminGrantPlus(1)">Plus (Stufe 1) geben</button>
-                <button class="profile-action-btn" style="background:#00f2fe; color:black;" onclick="adminGrantPlus(2)">Plus++ (Stufe 2) geben</button>
-                <button class="profile-action-btn" style="background:#ff0050; color:white;" onclick="adminGrantPlus(3)">Plus+++ (Stufe 3) geben</button>
-                <button class="profile-action-btn" style="background:transparent; border:1px solid #ff4444; color:#ff4444; margin-top: 10px;" onclick="adminGrantPlus(0)">Abo komplett löschen</button>
-            </div>
-        </div>
-
-        <div id="custom-alert-modal" class="alert-modal-overlay">
-            <div class="alert-box">
-                <i class="fas fa-exclamation-circle alert-icon"></i>
-                <h3 id="alert-title">Hinweis</h3>
-                <p id="alert-message">Dies ist eine Nachricht.</p>
-                <button id="close-alert-btn" class="profile-action-btn" style="width:100%; margin-top:20px; min-height: 50px;">Okay</button>
-            </div>
-        </div>
-
-        <div id="sub-conflict-modal" class="alert-modal-overlay">
-            <div class="alert-box" style="border-color: #ff0050;">
-                <i class="fas fa-exclamation-triangle alert-icon" style="color: #ff0050;"></i>
-                <h3>Abo Konflikt</h3>
-                <p id="sub-conflict-msg" style="margin-bottom: 20px; color: #ccc;">Du hast bereits ein aktives Phil Shorts+ Abo. Möchtest du dein neues Abo kaufen (altes wird ersetzt) oder dein aktuelles Abo kündigen?</p>
-                <div style="display:flex; flex-direction:column; gap:10px;">
-                    <button class="profile-action-btn" onclick="confirmSubPurchase()" style="min-height:45px; font-size:14px; background:#00f2fe; color:black;">Trotzdem Kaufen / Verlängern</button>
-                    <button class="profile-action-btn" onclick="cancelSubscription()" style="min-height:45px; font-size:14px; background:#ff4444; color:white;">Abo Abbestellen (Löschen)</button>
-                    <button class="profile-action-btn edit-btn" onclick="document.getElementById('sub-conflict-modal').classList.remove('show')" style="min-height:45px; font-size:14px;">Abbrechen</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="custom-border-modal" class="modal" style="height: auto; max-height: 80%;">
-            <div class="modal-header">
-                <h4>Custom Border (Plus+++)</h4><i class="fas fa-times close-modal" onclick="document.getElementById('custom-border-modal').classList.remove('show')"></i>
-            </div>
-            <div class="modal-body">
-                <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 15px; border: 1px solid #ffd700;">
-                    <div style="text-align:center; margin-bottom: 20px;">
-                        <div id="custom-border-preview" class="profile-image" style="width: 80px; height: 80px; background: #333; margin: 0 auto; border-radius: 50%;"></div>
-                    </div>
-                    <label style="color:#888; font-size:12px;">Farbe 1</label>
-                    <input type="color" id="cb-color1" value="#ff0050" style="width: 100%; height: 40px; border-radius: 10px; margin-bottom: 15px; cursor: pointer; border:none;">
-                    <div class="setting-toggle-row" style="margin-bottom: 15px;">
-                        <span>Gradient (Verlauf) aktivieren</span>
-                        <label class="switch"><input type="checkbox" id="cb-grad-toggle"><span class="slider round"></span></label>
-                    </div>
-                    <div id="cb-color2-container" style="display:none;">
-                        <label style="color:#888; font-size:12px;">Farbe 2</label>
-                        <input type="color" id="cb-color2" value="#00f2fe" style="width: 100%; height: 40px; border-radius: 10px; margin-bottom: 15px; cursor: pointer; border:none;">
-                    </div>
-                    <button class="profile-action-btn" onclick="saveCustomBorder()" style="width: 100%; background: #ffd700; color: black; margin-top: 10px;">Speichern & Ausrüsten</button>
-                </div>
-            </div>
-        </div>
-
-        <div id="view-live-room" class="view" style="background: #0e0e10; overflow: hidden;">
-            <style>
-                #view-live-room.active { position: fixed !important; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 99999; display: flex !important; }
-                .lr-layout { display: flex; width: 100%; height: 100%; }
-                .lr-video-col { flex: 1; background: #000; position: relative; display: flex; align-items: center; justify-content: center; }
-                .lr-header { position: absolute; top: 20px; left: 20px; right: 20px; display: flex; justify-content: space-between; z-index: 10; pointer-events: none; }
-                .lr-host-badge { background: rgba(0,0,0,0.6); backdrop-filter: blur(10px); padding: 6px 12px 6px 6px; border-radius: 30px; display: flex; align-items: center; gap: 12px; pointer-events: auto; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-                .lr-host-badge img { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #ff0050; object-fit: cover; }
-                .lr-host-info { display: flex; flex-direction: column; }
-                .lr-live-tag { background: #ff0050; color: white; font-size: 10px; font-weight: 900; padding: 2px 6px; border-radius: 4px; display: inline-block; width: max-content; margin-bottom: 2px; box-shadow: 0 0 10px rgba(255,0,80,0.5); }
-                .lr-actions { display: flex; gap: 10px; pointer-events: auto; }
-                .lr-btn { background: rgba(0,0,0,0.6); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); color: white; width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; transition: 0.2s; }
-                .lr-btn:hover { background: #ff0050; border-color: #ff0050; transform: scale(1.05); }
-                .lr-overlay-msg { position: absolute; display: flex; flex-direction: column; align-items: center; color: white; font-weight: bold; text-shadow: 0 2px 10px black; z-index: 5; text-align: center; }
-                
-                .lr-chat-col { width: 350px; background: #18181b; display: flex; flex-direction: column; border-left: 1px solid #1f1f23; }
-                .lr-chat-header { padding: 20px; border-bottom: 1px solid #1f1f23; font-weight: 700; color: white; display: flex; justify-content: space-between; font-size: 15px; }
-                .lr-chat-area { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
-                .lr-chat-msg { font-size: 13.5px; line-height: 1.4; color: #efeff1; word-wrap: break-word; padding: 4px 8px; border-radius: 6px; transition: 0.1s; }
-                .lr-chat-msg:hover { background: rgba(255,255,255,0.05); }
-                .lr-chat-msg strong { color: #00f2fe; cursor: pointer; font-weight: 700; }
-                .lr-input-area { padding: 15px; border-top: 1px solid #1f1f23; display: flex; gap: 10px; background: #0e0e10; }
-                .lr-input { flex: 1; background: #18181b; border: 1px solid #333; color: white; padding: 12px 15px; border-radius: 20px; font-size: 13px; outline: none; transition: 0.2s; }
-                .lr-input:focus { border-color: #00f2fe; }
-                .lr-send-btn, .lr-gift-btn { width: 42px; height: 42px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; font-size: 15px; }
-                .lr-send-btn { background: #00f2fe; color: black; }
-                .lr-gift-btn { background: #ff0050; color: white; }
-                .lr-send-btn:active, .lr-gift-btn:active { transform: scale(0.9); }
-
-                /* Lautstärke-Regler für PC Zuschauer */
-                .live-volume-ctrl { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.6); padding: 5px 12px; border-radius: 30px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); pointer-events: auto;}
-                .live-volume-slider { width: 80px; accent-color: #00f2fe; cursor: pointer; }
-
-                /* Chat Badges (Twitch Style) */
-                .chat-badge { padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 900; margin-right: 6px; letter-spacing: 0.5px; color: white; display: inline-block; vertical-align: middle; }
-                .badge-host { background: #ff0050; }
-                .badge-mod { background: #10b981; }
-                .badge-admin { background: #ffd700; color: black; }
-
-                /* Admin Chat Context Menü */
-                .live-ctx-menu { position: fixed; background: rgba(20, 20, 23, 0.95); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 6px; min-width: 200px; box-shadow: 0 15px 40px rgba(0,0,0,0.7); z-index: 100000; display: none; opacity: 0; transform: scale(0.95); transition: 0.15s cubic-bezier(0.16, 1, 0.3, 1); }
-                .live-ctx-menu.active { display: block; opacity: 1; transform: scale(1); }
-                .live-ctx-item { padding: 10px 14px; font-size: 13px; font-weight: 600; color: #f4f4f5; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 12px; transition: 0.1s; }
-                .live-ctx-item:hover { background: rgba(255,255,255,0.1); }
-                .live-ctx-item.danger { color: #ff0050; }
-                .live-ctx-item.danger:hover { background: #ff0050; color: white; }
-                .live-ctx-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 6px 0; }
-
-                /* 🔥 TIKTOK MASSIVE GIFT ANIMATION 🔥 */
-                .viewer-gift-overlay { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); z-index: 99999; pointer-events: none; display: flex; flex-direction: column; align-items: center; text-align: center; animation: popInGift 3.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
-                .viewer-gift-overlay .gift-icon { font-size: 140px; filter: drop-shadow(0 0 40px rgba(255,215,0,0.9)); margin-bottom: 10px; }
-                .viewer-gift-overlay .gift-text { font-size: 16px; color: white; text-shadow: 0 2px 10px black; background: rgba(0,0,0,0.7); backdrop-filter: blur(10px); padding: 10px 30px; border-radius: 30px; border: 2px solid #ffd700; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
-                .viewer-gift-overlay .gift-sender { color: #00f2fe; font-weight: 900; font-size: 20px; display: block; margin-bottom: 4px; text-transform: uppercase;}
-                @keyframes popInGift { 
-                    0% { opacity:0; transform: translate(-50%, 50%) scale(0.3); } 
-                    10% { opacity:1; transform: translate(-50%, -50%) scale(1.2); } 
-                    20% { transform: translate(-50%, -50%) scale(1); } 
-                    80% { opacity:1; transform: translate(-50%, -50%) scale(1); } 
-                    100% { opacity:0; transform: translate(-50%, -150%) scale(0.8); } 
-                }
-
-                @media (max-width: 768px) {
-                    .lr-layout { flex-direction: column; }
-                    .lr-video-col { flex: none; height: 35vh; }
-                    .lr-chat-col { width: 100%; flex: 1; }
-                    .live-volume-ctrl { display: none !important; } /* Am Handy macht das der physische Knopf */
-                }
-            </style>
-            
-            <div class="lr-layout">
-                <div class="lr-video-col">
-                    <div class="lr-header">
-                        <div class="lr-host-badge" onclick="openProfile(window.currentLiveStreamerUid)" style="cursor: pointer;">
-                            <img id="live-broadcaster-pic" src="https://i.imgur.com/JDPRzCc.png">
-                            <div class="lr-host-info">
-                                <span class="lr-live-tag">LIVE</span>
-                                <strong id="live-broadcaster-name" style="font-size: 14px; color: white; margin-top: 2px;">Lade...</strong>
-                            </div>
-                        </div>
-                        <div class="lr-actions">
-                            <div class="lr-btn" id="admin-force-offline-btn" style="display:none; background:#ff4444;" onclick="adminForceStreamOffline()" title="Stream Offline zwingen"><i class="fas fa-power-off"></i></div>
-                            <div class="lr-btn" id="admin-revoke-license-btn" style="display:none; background:#ff4444;" onclick="adminRevokeStreamLicense()" title="Stream Lizenz entziehen"><i class="fas fa-id-badge"></i></div>
-
-                            <div class="live-volume-ctrl" id="live-vol-container">
-                                <i class="fas fa-volume-up" id="live-vol-icon" style="color: #aaa; font-size: 14px;"></i>
-                                <input type="range" id="live-pc-volume" class="live-volume-slider" min="0" max="1" step="0.05" value="1">
-                            </div>
-
-                            <div class="lr-btn" style="width: auto; padding: 0 15px; font-size: 14px; font-weight: bold; background: rgba(0,0,0,0.8);"><i class="fas fa-eye" style="margin-right: 8px; color: #00f2fe;"></i> <span id="live-viewer-count">0</span></div>
-                            <div class="lr-btn" onclick="leaveLiveRoom()"><i class="fas fa-times"></i></div>
-                        </div>
-                    </div>
-                    
-                    <div id="live-stream-offline-text" class="lr-overlay-msg">
-                        <i class="fas fa-circle-notch fa-spin" style="font-size: 50px; color: #00f2fe; margin-bottom: 20px;"></i>
-                        <span style="font-size: 16px;">Verbinde mit Stream...</span>
-                    </div>
-                    
-                    <div id="live-unmute-overlay" class="lr-overlay-msg" style="display:none; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; cursor: pointer; z-index: 20; backdrop-filter: blur(10px);">
-                        <i class="fas fa-volume-up" style="font-size: 60px; color: #ff0050; margin-bottom: 20px; animation: pulse 2s infinite;"></i>
-                        <span style="font-size: 20px;">Tippen, um Ton zu aktivieren</span>
-                    </div>
-
-                    <div id="live-gift-animation-zone" style="position: absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:90000; overflow:hidden;"></div>
-                    
-                    <video id="live-video-player" autoplay playsinline style="width: 100%; height: 100%; object-fit: contain; z-index: 1;"></video>
-                </div>
-                
-                <div class="lr-chat-col">
-                    <div class="lr-chat-header">
-                        <span>Stream Chat</span>
-                        <i class="fas fa-user-friends" style="color: #888;"></i>
-                    </div>
-                    
-                    <div id="live-pinned-msg-bar" style="display:none; background: rgba(0,242,254,0.1); border-left: 3px solid #00f2fe; padding: 10px; position: relative;">
-                        <div style="font-size: 11px; color: #00f2fe; font-weight: bold; margin-bottom: 3px;"><i class="fas fa-thumbtack"></i> Angeheftet</div>
-                        <div id="live-pinned-text" style="font-size: 13px; color: white;"></div>
-                        <i class="fas fa-times" id="live-unpin-btn" style="display:none; position: absolute; right: 10px; top: 10px; cursor: pointer; color: #888;" onclick="unpinLiveMessage()"></i>
-                    </div>
-                    
-                    <div id="live-goal-container" style="display:none; background: rgba(255,215,0,0.05); border-bottom: 1px solid rgba(255,215,0,0.1); padding: 15px; font-size: 13px;">
-                        <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 8px;">
-                            <span id="live-goal-desc" style="color: white;">Ziel</span>
-                            <span style="color: #ffd700;"><span id="live-goal-current">0</span> / <span id="live-goal-target">0</span> <i class="fas fa-coins"></i></span>
-                        </div>
-                        <div style="width: 100%; height: 8px; background: #222; border-radius: 4px; overflow: hidden;">
-                            <div id="live-goal-progress" style="height: 100%; background: linear-gradient(90deg, #ff0050, #ffd700); width: 0%; transition: 0.3s;"></div>
-                        </div>
-                    </div>
-
-                    <div id="live-chat-box" class="lr-chat-area"></div>
-                    
-                    <div class="lr-input-area">
-                        <input type="text" id="live-chat-input" class="lr-input" placeholder="Sag Hallo...">
-                        <button id="send-live-chat-btn" class="lr-send-btn"><i class="fas fa-paper-plane"></i></button>
-                        <button id="live-gift-btn" class="lr-gift-btn"><i class="fas fa-gift"></i></button>
-                    </div>
-                </div>
-            </div>
-            
-            <div id="live-ctx-menu" class="live-ctx-menu">
-                <div class="live-ctx-item" id="lctx-whisper"><i class="fas fa-envelope"></i> Flüstern (DMs)</div>
-                <div class="live-ctx-divider"></div>
-                <div class="live-ctx-item" id="lctx-mod" style="color:#10b981"><i class="fas fa-shield-alt"></i> Moderator machen</div>
-                <div class="live-ctx-item danger" id="lctx-timeout"><i class="fas fa-clock"></i> Timeout geben</div>
-                <div class="live-ctx-divider"></div>
-                <div class="live-ctx-item danger" id="lctx-delete"><i class="fas fa-trash"></i> Nachricht Löschen</div>
-                <div class="live-ctx-item danger" id="lctx-ban"><i class="fas fa-ban"></i> Aus Stream Bannen</div>
-            </div>
-
-        </div>
-        <div id="dm-context-modal" class="modal" style="height: auto; max-height: 60%; z-index: 6000;">
-            <div class="modal-header">
-                <h4 id="dm-context-title">Nachricht Optionen</h4>
-                <i class="fas fa-times close-modal" onclick="document.getElementById('dm-context-modal').classList.remove('show')"></i>
-            </div>
-            <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;" id="dm-context-content"></div>
-        </div>
-
-        <div id="dm-edit-modal" class="modal" style="height: auto; z-index: 6100;">
-            <div class="modal-header">
-                <h4>Nachricht bearbeiten</h4>
-                <i class="fas fa-times close-modal" onclick="document.getElementById('dm-edit-modal').classList.remove('show')"></i>
-            </div>
-            <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;">
-                <input type="text" id="dm-edit-input" class="comment-input" style="width: 100%;">
-                <button id="save-dm-edit-btn" class="profile-action-btn" style="width: 100%; min-height: 50px;">Speichern</button>
-            </div>
-        </div>
-
-        <div id="mod-dashboard-modal" class="modal" style="height: 80%; z-index: 5500;">
-            <div class="modal-header">
-                <h4><i class="fas fa-shield-alt" style="color: #9b59b6;"></i> Mod Dashboard</h4>
-                <i class="fas fa-times close-modal" onclick="document.getElementById('mod-dashboard-modal').classList.remove('show')"></i>
-            </div>
-            <div class="shop-tabs">
-                <div class="shop-tab active" onclick="switchModTab('mods')">Mods</div>
-                <div class="shop-tab" onclick="switchModTab('bans')">Gebannte User</div>
-            </div>
-            <div class="modal-body" style="padding: 15px;">
-                <div id="mod-tab-mods" style="display: block;">
-                    <p style="color:#888; font-size:13px; text-align:center; margin-bottom:15px;">Aktuelle Moderatoren deines Streams:</p>
-                    <div id="mod-dashboard-mods-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
-                </div>
-                <div id="mod-tab-bans" style="display: none;">
-                    <p style="color:#888; font-size:13px; text-align:center; margin-bottom:15px;">Gebannte User aus deinem Stream (entblocken):</p>
-                    <div id="mod-dashboard-banned-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
-                </div>
-            </div>
-        </div>
-
         <div id="sound-library-modal" class="modal" style="height: 85%; z-index: 7000;">
             <div class="modal-header">
                 <h4>Musik finden</h4>
@@ -1408,5 +1065,4 @@
     </div>
     <script type="module" src="script.js"></script>
 </body>
-
 </html>
