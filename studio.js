@@ -328,6 +328,7 @@ window.switchScene = async (type) => {
                 
                 localScreenTrack.onended = () => { window.switchScene('cam'); };
             }
+
             
             previewVideo.srcObject = new MediaStream([localScreenTrack]);
             previewVideo.style.transform = 'none';
@@ -342,6 +343,9 @@ window.switchScene = async (type) => {
             previewVideo.style.transform = 'scaleX(-1)';
         }
     } catch (e) { console.warn("Szenenwechsel abgebrochen", e); }
+
+    // 🔥 LIVEKIT UPDATE BEIM SZENENWECHSEL
+    if(isLive) await window.syncLiveKitTracks();
 };
 
 // ... SOUNDBOARD SFX ...
@@ -455,6 +459,39 @@ if(btnLive) {
     });
 }
 
+// 🔥 DISCORD MULTI-TRACK LOGIK 🔥
+window.syncLiveKitTracks = async () => {
+    if (!isLive || !currentRoom) return;
+    
+    const p = currentRoom.localParticipant;
+    
+    // 1. GAMEPLAY (Screen) hochladen
+    if ((mode === 'screen' || mode === 'pip') && localScreenTrack) {
+        if(!p.getTrackPublication(LivekitClient.Track.Source.ScreenShare)) {
+            await p.publishTrack(localScreenTrack, { source: LivekitClient.Track.Source.ScreenShare, simulcast: false, videoEncoding: { maxBitrate: 3500000, maxFramerate: targetFPS } });
+        }
+    } else {
+        const pub = p.getTrackPublication(LivekitClient.Track.Source.ScreenShare);
+        if(pub) await p.unpublishTrack(pub.track);
+    }
+    
+    // 2. FACECAM (Kamera) hochladen
+    if ((mode === 'cam' || mode === 'pip') && localVideoTrack) {
+        if(!p.getTrackPublication(LivekitClient.Track.Source.Camera)) {
+            await p.publishTrack(localVideoTrack, { source: LivekitClient.Track.Source.Camera, simulcast: false, videoEncoding: { maxBitrate: 1500000, maxFramerate: targetFPS } });
+        }
+    } else {
+        const pub = p.getTrackPublication(LivekitClient.Track.Source.Camera);
+        if(pub) await p.unpublishTrack(pub.track);
+    }
+    
+    // 3. AUDIO (Der perfekte Mix aus Soundboard, Mic & Game)
+    const audioTrack = finalStream.getAudioTracks()[0];
+    if(audioTrack && !p.getTrackPublication(LivekitClient.Track.Source.Microphone)) {
+        await p.publishTrack(audioTrack, { source: LivekitClient.Track.Source.Microphone });
+    }
+};
+
 async function startStream() {
     initAudioMixer(); 
     if(audioCtx && audioCtx.state === 'suspended') await audioCtx.resume(); 
@@ -505,27 +542,16 @@ async function startStream() {
         currentRoom = new LivekitClient.Room();
 
         try {
-            await currentRoom.connect(livekitUrl, token);
-            console.log("Erfolgreich als Host im LiveKit Raum!");
+        await currentRoom.connect(livekitUrl, token);
+        console.log("Erfolgreich als Host im LiveKit Raum!");
 
-            // Videotrack und Audiotrack an den Server pushen
-            const videoTrack = finalStream.getVideoTracks()[0];
-            const audioTrack = finalStream.getAudioTracks()[0];
+        // Statt den Canvas hochzuladen, rufen wir unsere neue Discord-Logik auf!
+        await window.syncLiveKitTracks();
 
-    if(videoTrack) {
-            await currentRoom.localParticipant.publishTrack(videoTrack, {
-                videoEncoding: {
-                    maxBitrate: 3500000, // Zwingt LiveKit, fette 3.5 Mbit/s für HD zu nutzen
-                    maxFramerate: targetFPS
-                },
-                simulcast: false // 🔥 ABSOLUT WICHTIG: Verhindert, dass der Server das Canvas-Video zerschneidet und runterskaliert!
-            });
-        }            if(audioTrack) await currentRoom.localParticipant.publishTrack(audioTrack);
-
-        } catch (e) {
-            console.error("LiveKit Fehler:", e);
-            sysToast("LiveKit Verbindungsfehler!");
-        }
+    } catch (e) {
+        console.error("LiveKit Fehler:", e);
+        sysToast("LiveKit Verbindungsfehler!");
+    }
     } else {
         console.warn("LivekitClient SDK nicht geladen! Stream läuft nur lokal in Vorschau.");
     }
@@ -566,6 +592,8 @@ function updateDuration() {
         updateDoc(doc(db, "live_streams", currentUser.uid), { lastHeartbeat: Date.now() }).catch(()=>{});
     }
 }
+
+
 
 window.toggleMic = () => {
     if(!localAudioTrack) return;
