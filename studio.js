@@ -97,21 +97,6 @@ if(facecamOverlay) {
     resizeObserver.observe(facecamOverlay);
 }
 
-// 🔥 AUTO-TOKEN SERVER LOGIK FÜR DAS STUDIO (SANDBOX)
-async function getLiveKitConnection(roomName, participantName) {
-    const response = await fetch("https://cloud-api.livekit.io/api/sandbox/connection-details", {
-        method: "POST",
-        headers: {
-            "X-Sandbox-ID": "philshorts-1d03ou", 
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            "room name": roomName,
-            "participant name": participantName
-        })
-    });
-    return await response.json(); 
-}
 
 // --- INIT ENGINE ---
 window.onload = async () => {
@@ -549,29 +534,28 @@ async function startStream() {
         timestamp: Date.now()
     });
 
-        // 🔴 LIVEKIT CONNECTION 🔴
+    // 🔴 LIVEKIT CONNECTION 🔴
     if(currentRoom) {
         currentRoom.disconnect();
     }
     
+    const livekitUrl = "wss://phil-shorts-cv9pfxjq.livekit.cloud"; // <-- Hier LiveKit URL eintragen
+    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzU4NzI1NDMsImlkZW50aXR5Ijoic3RyZWFtZXIxIiwiaXNzIjoiQVBJYWJ1bUZzZllDZndKIiwibmJmIjoxNzc1ODY4OTQzLCJzdWIiOiJzdHJlYW1lcjEiLCJ2aWRlbyI6eyJjYW5QdWJsaXNoIjp0cnVlLCJjYW5QdWJsaXNoRGF0YSI6ZmFsc2UsImNhblN1YnNjcmliZSI6dHJ1ZSwicm9vbSI6InRlc3RyYXVtIiwicm9vbUpvaW4iOnRydWV9fQ.bnDC7xpwY5oDtlzR83u_VNbjCVp6zSLK11Q3TpifD1M"; // <-- Hier Token mit Publish Rechten eintragen
+
     if(typeof LivekitClient !== 'undefined') {
         currentRoom = new LivekitClient.Room();
 
         try {
-            // 🔥 Token automatisch abholen! (Die URL und der Token kommen jetzt direkt vom Sandbox-Server)
-            const details = await getLiveKitConnection(currentUser.uid, currentUser.displayName);
-            
-            // 🔥 WICHTIG: Hier nutzen wir details.participantToken (Das war vorher der Fehler!)
-            await currentRoom.connect(details.serverUrl, details.participantToken);
-            console.log("Erfolgreich als Host im LiveKit Raum!");
+        await currentRoom.connect(livekitUrl, token);
+        console.log("Erfolgreich als Host im LiveKit Raum!");
 
-            // Statt den Canvas hochzuladen, rufen wir unsere neue Discord-Logik auf!
-            await window.syncLiveKitTracks();
+        // Statt den Canvas hochzuladen, rufen wir unsere neue Discord-Logik auf!
+        await window.syncLiveKitTracks();
 
-        } catch (e) {
-            console.error("LiveKit Fehler:", e);
-            sysToast("LiveKit Verbindungsfehler!");
-        }
+    } catch (e) {
+        console.error("LiveKit Fehler:", e);
+        sysToast("LiveKit Verbindungsfehler!");
+    }
     } else {
         console.warn("LivekitClient SDK nicht geladen! Stream läuft nur lokal in Vorschau.");
     }

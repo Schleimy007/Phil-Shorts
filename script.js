@@ -17,22 +17,6 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// 🔥 AUTO-TOKEN SERVER LOGIK FÜR ZUSCHAUER (SANDBOX)
-async function getLiveKitConnection(roomName, participantName) {
-    const response = await fetch("https://cloud-api.livekit.io/api/sandbox/connection-details", {
-        method: "POST",
-        headers: {
-            "X-Sandbox-ID": "philshorts-1d03ou", // Deine Sandbox ID
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            "room name": roomName,
-            "participant name": participantName
-        })
-    });
-    return await response.json(); 
-}
-
 const supabaseUrl = 'https://smxxafxqtehgegyziplm.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNteHhhZnhxdGVoZ2VneXppcGxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NDAxNTQsImV4cCI6MjA5MDExNjE1NH0.sZ1Oasg08RLluHjFavz6cR-dntcgAQboAUdMsfVqYBY';
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -2986,6 +2970,8 @@ window.joinLiveStream = async function(streamId) {
     
     if(videoEl) {
         videoEl.srcObject = null;
+        
+        // 🔥 PC Lautstärke Regler
         const volSlider = document.getElementById('live-pc-volume');
         if(volSlider) {
             videoEl.volume = volSlider.value;
@@ -3015,36 +3001,71 @@ window.joinLiveStream = async function(streamId) {
     const streamData = streamSnap.data();
     window.currentLiveStreamerUid = streamData.broadcasterUid;
     
-    if(document.getElementById('live-broadcaster-pic')) document.getElementById('live-broadcaster-pic').src = streamData.broadcasterPic || 'https://i.imgur.com/JDPRzCc.png';
-    if(document.getElementById('live-broadcaster-name')) document.getElementById('live-broadcaster-name').innerText = streamData.broadcasterName || 'Creator';
+    document.getElementById('live-broadcaster-pic').src = streamData.broadcasterPic || 'https://i.imgur.com/JDPRzCc.png';
+    document.getElementById('live-broadcaster-name').innerText = streamData.broadcasterName || 'Creator';
     
     await updateDoc(doc(db, "live_streams", streamId), { viewers: increment(1) }).catch(()=>{});
     
-    if(currentRoom) currentRoom.disconnect();
+    // Alten Raum schließen, falls vorhanden
+    if(currentRoom) {
+        currentRoom.disconnect();
+    }
     
     // ==========================================
-    // 🔥 LIVEKIT CONNECTION FÜR ZUSCHAUER 🔥
+    // 🔥 LIVEKIT CONNECTION 🔥
     // ==========================================
-    currentRoom = new LivekitClient.Room({ adaptiveStream: false, dynacast: false });
+    const livekitUrl = "wss://phil-shorts-cv9pfxjq.livekit.cloud"; // WICHTIG: Hier deine LiveKit Server-URL eintragen!
+    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzU4NzI2NDcsImlkZW50aXR5IjoienVzY2hhdWVyMSIsImlzcyI6IkFQSWFidW1Gc2ZZQ2Z3SiIsIm5iZiI6MTc3NTg2OTA0Nywic3ViIjoienVzY2hhdWVyMSIsInZpZGVvIjp7ImNhblB1Ymxpc2giOmZhbHNlLCJjYW5QdWJsaXNoRGF0YSI6dHJ1ZSwiY2FuU3Vic2NyaWJlIjp0cnVlLCJyb29tIjoidGVzdHJhdW0iLCJyb29tSm9pbiI6dHJ1ZX19.O3IENCJWCOyKlJ_7zIR8j9NCZZtlC14ycGX8TfFwfuI"; // WICHTIG: Hier muss der Token rein, den dein Server für den Zuschauer generiert!
 
+    currentRoom = new LivekitClient.Room({
+        adaptiveStream: false, // 🔥 Zwingt die App, IMMER den HD-Stream zu laden, egal wie groß das Handyfenster ist
+        dynacast: false,       
+    });
+
+    // Event: Sobald der Streamer sein Video/Audio hochlädt, kommt es hier an
+    currentRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        if(offlineText) offlineText.style.display = 'none';
+        
+        // LiveKit hängt Video und Audio direkt an unser <video> Element an
+        if (track.kind === 'video' || track.kind === 'audio') {
+            track.attach(videoEl);
+        }
+        
+        // Zeigt einen "Tippen zum Entmuten" Screen, da Browser Autoplay mit Ton blockieren
+        const unmuteOverlay = document.getElementById('live-unmute-overlay');
+        if(unmuteOverlay) {
+            unmuteOverlay.style.display = 'flex';
+            unmuteOverlay.onclick = () => {
+                videoEl.muted = false;
+                unmuteOverlay.style.display = 'none';
+            };
+        }
+    });
+
+    // 1. Event: Wenn ein Track (Video/Audio) vom Streamer ankommt
     currentRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
         if(offlineText) offlineText.style.display = 'none';
         
         if (track.kind === 'audio') {
-            track.attach(videoEl); 
+            track.attach(videoEl); // Audio immer an den Hauptplayer heften
         } else if (track.kind === 'video') {
-            if (publication.source === LivekitClient.Track.Source.Camera) {
+            // DISCORD-TRICK: Wir prüfen, was für ein Video das ist!
+            if (publication.source === LivekitClient.Track.Source.ScreenShare) {
+                // Gameplay kommt in den großen Vollbild-Player
+                track.attach(videoEl);
+            } else if (publication.source === LivekitClient.Track.Source.Camera) {
+                // Facecam kommt in einen neuen, kleinen PiP-Kasten!
                 let camEl = document.getElementById('viewer-pip-cam');
                 if(!camEl) {
                     camEl = document.createElement('video');
                     camEl.id = 'viewer-pip-cam';
+                    // Schickes Apple/TikTok Design für die kleine Facecam:
                     camEl.style.cssText = "position:absolute; top:20px; right:20px; width:110px; aspect-ratio:9/16; object-fit:cover; border-radius:12px; border:2px solid #00f2fe; z-index:100; box-shadow:0 10px 30px rgba(0,0,0,0.5); transform: scaleX(-1);";
                     document.querySelector('.lr-video-col').appendChild(camEl);
                 }
-                camEl.style.display = 'block'; 
                 track.attach(camEl);
             } else {
-                track.attach(videoEl); 
+                track.attach(videoEl); // Fallback
             }
         }
         
@@ -3055,6 +3076,7 @@ window.joinLiveStream = async function(streamId) {
         }
     });
 
+    // 2. Event: Wenn der Streamer eine Szene wechselt (z.B. Cam ausschaltet)
     currentRoom.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, publication) => {
         track.detach();
         if (publication.source === LivekitClient.Track.Source.Camera) {
@@ -3063,6 +3085,7 @@ window.joinLiveStream = async function(streamId) {
         }
     });
 
+    // 3. Event: Streamer beendet Stream komplett
     currentRoom.on(LivekitClient.RoomEvent.Disconnected, () => {
         if(offlineText) {
             offlineText.style.display = 'flex';
@@ -3073,16 +3096,9 @@ window.joinLiveStream = async function(streamId) {
     });
 
     try {
-        // 🔥 WIR HOLEN DEN TOKEN JETZT DIREKT HIER DRIN! Das verhindert den Absturz.
-        const response = await fetch("https://cloud-api.livekit.io/api/sandbox/connection-details", {
-            method: "POST",
-            headers: { "X-Sandbox-ID": "philshorts-1d03ou", "Content-Type": "application/json" },
-            body: JSON.stringify({ "room name": streamId, "participant name": currentUser.displayName + "_" + Math.floor(Math.random() * 1000) })
-        });
-        const details = await response.json();
-        
-        await currentRoom.connect(details.serverUrl, details.participantToken);
-        console.log("Erfolgreich als Zuschauer verbunden!");
+        // Raum betreten!
+        await currentRoom.connect(livekitUrl, token);
+        console.log("Erfolgreich mit LiveKit Raum verbunden!");
     } catch (error) {
         console.error("LiveKit Error:", error);
         if(offlineText) {
@@ -3090,11 +3106,9 @@ window.joinLiveStream = async function(streamId) {
         }
     }
     
-    // Checken ob die Listener-Funktion existiert, bevor wir sie aufrufen
-    if (typeof initLiveRoomListeners === "function") {
-        initLiveRoomListeners(streamId);
-    }
+    initLiveRoomListeners(streamId);
 };
+
 window.leaveLiveRoom = async function() {
     if(window.currentLiveStreamId && currentUser) {
         await updateDoc(doc(db, "live_streams", window.currentLiveStreamId), { viewers: increment(-1) }).catch(()=>{});
