@@ -499,7 +499,7 @@ async function startStream() {
     }
     
     const livekitUrl = "wss://phil-shorts-cv9pfxjq.livekit.cloud"; // <-- Hier LiveKit URL eintragen
-    const token = "philshorts-1d03ou"; // <-- Hier Token mit Publish Rechten eintragen
+    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzU4NzI1NDMsImlkZW50aXR5Ijoic3RyZWFtZXIxIiwiaXNzIjoiQVBJYWJ1bUZzZllDZndKIiwibmJmIjoxNzc1ODY4OTQzLCJzdWIiOiJzdHJlYW1lcjEiLCJ2aWRlbyI6eyJjYW5QdWJsaXNoIjp0cnVlLCJjYW5QdWJsaXNoRGF0YSI6ZmFsc2UsImNhblN1YnNjcmliZSI6dHJ1ZSwicm9vbSI6InRlc3RyYXVtIiwicm9vbUpvaW4iOnRydWV9fQ.bnDC7xpwY5oDtlzR83u_VNbjCVp6zSLK11Q3TpifD1M"; // <-- Hier Token mit Publish Rechten eintragen
 
     if(typeof LivekitClient !== 'undefined') {
         currentRoom = new LivekitClient.Room();

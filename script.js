@@ -3015,7 +3015,7 @@ window.joinLiveStream = async function(streamId) {
     // 🔥 LIVEKIT CONNECTION 🔥
     // ==========================================
     const livekitUrl = "wss://phil-shorts-cv9pfxjq.livekit.cloud"; // WICHTIG: Hier deine LiveKit Server-URL eintragen!
-    const token = "philshorts-1d03ou"; // WICHTIG: Hier muss der Token rein, den dein Server für den Zuschauer generiert!
+    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzU4NzI2NDcsImlkZW50aXR5IjoienVzY2hhdWVyMSIsImlzcyI6IkFQSWFidW1Gc2ZZQ2Z3SiIsIm5iZiI6MTc3NTg2OTA0Nywic3ViIjoienVzY2hhdWVyMSIsInZpZGVvIjp7ImNhblB1Ymxpc2giOmZhbHNlLCJjYW5QdWJsaXNoRGF0YSI6dHJ1ZSwiY2FuU3Vic2NyaWJlIjp0cnVlLCJyb29tIjoidGVzdHJhdW0iLCJyb29tSm9pbiI6dHJ1ZX19.O3IENCJWCOyKlJ_7zIR8j9NCZZtlC14ycGX8TfFwfuI"; // WICHTIG: Hier muss der Token rein, den dein Server für den Zuschauer generiert!
 
     currentRoom = new LivekitClient.Room({
         adaptiveStream: true, // Spart Datenvolumen am Handy
