@@ -498,8 +498,8 @@ async function startStream() {
         currentRoom.disconnect();
     }
     
-    const livekitUrl = "wss://DEINE-LIVEKIT-URL.livekit.cloud"; // <-- Hier LiveKit URL eintragen
-    const token = "DEIN_BROADCASTER_TOKEN"; // <-- Hier Token mit Publish Rechten eintragen
+    const livekitUrl = "wss://phil-shorts-cv9pfxjq.livekit.cloud"; // <-- Hier LiveKit URL eintragen
+    const token = "philshorts-1d03ou"; // <-- Hier Token mit Publish Rechten eintragen
 
     if(typeof LivekitClient !== 'undefined') {
         currentRoom = new LivekitClient.Room();
