@@ -13,11 +13,10 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 let currentUser = JSON.parse(localStorage.getItem('phil_session'));
-let peer = null;
+let currentRoom = null; // 🔥 LiveKit Raum-Instanz
 let isLive = false;
 let startTime = null;
 let durationInterval = null;
-let activeCalls = [];
 let modsList = [];
 
 // === AUDIO & VIDEO ENGINE PRO ===
@@ -25,6 +24,7 @@ let audioCtx;
 let audioDestination;
 let micSource;
 let screenAudioSource;
+let musicSource;
 let analyser;
 
 let localVideoTrack = null;
@@ -36,18 +36,21 @@ let mode = 'cam';
 let isPiPMode = false;
 let animationFrameId;
 
+// 🔥 FPS & Performance-Einstellungen
 let targetFPS = 30;
 let fpsInterval = 1000 / targetFPS;
 let thenRenderTime = Date.now();
 
 const canvas = document.getElementById('composite-canvas');
-// 🔥 YOUTUBE PERFORMANCE FIX: Zwingt den Browser, die Grafikkarte zu nutzen und keine Transparenz zu berechnen (spart 30% CPU!)
+// GPU Beschleunigung: Alpha deaktiviert, Desynchronized an (Spart massiv CPU!)
 const ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
 ctx.imageSmoothingEnabled = true;
-ctx.imageSmoothingQuality = 'low'; // Schnelleres Rendern beim Skalieren von Videos
+ctx.imageSmoothingQuality = 'low'; 
+
 const previewVideo = document.getElementById('studio-preview');
-const facecamVideo = document.getElementById('facecam-video');
-const facecamOverlay = document.getElementById('facecam-container');
+const facecamVideo = document.getElementById('facecam-preview') || document.getElementById('facecam-video');
+const facecamOverlay = document.getElementById('facecam-overlay') || document.getElementById('facecam-container');
+const bgMusicPlayer = document.getElementById('bg-music-player');
 
 let fcState = { x: 0.75, y: 0.05, width: 0.23 }; 
 
@@ -55,42 +58,44 @@ let fcState = { x: 0.75, y: 0.05, width: 0.23 };
 let isDragging = false;
 let startX, startY, initialLeft, initialTop;
 
-facecamOverlay.addEventListener('mousedown', (e) => {
-    isDragging = true;
-    startX = e.clientX; startY = e.clientY;
-    initialLeft = facecamOverlay.offsetLeft; initialTop = facecamOverlay.offsetTop;
-    facecamOverlay.style.cursor = 'grabbing';
-});
+if(facecamOverlay) {
+    facecamOverlay.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        startX = e.clientX; startY = e.clientY;
+        initialLeft = facecamOverlay.offsetLeft; initialTop = facecamOverlay.offsetTop;
+        facecamOverlay.style.cursor = 'grabbing';
+    });
 
-window.addEventListener('mousemove', (e) => {
-    if (!isDragging) return;
-    const dx = e.clientX - startX; const dy = e.clientY - startY;
-    
-    const wrapper = document.getElementById('preview-viewport');
-    let newLeft = initialLeft + dx; let newTop = initialTop + dy;
-    
-    newLeft = Math.max(0, Math.min(newLeft, wrapper.clientWidth - facecamOverlay.offsetWidth));
-    newTop = Math.max(0, Math.min(newTop, wrapper.clientHeight - facecamOverlay.offsetHeight));
-
-    facecamOverlay.style.left = `${newLeft}px`;
-    facecamOverlay.style.top = `${newTop}px`;
-
-    fcState.x = newLeft / wrapper.clientWidth;
-    fcState.y = newTop / wrapper.clientHeight;
-});
-
-window.addEventListener('mouseup', () => {
-    isDragging = false;
-    facecamOverlay.style.cursor = 'move';
-});
-
-const resizeObserver = new ResizeObserver(entries => {
-    for (let entry of entries) {
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const dx = e.clientX - startX; const dy = e.clientY - startY;
+        
         const wrapper = document.getElementById('preview-viewport');
-        fcState.width = entry.contentRect.width / wrapper.clientWidth;
-    }
-});
-resizeObserver.observe(facecamOverlay);
+        let newLeft = initialLeft + dx; let newTop = initialTop + dy;
+        
+        newLeft = Math.max(0, Math.min(newLeft, wrapper.clientWidth - facecamOverlay.offsetWidth));
+        newTop = Math.max(0, Math.min(newTop, wrapper.clientHeight - facecamOverlay.offsetHeight));
+
+        facecamOverlay.style.left = `${newLeft}px`;
+        facecamOverlay.style.top = `${newTop}px`;
+
+        fcState.x = newLeft / wrapper.clientWidth;
+        fcState.y = newTop / wrapper.clientHeight;
+    });
+
+    window.addEventListener('mouseup', () => {
+        isDragging = false;
+        facecamOverlay.style.cursor = 'move';
+    });
+
+    const resizeObserver = new ResizeObserver(entries => {
+        for (let entry of entries) {
+            const wrapper = document.getElementById('preview-viewport');
+            fcState.width = entry.contentRect.width / wrapper.clientWidth;
+        }
+    });
+    resizeObserver.observe(facecamOverlay);
+}
 
 
 // --- INIT ENGINE ---
@@ -110,6 +115,8 @@ window.onload = async () => {
     setupContextMenu();
     setupHotkeys();
     setupGifts();
+    
+    if(typeof loadMusicLibrary === 'function') loadMusicLibrary();
 };
 
 window.changeFPS = async () => {
@@ -136,7 +143,7 @@ async function initBaseCamera() {
         localVideoTrack = camStream.getVideoTracks()[0];
         localAudioTrack = camStream.getAudioTracks()[0];
 
-        facecamVideo.srcObject = new MediaStream([localVideoTrack]);
+        if(facecamVideo) facecamVideo.srcObject = new MediaStream([localVideoTrack]);
         previewVideo.srcObject = new MediaStream([localVideoTrack]);
         previewVideo.style.transform = 'scaleX(-1)';
         
@@ -152,6 +159,7 @@ async function populateMics() {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioInputs = devices.filter(d => d.kind === 'audioinput');
         const select = document.getElementById('mic-select');
+        if(!select) return;
         select.innerHTML = audioInputs.map(d => `<option value="${d.deviceId}">${d.label || 'Mikrofon ' + (select.length + 1)}</option>`).join('');
         
         select.onchange = async () => {
@@ -164,7 +172,7 @@ async function populateMics() {
             localAudioTrack = newCamStream.getAudioTracks()[0];
             localVideoTrack = newCamStream.getVideoTracks()[0];
 
-            facecamVideo.srcObject = new MediaStream([localVideoTrack]);
+            if(facecamVideo) facecamVideo.srcObject = new MediaStream([localVideoTrack]);
             if(mode === 'cam') previewVideo.srcObject = new MediaStream([localVideoTrack]);
             
             // Wenn der Mixer (und der Stream) schon läuft, Audio Source updaten!
@@ -181,18 +189,26 @@ async function populateMics() {
     } catch(e) {}
 }
 
-// Wird beim allerersten Szene-Wechsel ODER bei Stream-Start aktiviert, umzeitsyncro zu sichern
+// Wird beim allerersten Szene-Wechsel ODER bei Stream-Start aktiviert, um zeitsyncro zu sichern
 function initAudioMixer() {
     if(audioCtx) return;
 
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     audioDestination = audioCtx.createMediaStreamDestination();
 
+    // Soundboard
     for(let key in sfx) {
         sfx[key].crossOrigin = "anonymous";
         let sfxSource = audioCtx.createMediaElementSource(sfx[key]);
         sfxSource.connect(audioDestination); 
         sfxSource.connect(audioCtx.destination); 
+    }
+
+    // Hintergrundmusik (falls vorhanden)
+    if(bgMusicPlayer) {
+        musicSource = audioCtx.createMediaElementSource(bgMusicPlayer);
+        musicSource.connect(audioDestination);
+        musicSource.connect(audioCtx.destination);
     }
 
     micSource = audioCtx.createMediaStreamSource(new MediaStream([localAudioTrack]));
@@ -212,12 +228,12 @@ function initAudioMixer() {
         if (now - lastVisTime < 50) return;
         lastVisTime = now;
 
-        if(!localAudioTrack.enabled) { micBar.style.width = '0%'; return; }
+        if(!localAudioTrack.enabled) { if(micBar) micBar.style.width = '0%'; return; }
         analyser.getByteFrequencyData(dataArray);
         let sum = 0; for(let i = 0; i < dataArray.length; i++) sum += dataArray[i];
         let avg = sum / dataArray.length;
         let percent = Math.min(100, (avg / 100) * 100);
-        micBar.style.width = percent + '%';
+        if(micBar) micBar.style.width = percent + '%';
     }
     requestAnimationFrame(drawVisualizer);
 
@@ -241,11 +257,11 @@ function startCompositor() {
         if (elapsed > fpsInterval) {
             thenRenderTime = now - (elapsed % fpsInterval);
 
-            // Da alpha: false gesetzt ist, überschreiben wir das Bild einfach (viel schneller als fillRect)
+            // Da alpha: false gesetzt ist, überschreiben wir das Bild einfach
             if (isPiPMode) {
                 if (localScreenTrack) ctx.drawImage(previewVideo, 0, 0, canvas.width, canvas.height);
                 
-                if (localVideoTrack) {
+                if (localVideoTrack && facecamVideo) {
                     const camW = canvas.width * fcState.width;
                     const camH = camW * (9/16); 
                     const camX = canvas.width * fcState.x;
@@ -274,7 +290,6 @@ function startCompositor() {
                         ctx.drawImage(sourceVideo, 0, 0, canvas.width, canvas.height);
                     }
                 } else {
-                    // Nur wenn gar kein Video da ist, schwarz malen
                     ctx.fillStyle = '#000';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
                 }
@@ -287,16 +302,17 @@ function startCompositor() {
 // --- SZENENSTEUERUNG ---
 window.switchScene = async (type) => {
     document.querySelectorAll('.source-btn').forEach(c => c.classList.remove('active'));
-    document.querySelector(`[data-scene="${type}"]`).classList.add('active');
+    let activeBtn = document.querySelector(`[data-scene="${type}"]`);
+    if(activeBtn) activeBtn.classList.add('active');
     
     isPiPMode = false;
-    facecamOverlay.style.display = 'none';
+    if(facecamOverlay) facecamOverlay.style.display = 'none';
+    mode = type;
     
     initAudioMixer(); // Startet den Mixer im Hintergrund
 
     try {
         if (type === 'screen' || type === 'pip') {
-            // 🔥 FIX: ERST den Screen (Monitor) anfordern, dann die Facecam aktivieren
             if (!localScreenTrack) {
                 const screenStream = await navigator.mediaDevices.getDisplayMedia({ 
                     video: { frameRate: { ideal: targetFPS, max: targetFPS } }, 
@@ -318,8 +334,7 @@ window.switchScene = async (type) => {
             
             if(type === 'pip') {
                 isPiPMode = true;
-                // Facecam-Track läuft schon im Hintergrund (von initBaseCamera), wir blenden nur das Div ein
-                facecamOverlay.style.display = 'block';
+                if(facecamOverlay) facecamOverlay.style.display = 'block';
             }
         } else {
             // Normale Cam Ansicht
@@ -339,6 +354,7 @@ const sfx = {
 
 window.sysToast = (msg) => {
     const toast = document.getElementById('sys-toast');
+    if(!toast) return;
     document.getElementById('toast-text').innerText = msg;
     toast.classList.add('show');
     setTimeout(() => toast.classList.remove('show'), 3000);
@@ -351,21 +367,29 @@ window.playEffect = (name) => {
 
 // --- ECHTE UI FUNKTIONEN ---
 function setupExtraUI() {
-    document.getElementById('studio-chat-input').addEventListener('keypress', (e) => {
-        if(e.key === 'Enter') window.sendHostMessage();
-    });
+    const chatInput = document.getElementById('studio-chat-input');
+    if(chatInput) {
+        chatInput.addEventListener('keypress', (e) => {
+            if(e.key === 'Enter') window.sendHostMessage();
+        });
+    }
 
-    document.getElementById('stream-title').addEventListener('change', async (e) => {
-        if(isLive) {
-            await updateDoc(doc(db, "live_streams", currentUser.uid), { title: e.target.value });
-            sysToast("Stream-Titel aktualisiert!");
-        }
-    });
+    const titleInput = document.getElementById('stream-title');
+    if(titleInput) {
+        titleInput.addEventListener('change', async (e) => {
+            if(isLive) {
+                await updateDoc(doc(db, "live_streams", currentUser.uid), { title: e.target.value });
+                sysToast("Stream-Titel aktualisiert!");
+            }
+        });
+    }
 
-    // Erlaubt das Leiser-Stellen von Game-Sound NUR auf den Kopfhörern des Streamers
-    document.getElementById('pc-volume-slider').addEventListener('input', (e) => {
-        previewVideo.volume = e.target.value;
-    });
+    const volSlider = document.getElementById('pc-volume-slider');
+    if(volSlider) {
+        volSlider.addEventListener('input', (e) => {
+            previewVideo.volume = e.target.value;
+        });
+    }
 }
 
 window.requestPiP = async () => {
@@ -377,9 +401,12 @@ window.requestPiP = async () => {
 let cinemaMode = false;
 window.toggleCinema = () => {
     cinemaMode = !cinemaMode;
-    document.getElementById('left-sidebar').style.display = cinemaMode ? 'none' : 'flex';
-    document.getElementById('right-sidebar').style.display = cinemaMode ? 'none' : 'flex';
-    document.querySelector('.app-layout').style.gridTemplateColumns = cinemaMode ? '0px 1fr 0px' : '280px 1fr 340px';
+    const left = document.getElementById('left-sidebar');
+    const right = document.getElementById('right-sidebar');
+    const layout = document.querySelector('.app-layout');
+    if(left) left.style.display = cinemaMode ? 'none' : 'flex';
+    if(right) right.style.display = cinemaMode ? 'none' : 'flex';
+    if(layout) layout.style.gridTemplateColumns = cinemaMode ? '0px 1fr 0px' : '280px 1fr 340px';
     sysToast(cinemaMode ? "Kino Modus aktiv" : "Standard Modus");
 };
 
@@ -393,20 +420,23 @@ window.clearChat = async () => {
 };
 
 window.pinMessage = async (text) => {
-    document.getElementById('pinned-text').innerText = text;
-    document.getElementById('pinned-msg-bar').style.display = 'flex';
+    const textEl = document.getElementById('pinned-text');
+    const barEl = document.getElementById('pinned-msg-bar');
+    if(textEl) textEl.innerText = text;
+    if(barEl) barEl.style.display = 'flex';
     if(isLive) await updateDoc(doc(db, "live_streams", currentUser.uid), { pinnedMessage: text });
     sysToast("Nachricht angeheftet!");
 };
 
 window.unpinMessage = async () => {
-    document.getElementById('pinned-msg-bar').style.display = 'none';
+    const barEl = document.getElementById('pinned-msg-bar');
+    if(barEl) barEl.style.display = 'none';
     if(isLive) await updateDoc(doc(db, "live_streams", currentUser.uid), { pinnedMessage: null });
 };
 
 window.updateLiveGoal = async () => {
-    const goalTarget = parseInt(document.getElementById('goal-target').value) || 0;
-    const goalDesc = document.getElementById('goal-desc').value || "Ziel";
+    const goalTarget = parseInt(document.getElementById('goal-target')?.value) || 0;
+    const goalDesc = document.getElementById('goal-desc')?.value || "Ziel";
     if(isLive) {
         await updateDoc(doc(db, "live_streams", currentUser.uid), { goalTarget: goalTarget, goalDesc: goalDesc });
         sysToast("Live Ziel wurde an Zuschauer gesendet!");
@@ -415,16 +445,21 @@ window.updateLiveGoal = async () => {
     }
 };
 
-// --- GO LIVE LOGIK ---
-document.getElementById('master-live-btn').addEventListener('click', () => {
-    if(!isLive) startStream(); else stopStream();
-});
+// =====================================
+// 🔥 GO LIVE LOGIK (LIVEKIT UPGRADE) 🔥
+// =====================================
+const btnLive = document.getElementById('master-live-btn');
+if(btnLive) {
+    btnLive.addEventListener('click', () => {
+        if(!isLive) startStream(); else stopStream();
+    });
+}
 
 async function startStream() {
-    initAudioMixer();
+    initAudioMixer(); 
     if(audioCtx && audioCtx.state === 'suspended') await audioCtx.resume(); 
 
-    // 🔥 FIX: Chat wird bei JEDEM neuen Stream restlos gelöscht!
+    // Chat leeren
     const q = query(collection(db, `live_streams/${currentUser.uid}/chat`));
     const snaps = await getDocs(q);
     snaps.forEach(d => deleteDoc(d.ref));
@@ -432,48 +467,61 @@ async function startStream() {
     isLive = true;
     startTime = Date.now();
     const btn = document.getElementById('master-live-btn');
-    btn.innerHTML = "STREAM BEENDEN";
-    btn.classList.add('danger');
+    if(btn) {
+        btn.innerHTML = "STREAM BEENDEN";
+        btn.classList.add('danger');
+    }
     
     const ind = document.getElementById('live-indicator');
-    ind.style.display = 'block';
+    if(ind) ind.style.display = 'block';
 
-    const title = document.getElementById('stream-title').value || "Live Stream";
-    const goalTarget = parseInt(document.getElementById('goal-target').value) || 0;
-    const goalDesc = document.getElementById('goal-desc').value || "";
+    const title = document.getElementById('stream-title')?.value || "Live Stream";
+    const goalTarget = parseInt(document.getElementById('goal-target')?.value) || 0;
+    const goalDesc = document.getElementById('goal-desc')?.value || "";
 
-    if(peer) peer.destroy(); 
+    // Firebase Datenbank Eintrag aktualisieren
+    await setDoc(doc(db, "live_streams", currentUser.uid), {
+        broadcasterUid: currentUser.uid, 
+        broadcasterName: currentUser.displayName, 
+        broadcasterPic: currentUser.photoURL,
+        title: title, 
+        viewers: 0, 
+        goalTarget: goalTarget,
+        goalCurrent: 0,
+        goalDesc: goalDesc,
+        lastHeartbeat: Date.now(), 
+        timestamp: Date.now()
+    });
+
+    // 🔴 LIVEKIT CONNECTION 🔴
+    if(currentRoom) {
+        currentRoom.disconnect();
+    }
     
-    peer = new Peer(currentUser.uid, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
-    
-    peer.on('open', async () => {
-        await setDoc(doc(db, "live_streams", currentUser.uid), {
-            broadcasterUid: currentUser.uid, 
-            broadcasterName: currentUser.displayName, 
-            broadcasterPic: currentUser.photoURL,
-            title: title, 
-            viewers: 0, 
-            goalTarget: goalTarget,
-            goalCurrent: 0,
-            goalDesc: goalDesc,
-            lastHeartbeat: Date.now(), 
-            timestamp: Date.now()
-        });
-    });
+    const livekitUrl = "wss://DEINE-LIVEKIT-URL.livekit.cloud"; // <-- Hier LiveKit URL eintragen
+    const token = "DEIN_BROADCASTER_TOKEN"; // <-- Hier Token mit Publish Rechten eintragen
 
-    peer.on('connection', (conn) => {
-        conn.on('open', () => {
-            const call = peer.call(conn.peer, finalStream);
-            activeCalls.push(call);
-            call.on('close', () => { activeCalls = activeCalls.filter(c => c !== call); });
-        });
-    });
+    if(typeof LivekitClient !== 'undefined') {
+        currentRoom = new LivekitClient.Room();
 
-    peer.on('call', call => {
-        call.answer(finalStream);
-        activeCalls.push(call);
-        call.on('close', () => { activeCalls = activeCalls.filter(c => c !== call); });
-    });
+        try {
+            await currentRoom.connect(livekitUrl, token);
+            console.log("Erfolgreich als Host im LiveKit Raum!");
+
+            // Videotrack und Audiotrack an den Server pushen
+            const videoTrack = finalStream.getVideoTracks()[0];
+            const audioTrack = finalStream.getAudioTracks()[0];
+
+            if(videoTrack) await currentRoom.localParticipant.publishTrack(videoTrack);
+            if(audioTrack) await currentRoom.localParticipant.publishTrack(audioTrack);
+
+        } catch (e) {
+            console.error("LiveKit Fehler:", e);
+            sysToast("LiveKit Verbindungsfehler!");
+        }
+    } else {
+        console.warn("LivekitClient SDK nicht geladen! Stream läuft nur lokal in Vorschau.");
+    }
 
     durationInterval = setInterval(updateDuration, 1000);
     sysToast("Du bist jetzt Live!");
@@ -482,22 +530,30 @@ async function startStream() {
 async function stopStream() {
     isLive = false;
     clearInterval(durationInterval);
-    if(peer) peer.destroy();
+    
+    // LiveKit sauber trennen
+    if(currentRoom) {
+        currentRoom.disconnect();
+        currentRoom = null;
+    }
+    
     await deleteDoc(doc(db, "live_streams", currentUser.uid));
     
     const btn = document.getElementById('master-live-btn');
-    btn.innerHTML = "STREAM STARTEN";
-    btn.classList.remove('danger');
-    document.getElementById('live-indicator').style.display = 'none';
-    
-    activeCalls = [];
+    if(btn) {
+        btn.innerHTML = "STREAM STARTEN";
+        btn.classList.remove('danger');
+    }
+    const ind = document.getElementById('live-indicator');
+    if(ind) ind.style.display = 'none';
 }
 
 function updateDuration() {
     let diff = Math.floor((Date.now() - startTime) / 1000);
     let m = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
     let s = (diff % 60).toString().padStart(2, '0');
-    document.getElementById('stat-duration').innerText = `${m}:${s}`;
+    const statDur = document.getElementById('stat-duration');
+    if(statDur) statDur.innerText = `${m}:${s}`;
     
     if(diff % 5 === 0 && isLive) {
         updateDoc(doc(db, "live_streams", currentUser.uid), { lastHeartbeat: Date.now() }).catch(()=>{});
@@ -505,22 +561,28 @@ function updateDuration() {
 }
 
 window.toggleMic = () => {
+    if(!localAudioTrack) return;
     localAudioTrack.enabled = !localAudioTrack.enabled;
     const btn = document.getElementById('toggle-mic');
-    btn.classList.toggle('muted', !localAudioTrack.enabled);
-    btn.innerHTML = localAudioTrack.enabled ? '<i class="fas fa-microphone"></i>' : '<i class="fas fa-microphone-slash"></i>';
+    if(btn) {
+        btn.classList.toggle('muted', !localAudioTrack.enabled);
+        btn.innerHTML = localAudioTrack.enabled ? '<i class="fas fa-microphone"></i>' : '<i class="fas fa-microphone-slash"></i>';
+    }
 };
 
 window.toggleVid = () => {
+    if(!localVideoTrack) return;
     localVideoTrack.enabled = !localVideoTrack.enabled;
     const btn = document.getElementById('toggle-vid');
-    btn.classList.toggle('muted', !localVideoTrack.enabled);
-    btn.innerHTML = localVideoTrack.enabled ? '<i class="fas fa-video"></i>' : '<i class="fas fa-video-slash"></i>';
+    if(btn) {
+        btn.classList.toggle('muted', !localVideoTrack.enabled);
+        btn.innerHTML = localVideoTrack.enabled ? '<i class="fas fa-video"></i>' : '<i class="fas fa-video-slash"></i>';
+    }
 };
 
 window.sendHostMessage = async () => {
     const input = document.getElementById('studio-chat-input');
-    if(!input.value.trim() || !isLive) return;
+    if(!input || !input.value.trim() || !isLive) return;
     await addDoc(collection(db, `live_streams/${currentUser.uid}/chat`), {
         uid: currentUser.uid, 
         name: currentUser.displayName, 
@@ -538,6 +600,7 @@ let ctxTargetName = null;
 
 function setupContextMenu() {
     const menu = document.getElementById('ctx-menu');
+    if(!menu) return;
     const modal = document.getElementById('viewer-card');
     
     document.addEventListener('contextmenu', (e) => {
@@ -552,15 +615,19 @@ function setupContextMenu() {
             const isMe = (ctxTargetUid === currentUser.uid);
             const isMod = modsList.includes(ctxTargetUid);
 
-            // 🔥 FIX: Streamer-Schutz (Verstecke gefährliche Buttons bei eigener ID)
-            document.getElementById('ctx-delete').style.display = isMe ? 'none' : 'flex';
-            document.getElementById('ctx-ban').style.display = isMe ? 'none' : 'flex';
-            document.getElementById('ctx-timeout').style.display = isMe ? 'none' : 'flex';
-            document.getElementById('ctx-mod').style.display = isMe ? 'none' : 'flex';
+            // Streamer-Schutz 
+            const btnDelete = document.getElementById('ctx-delete');
+            const btnBan = document.getElementById('ctx-ban');
+            const btnTimeout = document.getElementById('ctx-timeout');
+            const btnMod = document.getElementById('ctx-mod');
 
-            if(!isMe) {
-                // Dynamischer Mod-Button Text
-                document.getElementById('ctx-mod').innerHTML = isMod ? '<i class="fas fa-user-minus"></i> Mod-Status entfernen' : '<i class="fas fa-shield-alt" style="color:#10b981;"></i> Moderator machen';
+            if(btnDelete) btnDelete.style.display = isMe ? 'none' : 'flex';
+            if(btnBan) btnBan.style.display = isMe ? 'none' : 'flex';
+            if(btnTimeout) btnTimeout.style.display = isMe ? 'none' : 'flex';
+            if(btnMod) btnMod.style.display = isMe ? 'none' : 'flex';
+
+            if(!isMe && btnMod) {
+                btnMod.innerHTML = isMod ? '<i class="fas fa-user-minus"></i> Mod-Status entfernen' : '<i class="fas fa-shield-alt"></i> Moderator machen';
             }
 
             let x = e.clientX; let y = e.clientY;
@@ -575,15 +642,20 @@ function setupContextMenu() {
         if(!e.target.closest('.glass-menu')) menu.classList.remove('active'); 
     });
 
-    document.getElementById('ctx-profile').addEventListener('click', openProfileModal);
-    document.getElementById('studio-chat').addEventListener('click', (e) => {
-        if(e.target.tagName === 'STRONG') {
-            const msgEl = e.target.closest('.tw-msg');
-            ctxTargetUid = msgEl.dataset.uid;
-            ctxTargetName = msgEl.dataset.name;
-            openProfileModal();
-        }
-    });
+    const ctxProfile = document.getElementById('ctx-profile');
+    if(ctxProfile) ctxProfile.addEventListener('click', openProfileModal);
+
+    const studioChat = document.getElementById('studio-chat');
+    if(studioChat) {
+        studioChat.addEventListener('click', (e) => {
+            if(e.target.tagName === 'STRONG') {
+                const msgEl = e.target.closest('.tw-msg');
+                ctxTargetUid = msgEl.dataset.uid;
+                ctxTargetName = msgEl.dataset.name;
+                openProfileModal();
+            }
+        });
+    }
 
     function openProfileModal() {
         menu.classList.remove('active');
@@ -592,34 +664,43 @@ function setupContextMenu() {
         document.getElementById('pm-role').innerText = ctxTargetUid === currentUser.uid ? "Broadcaster" : (modsList.includes(ctxTargetUid) ? "Moderator" : "Zuschauer");
         
         const isMe = (ctxTargetUid === currentUser.uid);
-        document.getElementById('pm-btn-mod').style.display = isMe ? 'none' : 'flex';
-        document.getElementById('pm-btn-timeout').style.display = isMe ? 'none' : 'flex';
-        document.getElementById('pm-btn-ban').style.display = isMe ? 'none' : 'flex';
+        const btnMod = document.getElementById('pm-btn-mod');
+        const btnTimeout = document.getElementById('pm-btn-timeout');
+        const btnBan = document.getElementById('pm-btn-ban');
 
-        if(!isMe) {
-            document.getElementById('pm-btn-mod').innerHTML = modsList.includes(ctxTargetUid) ? '<i class="fas fa-user-minus"></i> Als Mod entfernen' : '<i class="fas fa-shield-alt" style="color:#10b981"></i> Als Mod ernennen';
+        if(btnMod) btnMod.style.display = isMe ? 'none' : 'flex';
+        if(btnTimeout) btnTimeout.style.display = isMe ? 'none' : 'flex';
+        if(btnBan) btnBan.style.display = isMe ? 'none' : 'flex';
+
+        if(!isMe && btnMod) {
+            btnMod.innerHTML = modsList.includes(ctxTargetUid) ? '<i class="fas fa-user-minus"></i> Als Mod entfernen' : '<i class="fas fa-shield-alt" style="color:#10b981"></i> Als Mod ernennen';
         }
 
-        modal.classList.add('show');
+        if(modal) modal.classList.add('show');
     }
 
-    document.getElementById('ctx-pin').addEventListener('click', () => { window.pinMessage(ctxTargetText); menu.classList.remove('active'); });
+    const ctxPin = document.getElementById('ctx-pin');
+    if(ctxPin) ctxPin.addEventListener('click', () => { window.pinMessage(ctxTargetText); menu.classList.remove('active'); });
     
-    // 🔥 FIX: Direktes Flüstern in DMs
-    document.getElementById('ctx-whisper').addEventListener('click', () => { 
-        window.open(`index.html?dm=${ctxTargetUid}`, '_blank'); 
-        menu.classList.remove('active'); 
-    });
+    const ctxWhisper = document.getElementById('ctx-whisper');
+    if(ctxWhisper) {
+        ctxWhisper.addEventListener('click', () => { 
+            window.open(`index.html?dm=${ctxTargetUid}`, '_blank'); 
+            menu.classList.remove('active'); 
+        });
+    }
     
-    document.getElementById('ctx-delete').addEventListener('click', async () => {
-        if(ctxTargetMsgId && isLive) { 
-            await deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, ctxTargetMsgId)); 
-            sysToast("Nachricht entfernt"); 
-            menu.classList.remove('active');
-        }
-    });
+    const ctxDelete = document.getElementById('ctx-delete');
+    if(ctxDelete) {
+        ctxDelete.addEventListener('click', async () => {
+            if(ctxTargetMsgId && isLive) { 
+                await deleteDoc(doc(db, `live_streams/${currentUser.uid}/chat`, ctxTargetMsgId)); 
+                sysToast("Nachricht entfernt"); 
+                menu.classList.remove('active');
+            }
+        });
+    }
 
-    // 🔥 FIX: Custom Timeout via Prompt
     const timeoutLogic = async () => {
         if(ctxTargetUid && isLive) {
             let mins = prompt(`Wie viele Minuten Timeout für ${ctxTargetName}?`, "5");
@@ -627,23 +708,27 @@ function setupContextMenu() {
                 await setDoc(doc(db, `live_streams/${currentUser.uid}/timeouts`, ctxTargetUid), { expire: Date.now() + (parseInt(mins) * 60000) });
                 sysToast(`${ctxTargetName} hat ${mins}m Timeout.`);
                 menu.classList.remove('active');
-                modal.classList.remove('show');
+                if(modal) modal.classList.remove('show');
             }
         }
     };
-    document.getElementById('ctx-timeout').addEventListener('click', timeoutLogic);
-    document.getElementById('pm-btn-timeout').addEventListener('click', timeoutLogic);
+    const ctxTimeout = document.getElementById('ctx-timeout');
+    const pmBtnTimeout = document.getElementById('pm-btn-timeout');
+    if(ctxTimeout) ctxTimeout.addEventListener('click', timeoutLogic);
+    if(pmBtnTimeout) pmBtnTimeout.addEventListener('click', timeoutLogic);
     
     const banLogic = async () => {
         if(ctxTargetUid && confirm(`Willst du ${ctxTargetName} bannen?`)) {
             await updateDoc(doc(db, "users", currentUser.uid), { blockedUsers: arrayUnion(ctxTargetUid) });
             sysToast("Gebannt!");
-            modal.classList.remove('show');
+            if(modal) modal.classList.remove('show');
             menu.classList.remove('active');
         }
     };
-    document.getElementById('ctx-ban').addEventListener('click', banLogic);
-    document.getElementById('pm-btn-ban').addEventListener('click', banLogic);
+    const ctxBan = document.getElementById('ctx-ban');
+    const pmBtnBan = document.getElementById('pm-btn-ban');
+    if(ctxBan) ctxBan.addEventListener('click', banLogic);
+    if(pmBtnBan) pmBtnBan.addEventListener('click', banLogic);
 
     const modLogic = async () => {
         if(ctxTargetUid && isLive) {
@@ -655,12 +740,14 @@ function setupContextMenu() {
                 await setDoc(doc(db, `live_streams/${currentUser.uid}/mods`, ctxTargetUid), { uid: ctxTargetUid });
                 sysToast(`${ctxTargetName} ist nun Mod!`);
             }
-            modal.classList.remove('show');
+            if(modal) modal.classList.remove('show');
             menu.classList.remove('active');
         }
     };
-    document.getElementById('ctx-mod').addEventListener('click', modLogic);
-    document.getElementById('pm-btn-mod').addEventListener('click', modLogic);
+    const ctxMod = document.getElementById('ctx-mod');
+    const pmBtnMod = document.getElementById('pm-btn-mod');
+    if(ctxMod) ctxMod.addEventListener('click', modLogic);
+    if(pmBtnMod) pmBtnMod.addEventListener('click', modLogic);
 }
 
 function setupHotkeys() {
@@ -683,14 +770,17 @@ function setupGifts() {
             if(change.type === 'added') {
                 const g = change.doc.data();
                 currentCoins += g.price;
-                document.getElementById('stat-coins').innerText = currentCoins;
+                const statCoins = document.getElementById('stat-coins');
+                if(statCoins) statCoins.innerText = currentCoins;
                 
                 const animZone = document.getElementById('gift-overlay-zone');
-                const el = document.createElement('div');
-                el.className = 'gift-overlay';
-                el.innerHTML = `<span>${g.emoji}</span><strong>${g.name} hat ${g.giftName} gesendet!</strong>`;
-                animZone.appendChild(el);
-                setTimeout(() => el.remove(), 3000);
+                if(animZone) {
+                    const el = document.createElement('div');
+                    el.className = 'gift-overlay';
+                    el.innerHTML = `<span>${g.emoji}</span><strong>${g.name} hat ${g.giftName} gesendet!</strong>`;
+                    animZone.appendChild(el);
+                    setTimeout(() => el.remove(), 3000);
+                }
             }
         });
     });
@@ -704,6 +794,8 @@ function setupListeners() {
     const scroller = document.getElementById('chat-scroller');
     const pauseBanner = document.getElementById('chat-paused-banner');
 
+    if(!chatContainer || !scroller) return;
+
     const stringToColor = (str) => {
         const colors = ['#FF453A', '#0A84FF', '#32D74B', '#FF9F0A', '#BF5AF2', '#FF375F', '#5E5CE6', '#FFD60A'];
         let hash = 0; for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -714,16 +806,16 @@ function setupListeners() {
         const isAtBottom = scroller.scrollHeight - scroller.scrollTop <= scroller.clientHeight + 20;
         if (!isAtBottom && !isChatPaused) {
             isChatPaused = true;
-            pauseBanner.style.display = 'flex';
+            if(pauseBanner) pauseBanner.style.display = 'flex';
         } else if (isAtBottom && isChatPaused) {
             isChatPaused = false;
-            pauseBanner.style.display = 'none';
+            if(pauseBanner) pauseBanner.style.display = 'none';
         }
     });
 
     window.resumeChatScroll = () => {
         isChatPaused = false;
-        pauseBanner.style.display = 'none';
+        if(pauseBanner) pauseBanner.style.display = 'none';
         scroller.scrollTop = scroller.scrollHeight;
     };
 
@@ -755,10 +847,14 @@ function setupListeners() {
     onSnapshot(doc(db, "live_streams", currentUser.uid), docSnap => {
         if(docSnap.exists()) {
             const data = docSnap.data();
-            document.getElementById('stat-viewers').innerText = data.viewers || 0;
+            const statViewers = document.getElementById('stat-viewers');
+            if(statViewers) statViewers.innerText = data.viewers || 0;
+            
             if(data.pinnedMessage) {
-                document.getElementById('pinned-text').innerText = data.pinnedMessage;
-                document.getElementById('pinned-msg-bar').style.display = 'flex';
+                const pinnedText = document.getElementById('pinned-text');
+                const pinnedBar = document.getElementById('pinned-msg-bar');
+                if(pinnedText) pinnedText.innerText = data.pinnedMessage;
+                if(pinnedBar) pinnedBar.style.display = 'flex';
             }
         }
     });
