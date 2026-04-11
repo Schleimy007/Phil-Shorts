@@ -305,6 +305,16 @@
                     
                     <video id="live-video-player" autoplay playsinline style="width: 100%; height: 100%; object-fit: contain; z-index: 1;"></video>
                 </div>
+
+                <div id="live-goal-container" style="display:none; position:absolute; top:20px; left:20px; z-index:100; background:rgba(0,0,0,0.6); padding:10px 15px; border-radius:15px; border:1px solid rgba(255,215,0,0.5); backdrop-filter:blur(10px);">
+    <div style="color:#ffd700; font-weight:800; font-size:14px; margin-bottom:6px;"><i class="fas fa-star"></i> <span id="live-goal-desc">Ziel</span></div>
+    <div style="font-size:12px; color:white; margin-bottom:4px; font-weight:600;"><span id="live-goal-current">0</span> / <span id="live-goal-target">0</span></div>
+    <div style="width:140px; background:rgba(255,255,255,0.2); height:6px; border-radius:3px; overflow:hidden;">
+        <div id="live-goal-progress" style="width:0%; background:linear-gradient(90deg, #f59e0b, #ffd700); height:100%; transition: width 0.3s;"></div>
+    </div>
+</div>
+
+<div id="live-gift-animation-zone" style="position:absolute; width:100%; height:100%; top:0; left:0; pointer-events:none; z-index:99999; overflow:hidden;"></div>
                 
                 <div class="lr-chat-col">
                     <div class="lr-chat-header">

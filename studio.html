@@ -189,7 +189,7 @@
         .tool-btn:hover { background: rgba(255,255,255,0.1); color: white; }
 
         /* === RIGHT SIDEBAR (iMESSAGE STYLE CHAT) === */
-        .right-panel { border-radius: var(--radius-lg); display: flex; flex-direction: column; position: relative; animation: slideLeft 0.5s var(--spring) backwards; animation-delay: 0.3s;}
+        .right-panel { border-radius: var(--radius-lg); display: flex; flex-direction: column; position: relative; animation: slideLeft 0.5s var(--spring) backwards; animation-delay: 0.3s; overflow: hidden;}
         @keyframes slideLeft { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         
         .chat-header { padding: 20px; border-bottom: 0.5px solid var(--border-dim); font-size: 14px; font-weight: 600; color: white; display: flex; align-items: center; justify-content: space-between; letter-spacing: 0.5px;}

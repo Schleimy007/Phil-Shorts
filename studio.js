@@ -459,24 +459,28 @@ if(btnLive) {
     });
 }
 
-// 🔥 DISCORD MULTI-TRACK LOGIK 🔥
+// 🔥 DISCORD MULTI-TRACK LOGIK (Gefixt) 🔥
 window.syncLiveKitTracks = async () => {
     if (!isLive || !currentRoom) return;
-    
     const p = currentRoom.localParticipant;
     
-    // 1. GAMEPLAY (Screen) hochladen
-    if ((mode === 'screen' || mode === 'pip') && localScreenTrack) {
+    // 1. HAUPT-BILD (ScreenShare Track für Zuschauer)
+    // Wenn Cam-Modus an ist, wird die Facecam zum Hauptbild! Wenn Screen-Modus an ist, wird der Monitor zum Hauptbild!
+    let mainTrack = null;
+    if (mode === 'screen' || mode === 'pip') mainTrack = localScreenTrack;
+    else if (mode === 'cam') mainTrack = localVideoTrack;
+
+    if (mainTrack) {
         if(!p.getTrackPublication(LivekitClient.Track.Source.ScreenShare)) {
-            await p.publishTrack(localScreenTrack, { source: LivekitClient.Track.Source.ScreenShare, simulcast: false, videoEncoding: { maxBitrate: 3500000, maxFramerate: targetFPS } });
+            await p.publishTrack(mainTrack, { source: LivekitClient.Track.Source.ScreenShare, simulcast: false, videoEncoding: { maxBitrate: 3500000, maxFramerate: targetFPS } });
         }
     } else {
         const pub = p.getTrackPublication(LivekitClient.Track.Source.ScreenShare);
         if(pub) await p.unpublishTrack(pub.track);
     }
     
-    // 2. FACECAM (Kamera) hochladen
-    if ((mode === 'cam' || mode === 'pip') && localVideoTrack) {
+    // 2. PiP-BILD (Winzige Facecam oben rechts) - WIRD NUR NOCH IM "PiP" MODUS GESENDET!
+    if (mode === 'pip' && localVideoTrack) {
         if(!p.getTrackPublication(LivekitClient.Track.Source.Camera)) {
             await p.publishTrack(localVideoTrack, { source: LivekitClient.Track.Source.Camera, simulcast: false, videoEncoding: { maxBitrate: 1500000, maxFramerate: targetFPS } });
         }
@@ -485,7 +489,7 @@ window.syncLiveKitTracks = async () => {
         if(pub) await p.unpublishTrack(pub.track);
     }
     
-    // 3. AUDIO (Der perfekte Mix aus Soundboard, Mic & Game)
+    // 3. AUDIO
     const audioTrack = finalStream.getAudioTracks()[0];
     if(audioTrack && !p.getTrackPublication(LivekitClient.Track.Source.Microphone)) {
         await p.publishTrack(audioTrack, { source: LivekitClient.Track.Source.Microphone });
@@ -800,6 +804,11 @@ function setupHotkeys() {
 // --- TIKTOK GIFTS ANIMATION IM STUDIO ---
 function setupGifts() {
     let currentCoins = 0;
+    
+    // 🔥 FIX: Blockiert alle alten Animationen beim ersten Laden der Seite!
+    let initialLoad = true;
+    setTimeout(() => initialLoad = false, 3000); 
+
     onSnapshot(collection(db, `live_streams/${currentUser.uid}/gifts`), snap => {
         snap.docChanges().forEach(change => {
             if(change.type === 'added') {
@@ -808,13 +817,16 @@ function setupGifts() {
                 const statCoins = document.getElementById('stat-coins');
                 if(statCoins) statCoins.innerText = currentCoins;
                 
-                const animZone = document.getElementById('gift-overlay-zone');
-                if(animZone) {
-                    const el = document.createElement('div');
-                    el.className = 'gift-overlay';
-                    el.innerHTML = `<span>${g.emoji}</span><strong>${g.name} hat ${g.giftName} gesendet!</strong>`;
-                    animZone.appendChild(el);
-                    setTimeout(() => el.remove(), 3000);
+                // Animiert NUR, wenn der Init-Load vorbei ist (es also ein WIRKLICH neues Geschenk ist)
+                if(!initialLoad) {
+                    const animZone = document.getElementById('gift-overlay-zone'); // in der script.js heißt es: 'live-gift-animation-zone'
+                    if(animZone) {
+                        const el = document.createElement('div');
+                        el.className = 'gift-overlay'; // in der script.js: 'viewer-gift-overlay'
+                        el.innerHTML = `<span>${g.emoji}</span><strong>${g.name} hat ${g.giftName} gesendet!</strong>`;
+                        animZone.appendChild(el);
+                        setTimeout(() => el.remove(), 3000);
+                    }
                 }
             }
         });
