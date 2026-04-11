@@ -2952,8 +2952,8 @@ window.LiveManager = {
     }
 };
 
-// 3. ALS ZUSCHAUER DEM STREAM BEITRETEN (WebRTC)
-let viewerPeer = null;
+// 3. STREAM BEITRETEN & WEBRTC LOGIK (🔥 LIVEKIT UPGRADE 🔥)
+let currentRoom = null;
 window.currentLiveStreamId = null;
 window.currentLiveStreamerUid = null;
 window.liveRoomUnsubscribes = [];
@@ -2971,7 +2971,7 @@ window.joinLiveStream = async function(streamId) {
     if(videoEl) {
         videoEl.srcObject = null;
         
-        // 🔥 PC Lautstärke Regler anbinden
+        // 🔥 PC Lautstärke Regler
         const volSlider = document.getElementById('live-pc-volume');
         if(volSlider) {
             videoEl.volume = volSlider.value;
@@ -2989,7 +2989,7 @@ window.joinLiveStream = async function(streamId) {
 
     if(offlineText) {
         offlineText.style.display = 'flex';
-        offlineText.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:40px; color:#00f2fe; margin-bottom:10px;"></i><span>Lade Stream...</span>';
+        offlineText.innerHTML = '<i class="fas fa-circle-notch fa-spin" style="font-size:40px; color:#00f2fe; margin-bottom:10px;"></i><span>Verbinde mit Live-Server...</span>';
     }
     
     const streamSnap = await getDoc(doc(db, "live_streams", streamId));
@@ -3006,62 +3006,74 @@ window.joinLiveStream = async function(streamId) {
     
     await updateDoc(doc(db, "live_streams", streamId), { viewers: increment(1) }).catch(()=>{});
     
-    if(viewerPeer) viewerPeer.destroy();
+    // Alten Raum schließen, falls vorhanden
+    if(currentRoom) {
+        currentRoom.disconnect();
+    }
     
-    // Viewer ID mit Datum, damit Host nicht gekickt wird
-    const viewerId = currentUser.uid + "_viewer_" + Date.now();
-    viewerPeer = new Peer(viewerId, { config: { 'iceServers': [{ urls: 'stun:stun.l.google.com:19302' }] }});
-    
-    let connectionTimeout = setTimeout(() => {
-        if(offlineText && !videoEl.srcObject) {
-            offlineText.innerHTML = '<i class="fas fa-satellite-dish" style="font-size:40px; color:#ff4444; margin-bottom:10px;"></i><span style="color:#ff4444;">Offline</span>';
-        }
-    }, 10000);
+    // ==========================================
+    // 🔥 LIVEKIT CONNECTION 🔥
+    // ==========================================
+    const livekitUrl = "wss://phil-shorts-cv9pfxjq.livekit.cloud"; // WICHTIG: Hier deine LiveKit Server-URL eintragen!
+    const token = "philshorts-1d03ou"; // WICHTIG: Hier muss der Token rein, den dein Server für den Zuschauer generiert!
 
-    viewerPeer.on('open', () => {
-        const conn = viewerPeer.connect(streamData.broadcasterUid);
-        conn.on('open', () => console.log("Verbunden mit Studio."));
+    currentRoom = new LivekitClient.Room({
+        adaptiveStream: true, // Spart Datenvolumen am Handy
+        dynacast: true,       // Optimiert die Latenz
     });
 
-    viewerPeer.on('call', (call) => {
-        call.answer(); 
-        call.on('stream', (remoteStream) => {
-            clearTimeout(connectionTimeout); 
-            if(offlineText) offlineText.style.display = 'none';
-            
-            if(videoEl) {
-                videoEl.srcObject = remoteStream; // Empfängt Mic + Game Audio + Video kombiniert
-                videoEl.muted = true; 
-                videoEl.play().catch(e=>{});
-            }
-            
-            const unmuteOverlay = document.getElementById('live-unmute-overlay');
-            if(unmuteOverlay) {
-                unmuteOverlay.style.display = 'flex';
-                unmuteOverlay.onclick = () => {
-                    videoEl.muted = false;
-                    unmuteOverlay.style.display = 'none';
-                };
-            }
-        });
+    // Event: Sobald der Streamer sein Video/Audio hochlädt, kommt es hier an
+    currentRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        if(offlineText) offlineText.style.display = 'none';
         
-        call.on('close', () => {
-            if(offlineText) {
-                offlineText.style.display = 'flex';
-                offlineText.innerHTML = '<i class="fas fa-broadcast-tower" style="font-size:40px; color:#ff4444; margin-bottom:10px;"></i><span>Beendet</span>';
-            }
-        });
+        // LiveKit hängt Video und Audio direkt an unser <video> Element an
+        if (track.kind === 'video' || track.kind === 'audio') {
+            track.attach(videoEl);
+        }
+        
+        // Zeigt einen "Tippen zum Entmuten" Screen, da Browser Autoplay mit Ton blockieren
+        const unmuteOverlay = document.getElementById('live-unmute-overlay');
+        if(unmuteOverlay) {
+            unmuteOverlay.style.display = 'flex';
+            unmuteOverlay.onclick = () => {
+                videoEl.muted = false;
+                unmuteOverlay.style.display = 'none';
+            };
+        }
     });
+
+    currentRoom.on(LivekitClient.RoomEvent.Disconnected, () => {
+        if(offlineText) {
+            offlineText.style.display = 'flex';
+            offlineText.innerHTML = '<i class="fas fa-broadcast-tower" style="font-size:40px; color:#ff4444; margin-bottom:10px;"></i><span>Stream beendet</span>';
+        }
+    });
+
+    try {
+        // Raum betreten!
+        await currentRoom.connect(livekitUrl, token);
+        console.log("Erfolgreich mit LiveKit Raum verbunden!");
+    } catch (error) {
+        console.error("LiveKit Error:", error);
+        if(offlineText) {
+            offlineText.innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size:40px; color:#ff4444; margin-bottom:10px;"></i><span style="color:#ff4444;">Verbindungsfehler</span>';
+        }
+    }
     
     initLiveRoomListeners(streamId);
 };
 
-// 4. STREAM VERLASSEN
 window.leaveLiveRoom = async function() {
     if(window.currentLiveStreamId && currentUser) {
         await updateDoc(doc(db, "live_streams", window.currentLiveStreamId), { viewers: increment(-1) }).catch(()=>{});
     }
-    if(viewerPeer) viewerPeer.destroy();
+    
+    // LiveKit Raum sauber verlassen
+    if(currentRoom) {
+        currentRoom.disconnect();
+        currentRoom = null;
+    }
+    
     const videoEl = document.getElementById('live-video-player');
     if(videoEl) { videoEl.pause(); videoEl.srcObject = null; }
     
@@ -3099,7 +3111,7 @@ function initLiveRoomListeners(streamId) {
     });
     window.liveRoomUnsubscribes.push(timeoutUnsub);
     
-    // Chat Listener
+    // --- CHAT LISTENER ---
     const chatUnsub = onSnapshot(query(collection(db, `live_streams/${streamId}/chat`), orderBy("timestamp", "desc"), limit(50)), snap => {
         if(!chatBox) return;
         chatBox.innerHTML = '';
@@ -3123,64 +3135,20 @@ function initLiveRoomListeners(streamId) {
             else if(m.uid === "schleimyverteilung@gmail.com" || m.isAdmin) badge = '<span class="chat-badge badge-admin">ADMIN</span>';
             else if(isMod) badge = '<span class="chat-badge badge-mod">MOD</span>';
             
-            // Klick-Logik für Moderation!
-            const clickInt = hasModPower ? `oncontextmenu="window.openLiveCtxMenu(event, '${m.uid}', '${d.id}', '${m.name.replace(/'/g, "\\'")}')" onclick="window.openLiveCtxMenu(event, '${m.uid}', '${d.id}', '${m.name.replace(/'/g, "\\'")}')"` : '';
+            // 🔥 FIX: Wenn du Mod bist ODER es deine eigene Nachricht ist, darfst du ins Menü!
+            const canManageMsg = hasModPower || m.uid === currentUser.uid;
+            
+            const clickInt = canManageMsg ? `oncontextmenu="window.openLiveCtxMenu(event, '${m.uid}', '${d.id}', '${m.name.replace(/'/g, "\\'")}')" onclick="window.openLiveCtxMenu(event, '${m.uid}', '${d.id}', '${m.name.replace(/'/g, "\\'")}')"` : '';
 
-            chatBox.innerHTML += `<div class="lr-chat-msg" ${clickInt} style="cursor:${hasModPower ? 'pointer' : 'default'}">
+            chatBox.innerHTML += `<div class="lr-chat-msg" ${clickInt} style="cursor:${canManageMsg ? 'pointer' : 'default'}">
                 ${badge}<strong>${m.name}</strong><span>:</span> <span style="color:#efeff1;">${m.text}</span>
             </div>`;
         });
         chatBox.scrollTop = chatBox.scrollHeight;
     });
     window.liveRoomUnsubscribes.push(chatUnsub);
-    
-    // Stream Meta (Viewers + Coin Goal)
-    const metaUnsub = onSnapshot(doc(db, "live_streams", streamId), docSnap => {
-        if(docSnap.exists()) {
-            const data = docSnap.data();
-            const viewerEl = document.getElementById('live-viewer-count');
-            if(viewerEl) viewerEl.innerText = data.viewers || 0;
-            
-            const goalCont = document.getElementById('live-goal-container');
-            if(goalCont) {
-                if(data.goalTarget && data.goalTarget > 0) {
-                    goalCont.style.display = 'block';
-                    document.getElementById('live-goal-desc').innerText = data.goalDesc || "Ziel";
-                    document.getElementById('live-goal-current').innerText = data.goalCurrent || 0;
-                    document.getElementById('live-goal-target').innerText = data.goalTarget;
-                    const percent = Math.min(100, ((data.goalCurrent || 0) / data.goalTarget) * 100);
-                    document.getElementById('live-goal-progress').style.width = percent + '%';
-                } else {
-                    goalCont.style.display = 'none';
-                }
-            }
-        }
-    });
-    window.liveRoomUnsubscribes.push(metaUnsub);
+    // ------------------------------------------------
 
-    // 🔥 TIKTOK GIFTS ANIMATION
-    const giftUnsub = onSnapshot(collection(db, `live_streams/${streamId}/gifts`), snap => {
-        snap.docChanges().forEach(change => {
-            if(change.type === 'added') {
-                const g = change.doc.data();
-                const animZone = document.getElementById('live-gift-animation-zone');
-                if(!animZone) return;
-                
-                const el = document.createElement('div');
-                el.className = 'viewer-gift-overlay';
-                el.innerHTML = `
-                    <span class="gift-icon">${g.emoji}</span>
-                    <div class="gift-text">
-                        <span class="gift-sender">${g.name}</span>
-                        <span>hat ${g.giftName} gesendet!</span>
-                    </div>
-                `;
-                animZone.appendChild(el);
-                setTimeout(() => el.remove(), 3500); 
-            }
-        });
-    });
-    window.liveRoomUnsubscribes.push(giftUnsub);
 
     // --- CONTEXT MENU LOGIK ---
     window.openLiveCtxMenu = function(e, uid, msgId, name) {
@@ -3193,27 +3161,36 @@ function initLiveRoomListeners(streamId) {
         if(!menu) return;
 
         const amIHost = currentUser.uid === window.currentLiveStreamId;
+        const amIMod = currentLiveMods.includes(currentUser.uid);
         const amIAppAdmin = currentUser.isAdmin || currentUser.email === "schleimyverteilung@gmail.com";
+        const hasModPower = amIHost || amIMod || amIAppAdmin;
+
         const targetIsHost = uid === window.currentLiveStreamId;
         const targetIsMod = currentLiveMods.includes(uid);
+        const isMe = uid === currentUser.uid;
 
-        // Streamer schützen (kein Bann, kein Delete bei Host-Nachrichten)
-        if(targetIsHost) {
-            document.getElementById('lctx-delete').style.display = 'none';
-            document.getElementById('lctx-ban').style.display = 'none';
-            document.getElementById('lctx-timeout').style.display = 'none';
-            document.getElementById('lctx-mod').style.display = 'none';
-        } else {
+        // 1. Zuerst alles ausblenden
+        document.getElementById('lctx-whisper').style.display = isMe ? 'none' : 'flex';
+        document.getElementById('lctx-delete').style.display = 'none';
+        document.getElementById('lctx-ban').style.display = 'none';
+        document.getElementById('lctx-timeout').style.display = 'none';
+        document.getElementById('lctx-mod').style.display = 'none';
+
+        // 2. Löschen: Erlaubt wenn es die EIGENE Nachricht ist, oder man Mod/Host ist
+        if (isMe || (hasModPower && !targetIsHost)) {
             document.getElementById('lctx-delete').style.display = 'flex';
+        }
+
+        // 3. Bann/Timeout: Nur Mods/Hosts dürfen das (aber nicht beim Host anwenden und nicht bei sich selbst)
+        if (hasModPower && !targetIsHost && !isMe) {
             document.getElementById('lctx-ban').style.display = 'flex';
             document.getElementById('lctx-timeout').style.display = 'flex';
-            
-            if(amIHost || amIAppAdmin) {
-                document.getElementById('lctx-mod').style.display = 'flex';
-                document.getElementById('lctx-mod').innerHTML = targetIsMod ? '<i class="fas fa-user-minus" style="color:#ff4444;"></i> Mod-Status entfernen' : '<i class="fas fa-shield-alt"></i> Moderator machen';
-            } else {
-                document.getElementById('lctx-mod').style.display = 'none';
-            }
+        }
+
+        // 4. Mod machen: Nur Host & AppAdmin darf das
+        if ((amIHost || amIAppAdmin) && !targetIsHost && !isMe) {
+            document.getElementById('lctx-mod').style.display = 'flex';
+            document.getElementById('lctx-mod').innerHTML = targetIsMod ? '<i class="fas fa-user-minus" style="color:#ff4444;"></i> Mod-Status entfernen' : '<i class="fas fa-shield-alt"></i> Moderator machen';
         }
 
         let x = e.clientX; let y = e.clientY;
