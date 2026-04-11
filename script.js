@@ -3294,19 +3294,6 @@ window.unpinLiveMessage = async function() {
     }
 };
 
-window.unpinLiveMessage = async function() {
-    if(window.currentLiveStreamerUid || window.currentLiveStreamId) {
-        await updateDoc(doc(db, "live_streams", window.currentLiveStreamerUid || window.currentLiveStreamId), { pinnedMessage: null });
-    }
-};
-
-document.getElementById('lctx-whisper')?.addEventListener('click', () => {
-    if(ctxTargetUid) {
-        window.openDM(ctxTargetUid, ctxTargetName, 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + ctxTargetUid);
-        document.getElementById('live-ctx-menu').classList.remove('active');
-    }
-});
-
 window.deleteVideo = async function(videoId) {
         window.open(`index.html?dm=${ctxTargetUid}`, '_blank');
         document.getElementById('live-ctx-menu').classList.remove('active');
