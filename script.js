@@ -3091,7 +3091,7 @@ window.joinLiveStream = async function(streamId) {
         const viewerName = currentUser.displayName + "_" + Math.floor(Math.random() * 1000);
         const details = await getLiveKitConnection(streamId, viewerName);
         
-        await currentRoom.connect(details.serverUrl, details.token);
+        await currentRoom.connect(details.serverUrl, details.participantToken);
         console.log("Erfolgreich als Zuschauer verbunden!");
     } catch (error) {
         console.error("LiveKit Error:", error);
