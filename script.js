@@ -3084,13 +3084,98 @@ window.joinLiveStream = async function(streamId) {
     // ==========================================
     const livekitUrl = "wss://phil-shorts-cv9pfxjq.livekit.cloud"; 
     
-    // GENERIERT EINEN EINZIGARTIGEN TOKEN FÜR GENAU DIESEN ZUSCHAUER!
-    const token = await generateLiveKitToken(streamId, currentUser.uid, false);
+    try {
+        // 🔥 FIX: Wir hängen eine Zufallszahl an die UID! So kannst du mit 10 Tabs im selben Account testen, ohne dass sich die Tabs rauskicken!
+        const uniqueViewerId = currentUser.uid + "_" + Math.floor(Math.random() * 100000);
+        
+        // GENERIERT EINEN EINZIGARTIGEN TOKEN FÜR GENAU DIESEN ZUSCHAUER!
+        const token = await generateLiveKitToken(streamId, uniqueViewerId, false);
 
-    currentRoom = new LivekitClient.Room({
-        adaptiveStream: false, // 🔥 Zwingt die App, IMMER den HD-Stream zu laden, egal wie groß das Handyfenster ist
-        dynacast: false,       
-    });
+        currentRoom = new LivekitClient.Room({
+            adaptiveStream: false, 
+            dynacast: false,       
+        });
+
+        // Event: Sobald der Streamer sein Video/Audio hochlädt, kommt es hier an
+        currentRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+            if(offlineText) offlineText.style.display = 'none';
+            
+            // LiveKit hängt Video und Audio direkt an unser <video> Element an
+            if (track.kind === 'video' || track.kind === 'audio') {
+                track.attach(videoEl);
+            }
+            
+            // Zeigt einen "Tippen zum Entmuten" Screen, da Browser Autoplay mit Ton blockieren
+            const unmuteOverlay = document.getElementById('live-unmute-overlay');
+            if(unmuteOverlay) {
+                unmuteOverlay.style.display = 'flex';
+                unmuteOverlay.onclick = () => {
+                    videoEl.muted = false;
+                    unmuteOverlay.style.display = 'none';
+                };
+            }
+        });
+
+        // 1. Event: Wenn ein Track (Video/Audio) vom Streamer ankommt
+        currentRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+            if(offlineText) offlineText.style.display = 'none';
+            
+            if (track.kind === 'audio') {
+                track.attach(videoEl); // Audio immer an den Hauptplayer heften
+            } else if (track.kind === 'video') {
+                if (publication.source === LivekitClient.Track.Source.ScreenShare) {
+                    track.attach(videoEl);
+                } else if (publication.source === LivekitClient.Track.Source.Camera) {
+                    let camEl = document.getElementById('viewer-pip-cam');
+                    if(!camEl) {
+                        camEl = document.createElement('video');
+                        camEl.id = 'viewer-pip-cam';
+                        camEl.style.cssText = "position:absolute; top:20px; right:20px; width:110px; aspect-ratio:9/16; object-fit:cover; border-radius:12px; border:2px solid #00f2fe; z-index:100; box-shadow:0 10px 30px rgba(0,0,0,0.5); transform: scaleX(-1);";
+                        document.querySelector('.lr-video-col').appendChild(camEl);
+                    }
+                    track.attach(camEl);
+                } else {
+                    track.attach(videoEl); // Fallback
+                }
+            }
+            
+            const unmuteOverlay = document.getElementById('live-unmute-overlay');
+            if(unmuteOverlay) {
+                unmuteOverlay.style.display = 'flex';
+                unmuteOverlay.onclick = () => { videoEl.muted = false; unmuteOverlay.style.display = 'none'; };
+            }
+        });
+
+        // 2. Event: Wenn der Streamer eine Szene wechselt (z.B. Cam ausschaltet)
+        currentRoom.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, publication) => {
+            track.detach();
+            if (publication.source === LivekitClient.Track.Source.Camera) {
+                const camEl = document.getElementById('viewer-pip-cam');
+                if(camEl) camEl.remove();
+            }
+        });
+
+        // 3. Event: Streamer beendet Stream komplett
+        currentRoom.on(LivekitClient.RoomEvent.Disconnected, () => {
+            if(offlineText) {
+                offlineText.style.display = 'flex';
+                offlineText.innerHTML = '<i class="fas fa-broadcast-tower" style="font-size:40px; color:#ff4444; margin-bottom:10px;"></i><span>Stream beendet</span>';
+            }
+            const camEl = document.getElementById('viewer-pip-cam');
+            if(camEl) camEl.remove();
+        });
+
+        // Raum betreten!
+        await currentRoom.connect(livekitUrl, token);
+        console.log("Erfolgreich mit LiveKit Raum verbunden!");
+
+    } catch (error) {
+        console.error("LiveKit Connection Error:", error);
+        if(offlineText) {
+            offlineText.innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size:40px; color:#ff4444; margin-bottom:10px;"></i><span style="color:#ff4444;">Live-Server Fehler</span>';
+        }
+        showCustomAlert("Verbindungsfehler", "Konnte nicht mit dem Live-Server verbinden. (Fehler in der Konsole)");
+    }
 
     // Event: Sobald der Streamer sein Video/Audio hochlädt, kommt es hier an
     currentRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
@@ -3110,72 +3195,7 @@ window.joinLiveStream = async function(streamId) {
                 unmuteOverlay.style.display = 'none';
             };
         }
-    });
-
-    // 1. Event: Wenn ein Track (Video/Audio) vom Streamer ankommt
-    currentRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-        if(offlineText) offlineText.style.display = 'none';
-        
-        if (track.kind === 'audio') {
-            track.attach(videoEl); // Audio immer an den Hauptplayer heften
-        } else if (track.kind === 'video') {
-            // DISCORD-TRICK: Wir prüfen, was für ein Video das ist!
-            if (publication.source === LivekitClient.Track.Source.ScreenShare) {
-                // Gameplay kommt in den großen Vollbild-Player
-                track.attach(videoEl);
-            } else if (publication.source === LivekitClient.Track.Source.Camera) {
-                // Facecam kommt in einen neuen, kleinen PiP-Kasten!
-                let camEl = document.getElementById('viewer-pip-cam');
-                if(!camEl) {
-                    camEl = document.createElement('video');
-                    camEl.id = 'viewer-pip-cam';
-                    // Schickes Apple/TikTok Design für die kleine Facecam:
-                    camEl.style.cssText = "position:absolute; top:20px; right:20px; width:110px; aspect-ratio:9/16; object-fit:cover; border-radius:12px; border:2px solid #00f2fe; z-index:100; box-shadow:0 10px 30px rgba(0,0,0,0.5); transform: scaleX(-1);";
-                    document.querySelector('.lr-video-col').appendChild(camEl);
-                }
-                track.attach(camEl);
-            } else {
-                track.attach(videoEl); // Fallback
-            }
-        }
-        
-        const unmuteOverlay = document.getElementById('live-unmute-overlay');
-        if(unmuteOverlay) {
-            unmuteOverlay.style.display = 'flex';
-            unmuteOverlay.onclick = () => { videoEl.muted = false; unmuteOverlay.style.display = 'none'; };
-        }
-    });
-
-    // 2. Event: Wenn der Streamer eine Szene wechselt (z.B. Cam ausschaltet)
-    currentRoom.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, publication) => {
-        track.detach();
-        if (publication.source === LivekitClient.Track.Source.Camera) {
-            const camEl = document.getElementById('viewer-pip-cam');
-            if(camEl) camEl.remove();
-        }
-    });
-
-    // 3. Event: Streamer beendet Stream komplett
-    currentRoom.on(LivekitClient.RoomEvent.Disconnected, () => {
-        if(offlineText) {
-            offlineText.style.display = 'flex';
-            offlineText.innerHTML = '<i class="fas fa-broadcast-tower" style="font-size:40px; color:#ff4444; margin-bottom:10px;"></i><span>Stream beendet</span>';
-        }
-        const camEl = document.getElementById('viewer-pip-cam');
-        if(camEl) camEl.remove();
-    });
-
-    try {
-        // Raum betreten!
-        await currentRoom.connect(livekitUrl, token);
-        console.log("Erfolgreich mit LiveKit Raum verbunden!");
-    } catch (error) {
-        console.error("LiveKit Error:", error);
-        if(offlineText) {
-            offlineText.innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size:40px; color:#ff4444; margin-bottom:10px;"></i><span style="color:#ff4444;">Verbindungsfehler</span>';
-        }
-    }
-    
+    }); 
     initLiveRoomListeners(streamId);
 };
 
