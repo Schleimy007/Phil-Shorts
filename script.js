@@ -593,6 +593,14 @@ function initLiveUser() {
                 document.getElementById('account-switcher-area').style.display = 'none';
                 document.getElementById('up-story-link').style.display = 'none'; }
 
+            if (checkPhilPlusStatus(2)) { 
+                const studioBtn = document.getElementById('open-studio-btn');
+                if(studioBtn) studioBtn.style.display = 'block';
+            } else {
+                const studioBtn = document.getElementById('open-studio-btn');
+                if(studioBtn) studioBtn.style.display = 'none';
+            }
+
             document.getElementById('btn-live-stream').style.display = 'flex';
 
             const supportTab = document.getElementById('tab-support');
@@ -1130,8 +1138,15 @@ function initLiveDatabase() {
             if (skelLoader) skelLoader.style.display = 'none';
             const urlParams = new URLSearchParams(window.location.search);
             const sharedVideoId = urlParams.get('video');
-            if (sharedVideoId) { window.history.replaceState({}, document.title, window.location.pathname);
-                setTimeout(() => jumpToVideo(sharedVideoId), 800); }
+            const sharedProfileUid = urlParams.get('profile'); // <-- NEU
+            
+            if (sharedVideoId) { 
+                window.history.replaceState({}, document.title, window.location.pathname);
+                setTimeout(() => jumpToVideo(sharedVideoId), 800); 
+            } else if (sharedProfileUid) { // <-- NEU
+                window.history.replaceState({}, document.title, window.location.pathname);
+                setTimeout(() => openProfile(sharedProfileUid), 800);
+            }
         } else {
             snapshot.docChanges().forEach((change) => {
                 const vData = { id: change.doc.id, ...change.doc.data() };
@@ -1687,6 +1702,19 @@ function attachInteractionsToVideo(videoContainerEl) {
     container.querySelector('.gift-btn')?.addEventListener('click', (e) => { window.openGiftModal(e.currentTarget.dataset.id); });
     container.querySelector('.share-btn')?.addEventListener('click', async(e) => { const vidId = e.currentTarget.dataset.id; const shareUrl = `${window.location.origin}${window.location.pathname}?video=${vidId}`; if (navigator.share) { try { await navigator.share({ title: 'Phil Shorts', text: 'Schau dir dieses an!', url: shareUrl }); } catch (err) {} } else { navigator.clipboard.writeText(shareUrl); showToast("Link kopiert!"); } });
 }
+
+// Admin Funktionen für Streams
+window.adminForceStreamOffline = async function() {
+    if(!confirm("Diesen Stream wirklich offline zwingen?")) return;
+    await deleteDoc(doc(db, "live_streams", window.currentLiveStreamerUid || window.currentLiveStreamId));
+    showToast("Stream wurde beendet.");
+};
+
+window.adminRevokeStreamLicense = async function() {
+    if(!confirm("Diesem Nutzer die Stream-Lizenz entziehen? Er kann danach nicht mehr streamen.")) return;
+    await updateDoc(doc(db, "users", window.currentLiveStreamerUid || window.currentLiveStreamId), { streamLicense: false });
+    showToast("Lizenz entzogen.");
+};
 
 window.deleteVideo = async function(videoId) { if (confirm("Möchtest du diesen Post wirklich endgültig löschen?")) { try { await deleteDoc(doc(db, "videos", videoId)); showToast("Post erfolgreich gelöscht! 🗑️"); if (document.getElementById('view-profile').classList.contains('active')) openProfile(document.getElementById('profile-action-btn').dataset.uid); } catch (e) { showCustomAlert("Fehler", "Konnte nicht gelöscht werden."); } } };
 
@@ -3251,10 +3279,38 @@ function initLiveRoomListeners(streamId) {
         if(menu && !e.target.closest('.live-ctx-menu')) menu.classList.remove('active'); 
     });
 
-    document.getElementById('lctx-whisper')?.addEventListener('click', () => {
+    document.getElementById('lctx-pin')?.addEventListener('click', async () => {
+    const text = document.getElementById('live-ctx-menu').dataset.text;
+    if(text && (window.currentLiveStreamerUid || window.currentLiveStreamId)) {
+        await updateDoc(doc(db, "live_streams", window.currentLiveStreamerUid || window.currentLiveStreamId), { pinnedMessage: text });
+        document.getElementById('live-ctx-menu').classList.remove('active');
+        showToast("Nachricht angeheftet!");
+    }
+});
+
+window.unpinLiveMessage = async function() {
+    if(window.currentLiveStreamerUid || window.currentLiveStreamId) {
+        await updateDoc(doc(db, "live_streams", window.currentLiveStreamerUid || window.currentLiveStreamId), { pinnedMessage: null });
+    }
+};
+
+window.unpinLiveMessage = async function() {
+    if(window.currentLiveStreamerUid || window.currentLiveStreamId) {
+        await updateDoc(doc(db, "live_streams", window.currentLiveStreamerUid || window.currentLiveStreamId), { pinnedMessage: null });
+    }
+};
+
+document.getElementById('lctx-whisper')?.addEventListener('click', () => {
+    if(ctxTargetUid) {
+        window.openDM(ctxTargetUid, ctxTargetName, 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + ctxTargetUid);
+        document.getElementById('live-ctx-menu').classList.remove('active');
+    }
+});
+
+window.deleteVideo = async function(videoId) {
         window.open(`index.html?dm=${ctxTargetUid}`, '_blank');
         document.getElementById('live-ctx-menu').classList.remove('active');
-    });
+    };
 
     document.getElementById('lctx-delete')?.addEventListener('click', async () => {
         if(ctxTargetMsgId && window.currentLiveStreamId) {
@@ -3297,7 +3353,70 @@ function initLiveRoomListeners(streamId) {
             document.getElementById('live-ctx-menu').classList.remove('active');
         }
     });
-}
+
+    // === HIER STARTET DIE NEUE ÜBERWACHUNG ===
+    const streamDocUnsub = onSnapshot(doc(db, "live_streams", streamId), (docSnap) => {
+        if(docSnap.exists()) {
+            const data = docSnap.data();
+
+            // Ban Logik
+            if (data.bannedUsers && data.bannedUsers.includes(currentUser.uid)) {
+                leaveLiveRoom();
+                showCustomAlert("Gebannt", "Du wurdest aus diesem Stream gebannt.");
+            }
+
+            // Angeheftete Nachrichten
+            if (data.pinnedMessage) {
+                document.getElementById('live-pinned-msg-bar').style.display = 'block';
+                document.getElementById('live-pinned-text').innerText = data.pinnedMessage;
+                let isModOrHostPanel = (window.currentLiveStreamerUid === currentUser.uid) || currentLiveMods.includes(currentUser.uid);
+                document.getElementById('live-unpin-btn').style.display = isModOrHostPanel ? 'block' : 'none';
+            } else {
+                document.getElementById('live-pinned-msg-bar').style.display = 'none';
+            }
+
+            // Admin Panel für Mods anzeigen
+            let isModOrHostPanel = (window.currentLiveStreamerUid === currentUser.uid) || currentLiveMods.includes(currentUser.uid);
+            document.getElementById('live-mod-panel-btn').style.display = isModOrHostPanel ? 'flex' : 'none';
+            if (currentUser.isAdmin) {
+                document.getElementById('admin-force-offline-btn').style.display = 'flex';
+                document.getElementById('admin-revoke-license-btn').style.display = 'flex';
+            }
+
+            // Coin Goal Progressbar
+            if (data.goalTarget && data.goalTarget > 0) {
+                document.getElementById('live-goal-container').style.display = 'block';
+                document.getElementById('live-goal-desc').innerText = data.goalDesc || 'Ziel';
+                document.getElementById('live-goal-target').innerText = data.goalTarget;
+                document.getElementById('live-goal-current').innerText = data.goalCurrent || 0;
+                
+                let pct = Math.min(100, ((data.goalCurrent || 0) / data.goalTarget) * 100);
+                document.getElementById('live-goal-progress').style.width = pct + '%';
+            } else {
+                document.getElementById('live-goal-container').style.display = 'none';
+            }
+        }
+    });
+    window.liveRoomUnsubscribes.push(streamDocUnsub);
+    // === ENDE DER NEUEN ÜBERWACHUNG ===
+
+} // <-- Das ist die allerletzte Klammer der initLiveRoomListeners Funktion!
+
+// Öffnen des Mod Panels
+document.getElementById('live-mod-panel-btn')?.addEventListener('click', () => {
+    document.getElementById('mod-panel-modal').classList.add('show');
+});
+
+// Funktion zum Leeren des Chats
+window.clearLiveChat = async function() {
+    if(!confirm("Gesamten Chat wirklich leeren?")) return;
+    const streamId = window.currentLiveStreamerUid || window.currentLiveStreamId;
+    const q = query(collection(db, `live_streams/${streamId}/chat`));
+    const snaps = await getDocs(q);
+    snaps.forEach(d => deleteDoc(d.ref));
+    showToast("Chat wurde geleert!");
+    document.getElementById('mod-panel-modal').classList.remove('show');
+};
 
 document.getElementById('send-live-chat-btn')?.addEventListener('click', async () => {
     const input = document.getElementById('live-chat-input');

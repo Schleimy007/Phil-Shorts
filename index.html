@@ -281,6 +281,9 @@
                             </div>
                         </div>
                         <div class="lr-actions">
+                            <div class="lr-btn" id="admin-force-offline-btn" style="display:none; background:#ff4444;" onclick="adminForceStreamOffline()" title="Stream Offline zwingen"><i class="fas fa-power-off"></i></div>
+                            <div class="lr-btn" id="admin-revoke-license-btn" style="display:none; background:#ff4444;" onclick="adminRevokeStreamLicense()" title="Stream Lizenz entziehen"><i class="fas fa-id-badge"></i></div>
+
                             <div class="live-volume-ctrl" id="live-vol-container">
                                 <i class="fas fa-volume-up" id="live-vol-icon" style="color: #aaa; font-size: 14px;"></i>
                                 <input type="range" id="live-pc-volume" class="live-volume-slider" min="0" max="1" step="0.05" value="1">
@@ -322,6 +325,12 @@
                         <i class="fas fa-user-friends" style="color: #888;"></i>
                     </div>
                     
+                    <div id="live-pinned-msg-bar" style="display:none; background: rgba(0,242,254,0.1); border-left: 3px solid #00f2fe; padding: 10px; position: relative;">
+                        <div style="font-size: 11px; color: #00f2fe; font-weight: bold; margin-bottom: 3px;"><i class="fas fa-thumbtack"></i> Angeheftet</div>
+                        <div id="live-pinned-text" style="font-size: 13px; color: white;"></div>
+                        <i class="fas fa-times" id="live-unpin-btn" style="display:none; position: absolute; right: 10px; top: 10px; cursor: pointer; color: #888;" onclick="unpinLiveMessage()"></i>
+                    </div>
+                    
                     <div id="live-goal-container" style="display:none; background: rgba(255,215,0,0.05); border-bottom: 1px solid rgba(255,215,0,0.1); padding: 15px; font-size: 13px;">
                         <div style="display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 8px;">
                             <span id="live-goal-desc" style="color: white;">Ziel</span>
@@ -338,6 +347,7 @@
                         <input type="text" id="live-chat-input" class="lr-input" placeholder="Sag Hallo...">
                         <button id="send-live-chat-btn" class="lr-send-btn"><i class="fas fa-paper-plane"></i></button>
                         <button id="live-gift-btn" class="lr-gift-btn"><i class="fas fa-gift"></i></button>
+                        <button id="live-mod-panel-btn" class="lr-gift-btn" style="display:none; background:#10b981; margin-left:5px;"><i class="fas fa-shield-alt"></i></button>
                     </div>
                 </div>
             </div>
@@ -345,6 +355,8 @@
             <div id="live-ctx-menu" class="live-ctx-menu">
                 <div class="live-ctx-item" id="lctx-whisper"><i class="fas fa-envelope"></i> Flüstern (DMs)</div>
                 <div class="live-ctx-divider"></div>
+                <div class="live-ctx-item" id="lctx-pin"><i class="fas fa-thumbtack"></i> Nachricht anheften</div>
+                <div class="live-ctx-item" id="lctx-pin"><i class="fas fa-thumbtack"></i> Nachricht anheften</div>
                 <div class="live-ctx-item" id="lctx-mod" style="color:#10b981"><i class="fas fa-shield-alt"></i> Moderator machen</div>
                 <div class="live-ctx-item danger" id="lctx-timeout"><i class="fas fa-clock"></i> Timeout geben</div>
                 <div class="live-ctx-divider"></div>
@@ -489,6 +501,7 @@
 
                 <div id="admin-controls" style="width: 100%;"></div>
                 <button id="open-admin-dashboard" class="profile-action-btn" style="display:none; background:#ffd700; color:black; margin-top:10px; width:100%;">👑 Admin Dashboard</button>
+                <button id="open-studio-btn" class="profile-action-btn" style="display:none; background:#9c27b0; color:white; margin-top:10px; width:100%;" onclick="window.location.href='studio.html'">🎙️ Creator Studio Ultra öffnen</button>
 
                 <div id="private-stats" style="display: none; width: 100%; margin-top: 20px; background: rgba(255, 255, 255, 0.1); border-radius: 15px; padding: 15px; border: 1px solid rgba(255,255,255,0.2); backdrop-filter: blur(5px);">
                     <div style="display: flex; justify-content: space-around; text-align: center;">
@@ -602,7 +615,18 @@
             </div>
         </div>
 
-        <div id="analytics-modal" class="modal" style="height: 50%; z-index: 300;">
+        <div id="mod-panel-modal" class="modal" style="z-index: 100005; height: 60%;">
+        <div class="modal-header">
+            <h4><i class="fas fa-shield-alt"></i> Mod Panel</h4>
+            <i class="fas fa-times close-modal" onclick="document.getElementById('mod-panel-modal').classList.remove('show')"></i>
+        </div>
+        <div class="modal-body" style="display:flex; flex-direction:column; gap:15px;">
+            <button class="profile-action-btn edit-btn" style="width:100%;" onclick="clearLiveChat()"><i class="fas fa-trash"></i> Gesamten Chat leeren</button>
+            <button class="profile-action-btn edit-btn" style="width:100%;" onclick="showCustomAlert('Info', 'Weitere Mod-Funktionen folgen bald.')"><i class="fas fa-cog"></i> Stream Einstellungen</button>
+        </div>
+    </div>
+
+    <div id="analytics-modal" class="modal" style="height: 50%; z-index: 300;">
             <div class="modal-header">
                 <h4><i class="fas fa-chart-line" style="color: #00f2fe;"></i> Video Analytics</h4>
                 <i class="fas fa-times close-modal" onclick="document.getElementById('analytics-modal').classList.remove('show')"></i>
@@ -1234,6 +1258,9 @@
                             </div>
                         </div>
                         <div class="lr-actions">
+                            <div class="lr-btn" id="admin-force-offline-btn" style="display:none; background:#ff4444;" onclick="adminForceStreamOffline()" title="Stream Offline zwingen"><i class="fas fa-power-off"></i></div>
+                            <div class="lr-btn" id="admin-revoke-license-btn" style="display:none; background:#ff4444;" onclick="adminRevokeStreamLicense()" title="Stream Lizenz entziehen"><i class="fas fa-id-badge"></i></div>
+
                             <div class="live-volume-ctrl" id="live-vol-container">
                                 <i class="fas fa-volume-up" id="live-vol-icon" style="color: #aaa; font-size: 14px;"></i>
                                 <input type="range" id="live-pc-volume" class="live-volume-slider" min="0" max="1" step="0.05" value="1">
@@ -1263,6 +1290,12 @@
                     <div class="lr-chat-header">
                         <span>Stream Chat</span>
                         <i class="fas fa-user-friends" style="color: #888;"></i>
+                    </div>
+                    
+                    <div id="live-pinned-msg-bar" style="display:none; background: rgba(0,242,254,0.1); border-left: 3px solid #00f2fe; padding: 10px; position: relative;">
+                        <div style="font-size: 11px; color: #00f2fe; font-weight: bold; margin-bottom: 3px;"><i class="fas fa-thumbtack"></i> Angeheftet</div>
+                        <div id="live-pinned-text" style="font-size: 13px; color: white;"></div>
+                        <i class="fas fa-times" id="live-unpin-btn" style="display:none; position: absolute; right: 10px; top: 10px; cursor: pointer; color: #888;" onclick="unpinLiveMessage()"></i>
                     </div>
                     
                     <div id="live-goal-container" style="display:none; background: rgba(255,215,0,0.05); border-bottom: 1px solid rgba(255,215,0,0.1); padding: 15px; font-size: 13px;">
