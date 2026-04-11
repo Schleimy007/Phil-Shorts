@@ -23,6 +23,45 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const GIPHY_API_KEY = "Vj2uCqfOmAT1sXEKQgQvneGy60VIxgCk";
 
+// === LIVEKIT TOKEN GENERATOR (Client-Side) ===
+async function generateLiveKitToken(roomName, participantId, isBroadcaster = false) {
+    // ⚠️ WICHTIG: Trage hier deine LiveKit API Key und Secret ein!
+    const apiKey = "APIabumFsfYCfwJ"; 
+    const apiSecret = "vh0kN1T3RwCahxLF520Zy00geWxeRbnWGmofgvb3woGA";
+
+    const header = { alg: "HS256", typ: "JWT" };
+    const payload = {
+        iss: apiKey,
+        sub: participantId, // Eindeutige ID (damit sich Leute nicht überschreiben)
+        nbf: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + (6 * 60 * 60), // 6 Stunden gültig
+        video: {
+            roomJoin: true,
+            room: roomName,
+            canPublish: isBroadcaster,
+            canSubscribe: true
+        }
+    };
+
+    const base64UrlEncode = (obj) => btoa(JSON.stringify(obj)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    
+    const encodedHeader = base64UrlEncode(header);
+    const encodedPayload = base64UrlEncode(payload);
+    const unsignedToken = `${encodedHeader}.${encodedPayload}`;
+
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+        "raw", encoder.encode(apiSecret),
+        { name: "HMAC", hash: "SHA-256" },
+        false, ["sign"]
+    );
+
+    const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(unsignedToken));
+    const encodedSignature = btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+    return `${unsignedToken}.${encodedSignature}`;
+}
+
 // === GLOBALE VARIABLEN & ALGORITHMUS TRACKER ===
 let allVideosData = [];
 let allKnownUsers = [];
@@ -1138,12 +1177,12 @@ function initLiveDatabase() {
             if (skelLoader) skelLoader.style.display = 'none';
             const urlParams = new URLSearchParams(window.location.search);
             const sharedVideoId = urlParams.get('video');
-            const sharedProfileUid = urlParams.get('profile'); // <-- NEU
+            const sharedProfileUid = urlParams.get('profile'); 
             
             if (sharedVideoId) { 
                 window.history.replaceState({}, document.title, window.location.pathname);
                 setTimeout(() => jumpToVideo(sharedVideoId), 800); 
-            } else if (sharedProfileUid) { // <-- NEU
+            } else if (sharedProfileUid) { 
                 window.history.replaceState({}, document.title, window.location.pathname);
                 setTimeout(() => openProfile(sharedProfileUid), 800);
             }
@@ -1703,19 +1742,6 @@ function attachInteractionsToVideo(videoContainerEl) {
     container.querySelector('.share-btn')?.addEventListener('click', async(e) => { const vidId = e.currentTarget.dataset.id; const shareUrl = `${window.location.origin}${window.location.pathname}?video=${vidId}`; if (navigator.share) { try { await navigator.share({ title: 'Phil Shorts', text: 'Schau dir dieses an!', url: shareUrl }); } catch (err) {} } else { navigator.clipboard.writeText(shareUrl); showToast("Link kopiert!"); } });
 }
 
-// Admin Funktionen für Streams
-window.adminForceStreamOffline = async function() {
-    if(!confirm("Diesen Stream wirklich offline zwingen?")) return;
-    await deleteDoc(doc(db, "live_streams", window.currentLiveStreamerUid || window.currentLiveStreamId));
-    showToast("Stream wurde beendet.");
-};
-
-window.adminRevokeStreamLicense = async function() {
-    if(!confirm("Diesem Nutzer die Stream-Lizenz entziehen? Er kann danach nicht mehr streamen.")) return;
-    await updateDoc(doc(db, "users", window.currentLiveStreamerUid || window.currentLiveStreamId), { streamLicense: false });
-    showToast("Lizenz entzogen.");
-};
-
 window.deleteVideo = async function(videoId) { if (confirm("Möchtest du diesen Post wirklich endgültig löschen?")) { try { await deleteDoc(doc(db, "videos", videoId)); showToast("Post erfolgreich gelöscht! 🗑️"); if (document.getElementById('view-profile').classList.contains('active')) openProfile(document.getElementById('profile-action-btn').dataset.uid); } catch (e) { showCustomAlert("Fehler", "Konnte nicht gelöscht werden."); } } };
 
 window.toggleCreatorHeart = async function(videoId, cId, rId = null) {
@@ -1917,7 +1943,6 @@ window.renderProfileGrid = function(targetUid) {
 window.openProfile = async function(targetUid) {
     switchView('profile'); 
     
-    // FIX: Nur neu rendern, wenn sich die UID ändert
     const grid = document.getElementById('profile-grid');
     if (grid.dataset.lastUid !== targetUid || grid.innerHTML === "" || grid.innerHTML.includes('loading-screen')) {
         grid.innerHTML = '<div class="loading-screen"><i class="fas fa-circle-notch fa-spin"></i></div>';
@@ -2883,7 +2908,8 @@ window.updateAccountSecurity = async function() {
 function initResponsiveLayout() {
     const appContainer = document.querySelector('.app'); const originalNav = appContainer.querySelector('.app__bottom-nav'); let currentMode = ''; let pcSidebar = null;
     function createPCContainers() { if (!pcSidebar) { pcSidebar = document.createElement('div'); pcSidebar.id = 'pc-nav-sidebar'; pcSidebar.innerHTML = `<div class="logo-area"><img src="https://i.imgur.com/JDPRzCc.png" class="app-logo" alt="Logo">Phil Shorts</div>`; appContainer.prepend(pcSidebar); } }
-    function restructureVideoForPC(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; let infoPanel = inner.querySelector('.pc-info-panel-container'); if (!infoPanel) { infoPanel = document.createElement('div'); infoPanel.className = 'pc-info-panel-container'; inner.appendChild(infoPanel); const videoFooter = inner.querySelector('.video__footer'); const videoSidebar = inner.querySelector('.video__sidebar'); if (videoFooter) infoPanel.appendChild(videoFooter); if (videoSidebar) infoPanel.appendChild(videoSidebar); } }
+    function restructureVideoForPC(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; let infoPanel = inner.querySelector('.pc-info-panel-container'); if (!infoPanel) { infoPanel = document.createElement('div'); infoPanel.className = 'pc-info-panel-container'; inner.appendChild(infoPanel); const videoFooter = inner.querySelector('.video__footer'); const videoSidebar = inner.querySelector('.video__sidebar'); if (videoFooter) infoPanel.appendChild(videoFooter);
+        if (videoSidebar) infoPanel.appendChild(videoSidebar); } }
     function rollBackVideoForHandy(videoEl) { const inner = videoEl.querySelector('.video-inner'); if (!inner) return; const infoPanel = inner.querySelector('.pc-info-panel-container'); if (infoPanel) { const videoFooter = infoPanel.querySelector('.video__footer'); const videoSidebar = infoPanel.querySelector('.video__sidebar'); if (videoFooter) inner.appendChild(videoFooter); if (videoSidebar) inner.appendChild(videoSidebar); infoPanel.remove(); } }
     function checkResponsiveMode() { const isPC = window.innerWidth > 768; if (isPC && currentMode !== 'pc') { currentMode = 'pc'; createPCContainers(); if (originalNav) pcSidebar.appendChild(originalNav); document.querySelectorAll('.app__videos .video').forEach(restructureVideoForPC); } else if (!isPC && currentMode !== 'handy') { currentMode = 'handy'; if (originalNav) appContainer.appendChild(originalNav); if (pcSidebar) { pcSidebar.remove(); pcSidebar = null; } document.querySelectorAll('.app__videos .video').forEach(rollBackVideoForHandy); } }
     checkResponsiveMode(); window.addEventListener('resize', checkResponsiveMode);
@@ -3042,8 +3068,10 @@ window.joinLiveStream = async function(streamId) {
     // ==========================================
     // 🔥 LIVEKIT CONNECTION 🔥
     // ==========================================
-    const livekitUrl = "wss://phil-shorts-cv9pfxjq.livekit.cloud"; // WICHTIG: Hier deine LiveKit Server-URL eintragen!
-    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDU5MjA4MzcsImlkZW50aXR5IjoienVzY2hhdWVyMSIsImlzcyI6IkFQSWFidW1Gc2ZZQ2Z3SiIsIm5iZiI6MTc3NTkyMDgzNywic3ViIjoienVzY2hhdWVyMSIsInZpZGVvIjp7ImNhblB1Ymxpc2giOmZhbHNlLCJjYW5QdWJsaXNoRGF0YSI6ZmFsc2UsImNhblN1YnNjcmliZSI6dHJ1ZSwicm9vbSI6InRlc3RyYXVtIiwicm9vbUpvaW4iOnRydWV9fQ.wQyjh1faiqkErcC65qlcVZBTwxJqPTQMeLenUtHSsJY"; // WICHTIG: Hier muss der Token rein, den dein Server für den Zuschauer generiert!
+    const livekitUrl = "wss://phil-shorts-cv9pfxjq.livekit.cloud"; 
+    
+    // GENERIERT EINEN EINZIGARTIGEN TOKEN FÜR GENAU DIESEN ZUSCHAUER!
+    const token = await generateLiveKitToken(streamId, currentUser.uid, false);
 
     currentRoom = new LivekitClient.Room({
         adaptiveStream: false, // 🔥 Zwingt die App, IMMER den HD-Stream zu laden, egal wie groß das Handyfenster ist
@@ -3209,10 +3237,12 @@ function initLiveRoomListeners(streamId) {
             else if(m.uid === "schleimyverteilung@gmail.com" || m.isAdmin) badge = '<span class="chat-badge badge-admin">ADMIN</span>';
             else if(isMod) badge = '<span class="chat-badge badge-mod">MOD</span>';
             
-            // 🔥 FIX: Wenn du Mod bist ODER es deine eigene Nachricht ist, darfst du ins Menü!
             const canManageMsg = hasModPower || m.uid === currentUser.uid;
             
-            const clickInt = canManageMsg ? `oncontextmenu="window.openLiveCtxMenu(event, '${m.uid}', '${d.id}', '${m.name.replace(/'/g, "\\'")}')" onclick="window.openLiveCtxMenu(event, '${m.uid}', '${d.id}', '${m.name.replace(/'/g, "\\'")}')"` : '';
+            // FIX: Auch den Text der Nachricht sauber ans Menü übergeben, damit man ihn anheften kann!
+            const safeText = m.text ? m.text.replace(/'/g, "\\'").replace(/"/g, '&quot;') : '';
+            const safeName = m.name ? m.name.replace(/'/g, "\\'") : 'User';
+            const clickInt = canManageMsg ? `oncontextmenu="window.openLiveCtxMenu(event, '${m.uid}', '${d.id}', '${safeName}', '${safeText}')" onclick="window.openLiveCtxMenu(event, '${m.uid}', '${d.id}', '${safeName}', '${safeText}')"` : '';
 
             chatBox.innerHTML += `<div class="lr-chat-msg" ${clickInt} style="cursor:${canManageMsg ? 'pointer' : 'default'}">
                 ${badge}<strong>${m.name}</strong><span>:</span> <span style="color:#efeff1;">${m.text}</span>
@@ -3225,11 +3255,12 @@ function initLiveRoomListeners(streamId) {
 
 
     // --- CONTEXT MENU LOGIK ---
-    window.openLiveCtxMenu = function(e, uid, msgId, name) {
+    window.openLiveCtxMenu = function(e, uid, msgId, name, text) {
         e.preventDefault();
         ctxTargetUid = uid;
         ctxTargetMsgId = msgId;
         ctxTargetName = name;
+        window.ctxTargetText = text; // Global speichern für Anheften
 
         const menu = document.getElementById('live-ctx-menu');
         if(!menu) return;
@@ -3249,6 +3280,11 @@ function initLiveRoomListeners(streamId) {
         document.getElementById('lctx-ban').style.display = 'none';
         document.getElementById('lctx-timeout').style.display = 'none';
         document.getElementById('lctx-mod').style.display = 'none';
+        
+        // Pin Button zeigen, wenn Mod/Host
+        if(document.getElementById('lctx-pin')) {
+            document.getElementById('lctx-pin').style.display = hasModPower ? 'flex' : 'none';
+        }
 
         // 2. Löschen: Erlaubt wenn es die EIGENE Nachricht ist, oder man Mod/Host ist
         if (isMe || (hasModPower && !targetIsHost)) {
@@ -3280,24 +3316,26 @@ function initLiveRoomListeners(streamId) {
     });
 
     document.getElementById('lctx-pin')?.addEventListener('click', async () => {
-    const text = document.getElementById('live-ctx-menu').dataset.text;
-    if(text && (window.currentLiveStreamerUid || window.currentLiveStreamId)) {
-        await updateDoc(doc(db, "live_streams", window.currentLiveStreamerUid || window.currentLiveStreamId), { pinnedMessage: text });
-        document.getElementById('live-ctx-menu').classList.remove('active');
-        showToast("Nachricht angeheftet!");
-    }
-});
+        if(window.ctxTargetText && (window.currentLiveStreamerUid || window.currentLiveStreamId)) {
+            await updateDoc(doc(db, "live_streams", window.currentLiveStreamerUid || window.currentLiveStreamId), { pinnedMessage: window.ctxTargetText });
+            document.getElementById('live-ctx-menu').classList.remove('active');
+            showToast("Nachricht angeheftet!");
+        }
+    });
 
-window.unpinLiveMessage = async function() {
-    if(window.currentLiveStreamerUid || window.currentLiveStreamId) {
-        await updateDoc(doc(db, "live_streams", window.currentLiveStreamerUid || window.currentLiveStreamId), { pinnedMessage: null });
-    }
-};
-
-window.deleteVideo = async function(videoId) {
-        window.open(`index.html?dm=${ctxTargetUid}`, '_blank');
-        document.getElementById('live-ctx-menu').classList.remove('active');
+    window.unpinLiveMessage = async function() {
+        if(window.currentLiveStreamerUid || window.currentLiveStreamId) {
+            await updateDoc(doc(db, "live_streams", window.currentLiveStreamerUid || window.currentLiveStreamId), { pinnedMessage: null });
+        }
     };
+
+    document.getElementById('lctx-whisper')?.addEventListener('click', () => {
+        if(ctxTargetUid) {
+            window.openDM(ctxTargetUid, ctxTargetName, 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + ctxTargetUid);
+            document.getElementById('live-ctx-menu').classList.remove('active');
+            switchView('dm');
+        }
+    });
 
     document.getElementById('lctx-delete')?.addEventListener('click', async () => {
         if(ctxTargetMsgId && window.currentLiveStreamId) {
@@ -3320,9 +3358,11 @@ window.deleteVideo = async function(videoId) {
 
     document.getElementById('lctx-ban')?.addEventListener('click', async () => {
         if(ctxTargetUid && confirm(`Willst du ${ctxTargetName} wirklich aus dem Stream bannen?`)) {
-            // Bann bedeutet: Wir packen den User in die Block-Liste des Streamers
+            // Kickt den User in Echtzeit aus dem aktuellen Stream
+            await updateDoc(doc(db, "live_streams", window.currentLiveStreamId), { bannedUsers: arrayUnion(ctxTargetUid) });
+            // Blockiert ihn zusätzlich generell für den Streamer
             await updateDoc(doc(db, "users", window.currentLiveStreamId), { blockedUsers: arrayUnion(ctxTargetUid) });
-            showToast("User gebannt!");
+            showToast("User gebannt & gekickt!");
             document.getElementById('live-ctx-menu').classList.remove('active');
         }
     });
@@ -3382,12 +3422,40 @@ window.deleteVideo = async function(videoId) {
             } else {
                 document.getElementById('live-goal-container').style.display = 'none';
             }
+
+            // Sync Mod Panel UI mit Datenbank
+            const followerToggle = document.getElementById('mod-follower-only-toggle');
+            const slowToggle = document.getElementById('mod-slow-mode-toggle');
+            const lockToggle = document.getElementById('mod-lock-chat-toggle');
+            
+            if(followerToggle) followerToggle.checked = data.followerOnly || false;
+            if(slowToggle) slowToggle.checked = data.slowMode || false;
+            if(lockToggle) lockToggle.checked = data.chatLocked || false;
+            
+            // Einstellungen global speichern für die Send-Logik
+            window.currentStreamSettings = {
+                followerOnly: data.followerOnly || false,
+                slowMode: data.slowMode || false,
+                chatLocked: data.chatLocked || false
+            };
         }
     });
     window.liveRoomUnsubscribes.push(streamDocUnsub);
     // === ENDE DER NEUEN ÜBERWACHUNG ===
 
 } // <-- Das ist die allerletzte Klammer der initLiveRoomListeners Funktion!
+
+// --- NEUE FUNKTION FÜR DAS TWITCH MOD PANEL ---
+window.toggleStreamSetting = async function(settingKey, value) {
+    const streamId = window.currentLiveStreamerUid || window.currentLiveStreamId;
+    if(!streamId) return;
+    
+    let updateData = {};
+    updateData[settingKey] = value;
+    
+    await updateDoc(doc(db, "live_streams", streamId), updateData);
+    showToast("Stream-Einstellung live aktualisiert!");
+};
 
 // Öffnen des Mod Panels
 document.getElementById('live-mod-panel-btn')?.addEventListener('click', () => {
@@ -3405,11 +3473,41 @@ window.clearLiveChat = async function() {
     document.getElementById('mod-panel-modal').classList.remove('show');
 };
 
+// --- CHAT SENDEN MIT MOD-REGELN (SLOW MODE, FOLLOWER ONLY) ---
 document.getElementById('send-live-chat-btn')?.addEventListener('click', async () => {
     const input = document.getElementById('live-chat-input');
     const text = input.value.trim();
     if(!text || !window.currentLiveStreamId || !currentUser) return;
     
+    const streamId = window.currentLiveStreamId;
+    const amIHost = currentUser.uid === streamId;
+    const amIMod = currentLiveMods.includes(currentUser.uid);
+    const amIAppAdmin = currentUser.isAdmin || currentUser.email === "schleimyverteilung@gmail.com";
+    const hasModPower = amIHost || amIMod || amIAppAdmin;
+
+    // Aktuelle Settings prüfen
+    const settings = window.currentStreamSettings || {};
+
+    // Wenn der Nutzer KEIN Mod ist, greifen die strengen Twitch-Regeln:
+    if (!hasModPower) {
+        if (settings.chatLocked) {
+            return showCustomAlert("Chat gesperrt", "Der Chat wurde von einem Moderator temporär gesperrt.");
+        }
+        if (settings.followerOnly) {
+            if (!currentUser.following || !currentUser.following.includes(streamId)) {
+                return showCustomAlert("Follower-Only", "Nur Follower können in diesem Stream schreiben. Klicke auf 'Folgen'!");
+            }
+        }
+        if (settings.slowMode) {
+            const now = Date.now();
+            if (window.lastLiveChatSent && (now - window.lastLiveChatSent) < 5000) {
+                return showToast("Slow Mode aktiv! Bitte warte 5 Sekunden.");
+            }
+        }
+    }
+
+    window.lastLiveChatSent = Date.now();
+
     await addDoc(collection(db, `live_streams/${window.currentLiveStreamId}/chat`), {
         uid: currentUser.uid, name: currentUser.displayName, text: text, timestamp: Date.now()
     });
@@ -3423,3 +3521,16 @@ document.getElementById('live-chat-input')?.addEventListener('keypress', (e) => 
 document.getElementById('live-gift-btn')?.addEventListener('click', () => {
     if(window.currentLiveStreamId) window.openGiftModal(window.currentLiveStreamId);
 });
+
+// Admin Funktionen für Streams
+window.adminForceStreamOffline = async function() {
+    if(!confirm("Diesen Stream wirklich offline zwingen?")) return;
+    await deleteDoc(doc(db, "live_streams", window.currentLiveStreamerUid || window.currentLiveStreamId));
+    showToast("Stream wurde beendet.");
+};
+
+window.adminRevokeStreamLicense = async function() {
+    if(!confirm("Diesem Nutzer die Stream-Lizenz entziehen? Er kann danach nicht mehr streamen.")) return;
+    await updateDoc(doc(db, "users", window.currentLiveStreamerUid || window.currentLiveStreamId), { streamLicense: false });
+    showToast("Lizenz entzogen.");
+};
