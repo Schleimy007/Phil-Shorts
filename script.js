@@ -3195,7 +3195,8 @@ window.joinLiveStream = async function(streamId) {
                 unmuteOverlay.style.display = 'none';
             };
         }
-    }); 
+    });
+ 
     initLiveRoomListeners(streamId);
 };
 
