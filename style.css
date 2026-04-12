@@ -450,41 +450,42 @@ button:active, .btn:active, .nav__item:active, .videoSidebar__button:active, .pr
 
 .modal-header { padding: 28px 24px 16px; display: flex; justify-content: space-between; border-bottom: 0.5px solid var(--border-dim); align-items: center; }
 .modal-header h4 { font-size: 18px; font-weight: 600; text-align: center; flex: 1; margin: 0; }
-/* --- ABSOLUT ZENTRIERTER CLOSE BUTTON --- */
+/* --- ABSOLUT ZENTRIERTER CLOSE BUTTON (HARD OVERRIDE) --- */
 .close-modal { 
     width: 32px; 
     height: 32px; 
     border-radius: 50%; 
     background: rgba(255, 255, 255, 0.1);
     color: var(--ios-gray); 
-    font-size: 18px; /* Etwas kleiner, damit das X elegant im Kreis wirkt */
+    font-size: 18px; 
     
-    /* Flexbox Zentrierung */
-    display: flex; 
-    justify-content: center; 
-    align-items: center; 
+    /* Position Relative für den Container */
+    position: relative;
     
-    /* Reset von Störfaktoren */
     padding: 0;
     margin: 0;
     border: none;
     line-height: 0;
-    
     cursor: pointer; 
     transition: var(--press-out); 
 }
 
-/* Zwingt das Icon selbst in die Mitte */
+/* Hard-Reset für das Icon im Inneren */
 .close-modal i,
-.close-modal span {
-    display: flex;
-    justify-content: center;
-    align-items: center;
+.close-modal span,
+.close-modal::before,
+.close-modal::after {
+    /* Absolute Zentrierung, die Flexbox-Bugs ignoriert */
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    
+    /* Resets */
     margin: 0 !important;
     padding: 0 !important;
-    line-height: 0;
-    width: 100%;
-    height: 100%;
+    line-height: 1 !important; /* Wichtig für FontAwesome */
+    display: block !important;
 }
 
 .close-modal:active { 
