@@ -3069,59 +3069,30 @@ window.joinLiveStream = async function(streamId) {
     const streamData = streamSnap.data();
     window.currentLiveStreamerUid = streamData.broadcasterUid;
     
-    document.getElementById('live-broadcaster-pic').src = streamData.broadcasterPic || 'https://i.imgur.com/JDPRzCc.png';
-    document.getElementById('live-broadcaster-name').innerText = streamData.broadcasterName || 'Creator';
+    if(document.getElementById('live-broadcaster-pic')) document.getElementById('live-broadcaster-pic').src = streamData.broadcasterPic || 'https://i.imgur.com/JDPRzCc.png';
+    if(document.getElementById('live-broadcaster-name')) document.getElementById('live-broadcaster-name').innerText = streamData.broadcasterName || 'Creator';
     
     await updateDoc(doc(db, "live_streams", streamId), { viewers: increment(1) }).catch(()=>{});
     
     // Alten Raum schließen, falls vorhanden
-    if(currentRoom) {
-        currentRoom.disconnect();
-    }
+    if(currentRoom) currentRoom.disconnect();
     
     // ==========================================
-    // 🔥 LIVEKIT CONNECTION 🔥
+    // 🔥 LIVEKIT CONNECTION FÜR ZUSCHAUER 🔥
     // ==========================================
     const livekitUrl = "wss://phil-shorts-cv9pfxjq.livekit.cloud"; 
     
     try {
-        // 🔥 FIX: Wir hängen eine Zufallszahl an die UID! So kannst du mit 10 Tabs im selben Account testen, ohne dass sich die Tabs rauskicken!
         const uniqueViewerId = currentUser.uid + "_" + Math.floor(Math.random() * 100000);
-        
-        // GENERIERT EINEN EINZIGARTIGEN TOKEN FÜR GENAU DIESEN ZUSCHAUER!
         const token = await generateLiveKitToken(streamId, uniqueViewerId, false);
 
-        currentRoom = new LivekitClient.Room({
-            adaptiveStream: false, 
-            dynacast: false,       
-        });
+        currentRoom = new LivekitClient.Room({ adaptiveStream: false, dynacast: false });
 
-        // Event: Sobald der Streamer sein Video/Audio hochlädt, kommt es hier an
-        currentRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-            if(offlineText) offlineText.style.display = 'none';
-            
-            // LiveKit hängt Video und Audio direkt an unser <video> Element an
-            if (track.kind === 'video' || track.kind === 'audio') {
-                track.attach(videoEl);
-            }
-            
-            // Zeigt einen "Tippen zum Entmuten" Screen, da Browser Autoplay mit Ton blockieren
-            const unmuteOverlay = document.getElementById('live-unmute-overlay');
-            if(unmuteOverlay) {
-                unmuteOverlay.style.display = 'flex';
-                unmuteOverlay.onclick = () => {
-                    videoEl.muted = false;
-                    unmuteOverlay.style.display = 'none';
-                };
-            }
-        });
-
-        // 1. Event: Wenn ein Track (Video/Audio) vom Streamer ankommt
         currentRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
             if(offlineText) offlineText.style.display = 'none';
             
             if (track.kind === 'audio') {
-                track.attach(videoEl); // Audio immer an den Hauptplayer heften
+                track.attach(videoEl); 
             } else if (track.kind === 'video') {
                 if (publication.source === LivekitClient.Track.Source.ScreenShare) {
                     track.attach(videoEl);
@@ -3133,9 +3104,10 @@ window.joinLiveStream = async function(streamId) {
                         camEl.style.cssText = "position:absolute; top:20px; right:20px; width:110px; aspect-ratio:9/16; object-fit:cover; border-radius:12px; border:2px solid #00f2fe; z-index:100; box-shadow:0 10px 30px rgba(0,0,0,0.5); transform: scaleX(-1);";
                         document.querySelector('.lr-video-col').appendChild(camEl);
                     }
+                    camEl.style.display = 'block'; 
                     track.attach(camEl);
                 } else {
-                    track.attach(videoEl); // Fallback
+                    track.attach(videoEl); 
                 }
             }
             
@@ -3146,7 +3118,6 @@ window.joinLiveStream = async function(streamId) {
             }
         });
 
-        // 2. Event: Wenn der Streamer eine Szene wechselt (z.B. Cam ausschaltet)
         currentRoom.on(LivekitClient.RoomEvent.TrackUnsubscribed, (track, publication) => {
             track.detach();
             if (publication.source === LivekitClient.Track.Source.Camera) {
@@ -3155,7 +3126,6 @@ window.joinLiveStream = async function(streamId) {
             }
         });
 
-        // 3. Event: Streamer beendet Stream komplett
         currentRoom.on(LivekitClient.RoomEvent.Disconnected, () => {
             if(offlineText) {
                 offlineText.style.display = 'flex';
@@ -3165,7 +3135,6 @@ window.joinLiveStream = async function(streamId) {
             if(camEl) camEl.remove();
         });
 
-        // Raum betreten!
         await currentRoom.connect(livekitUrl, token);
         console.log("Erfolgreich mit LiveKit Raum verbunden!");
 
@@ -3174,29 +3143,9 @@ window.joinLiveStream = async function(streamId) {
         if(offlineText) {
             offlineText.innerHTML = '<i class="fas fa-exclamation-triangle" style="font-size:40px; color:#ff4444; margin-bottom:10px;"></i><span style="color:#ff4444;">Live-Server Fehler</span>';
         }
-        showCustomAlert("Verbindungsfehler", "Konnte nicht mit dem Live-Server verbinden. (Fehler in der Konsole)");
+        showCustomAlert("Verbindungsfehler", "Konnte nicht mit dem Live-Server verbinden.");
     }
-
-    // Event: Sobald der Streamer sein Video/Audio hochlädt, kommt es hier an
-    currentRoom.on(LivekitClient.RoomEvent.TrackSubscribed, (track, publication, participant) => {
-        if(offlineText) offlineText.style.display = 'none';
-        
-        // LiveKit hängt Video und Audio direkt an unser <video> Element an
-        if (track.kind === 'video' || track.kind === 'audio') {
-            track.attach(videoEl);
-        }
-        
-        // Zeigt einen "Tippen zum Entmuten" Screen, da Browser Autoplay mit Ton blockieren
-        const unmuteOverlay = document.getElementById('live-unmute-overlay');
-        if(unmuteOverlay) {
-            unmuteOverlay.style.display = 'flex';
-            unmuteOverlay.onclick = () => {
-                videoEl.muted = false;
-                unmuteOverlay.style.display = 'none';
-            };
-        }
-    });
- 
+    
     initLiveRoomListeners(streamId);
 };
 
