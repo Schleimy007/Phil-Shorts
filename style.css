@@ -28,7 +28,7 @@
     --ps-cyan: #32ade6; /* iOS System Cyan */       
     
     /* iOS Geometry */
-    --radius-sm: 10px;
+    --radius-sm: 8px;
     --radius-md: 16px; 
     --radius-lg: 24px; 
     --radius-modal: 38px;
@@ -104,13 +104,13 @@ body.theme-neon-pink, body.theme-neon-pink .app, body.theme-neon-pink .video, bo
 @keyframes glowPulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
 /* --- GLOBAL BUTTON RESET (Makes ALL buttons clickable & bouncy) --- */
-button, .btn, .nav__item, .videoSidebar__button, .profile-action-btn, .chat-send-btn, .close-modal, .live-stream-btn {
+button, .btn, .nav__item, .videoSidebar__button, .profile-action-btn, .chat-send-btn, .close-modal, .live-stream-btn, .back-btn, .search-icon {
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
     transition: var(--press-out);
 }
-button:active, .btn:active, .nav__item:active, .videoSidebar__button:active, .profile-action-btn:active, .chat-send-btn:active, .close-modal:active, .live-stream-btn:active {
+button:active, .btn:active, .nav__item:active, .videoSidebar__button:active, .profile-action-btn:active, .chat-send-btn:active, .close-modal:active, .live-stream-btn:active, .back-btn:active, .search-icon:active {
     transform: scale(0.92);
     opacity: 0.7;
     transition: var(--press-in);
@@ -134,11 +134,11 @@ button:active, .btn:active, .nav__item:active, .videoSidebar__button:active, .pr
     margin-top: 12px; display: inline-flex; align-items: center; gap: 8px;
 }
 
-.reply-video-btn { color: var(--ios-blue); margin-left: 15px; font-size: 15px; font-weight: 500; }
+.reply-video-btn { color: var(--ios-blue); margin-left: 16px; font-size: 15px; font-weight: 500; }
 
-.battle-score { position: absolute; top: 12px; font-size: 24px; font-weight: 700; z-index: 30; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
-.battle-score.left { left: 20px; color: var(--ps-cyan); }
-.battle-score.right { right: 20px; color: var(--ps-pink); }
+.battle-score { position: absolute; top: 16px; font-size: 24px; font-weight: 700; z-index: 30; text-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+.battle-score.left { left: 24px; color: var(--ps-cyan); }
+.battle-score.right { right: 24px; color: var(--ps-pink); }
 
 .verified-badge { color: var(--ios-blue) !important; margin-left: 4px; font-size: 14px; -webkit-text-fill-color: var(--ios-blue) !important; display: inline-block; }
 
@@ -255,14 +255,15 @@ button:active, .btn:active, .nav__item:active, .videoSidebar__button:active, .pr
 .header__link.active { color: white; }
 .header__link.active::after { content: ''; display: block; width: 28px; height: 3px; background: white; margin: 6px auto 0; border-radius: var(--radius-pill); }
 
-.search-icon { position: absolute; right: 24px; top: 50%; transform: translateY(-50%); font-size: 24px; color: white; cursor: pointer; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4); transition: var(--press-out); padding: 8px; border-radius: 50%; background: rgba(255,255,255,0.1); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);}
-.search-icon:active { transform: translateY(-50%) scale(0.85); background: rgba(255,255,255,0.2); transition: var(--press-in); }
-
-.live-stream-btn { position: absolute; left: 24px; top: 50%; transform: translateY(-50%); font-size: 15px; font-weight: 600; background: var(--ios-red); color: white; padding: 8px 16px; border-radius: var(--radius-pill); cursor: pointer; display: flex; gap: 8px; align-items: center; box-shadow: 0 4px 12px rgba(255, 69, 58, 0.3); }
+/* NACKTE ICONS (Search, Back) ohne Hintergrund, symmetrisch */
+.search-icon { position: absolute; right: 24px; top: 50%; transform: translateY(-50%); font-size: 24px; color: white; cursor: pointer; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6); transition: var(--press-out); padding: 8px; background: transparent; border: none; }
+.search-icon:active { transform: translateY(-50%) scale(0.85); opacity: 0.7; transition: var(--press-in); }
 
 .top-bar { display: flex; align-items: center; width: 100%; max-width: 100%; gap: 16px; padding: 16px 24px; position: sticky; top: 0; z-index: 10; background: var(--bg-deep); border-bottom: 0.5px solid var(--border-dim);}
-.back-btn { font-size: 28px; cursor: pointer; padding: 8px; color: var(--text-main); transition: var(--press-out); border-radius: 50%; background: rgba(255, 255, 255, 0.1);}
-.back-btn:active { background: rgba(255, 255, 255, 0.2); transform: scale(0.9); transition: var(--press-in); }
+.back-btn { font-size: 28px; cursor: pointer; padding: 8px; color: var(--text-main); transition: var(--press-out); background: transparent; border: none;}
+.back-btn:active { transform: scale(0.9); opacity: 0.6; transition: var(--press-in); }
+
+.live-stream-btn { position: absolute; left: 24px; top: 50%; transform: translateY(-50%); font-size: 15px; font-weight: 600; background: var(--ios-red); color: white; padding: 8px 16px; border-radius: var(--radius-pill); cursor: pointer; display: flex; gap: 8px; align-items: center; box-shadow: 0 4px 12px rgba(255, 69, 58, 0.3); }
 
 /* --- VIDEO FEED --- */
 .app__videos { height: 100%; width: 100%; max-width: 100vw; scroll-snap-type: y mandatory; overflow-y: scroll; scrollbar-width: none; background-color: transparent; scroll-behavior: smooth; }
@@ -315,9 +316,20 @@ button:active, .btn:active, .nav__item:active, .videoSidebar__button:active, .pr
 .follow-btn { position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); color: white; background: var(--ps-pink); font-size: 13px; font-weight: bold; border-radius: 50%; width: 24px; height: 24px; display: flex; justify-content: center; align-items: center; cursor: pointer; border: 2px solid white; transition: var(--press-out); }
 .follow-btn:active { transform: translateX(-50%) scale(0.85); background: #d01c3f; transition: var(--press-in); }
 
-.videoSidebar__button { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: rgba(0, 0, 0, 0.4); backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur); border-radius: var(--radius-pill); padding: 12px 10px; min-width: 54px; border: 0.5px solid rgba(255, 255, 255, 0.1); }
-.videoSidebar__button i { font-size: 26px; color: white; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
-.videoSidebar__button p { font-size: 13px; font-weight: 600; color: white; margin-top: 6px; }
+/* NACKTE VIDEO BUTTONS OHNE HINTERGRUND (Modern, Clean, Symmetrical) */
+.videoSidebar__button { 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    justify-content: center; 
+    text-align: center; 
+    background: transparent; /* KEIN HINTERGRUND MEHR */
+    border: none;
+    padding: 8px 0; 
+    min-width: 50px; 
+}
+.videoSidebar__button i { font-size: 32px; color: white; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5)); /* Starker Schatten für Sichtbarkeit */ }
+.videoSidebar__button p { font-size: 13px; font-weight: 600; color: white; margin-top: 6px; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
 .videoSidebar__button.liked i { color: var(--ps-pink); }
 .videoSidebar__button.gift-btn i { color: var(--ios-yellow); }
 
@@ -335,7 +347,7 @@ button:active, .btn:active, .nav__item:active, .videoSidebar__button:active, .pr
 .stat-box strong { display: block; font-size: 20px; font-weight: 700; color: var(--text-main); }
 .stat-box span { font-size: 14px; color: var(--ios-gray); font-weight: 500;}
 
-/* NEU: Graues, modernes Design für den Bearbeiten-Button */
+/* Graues, modernes Design für den Bearbeiten-Button */
 .profile-action-btn { background: var(--bg-surface-elevated); color: var(--ios-blue); border: none; padding: 0 28px; min-height: 44px; border-radius: var(--radius-pill); font-weight: 600; font-size: 16px; width: auto; min-width: 140px; display: flex; justify-content: center; align-items: center; border: 0.5px solid var(--border-dim); }
 .profile-action-btn.edit-btn { background: rgba(255, 255, 255, 0.1); color: var(--text-main); border: 0.5px solid rgba(255, 255, 255, 0.15); }
 
