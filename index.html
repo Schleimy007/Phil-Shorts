@@ -1249,19 +1249,17 @@
         </div>
 
     </div>
-<!-- Die neuen, sauber getrennten Module -->
-    <script type="module" src="js/firebase-config.js"></script>
+<script type="module" src="js/firebase-config.js"></script>
     <script type="module" src="js/script.js"></script>
     <script type="module" src="js/auth.js"></script>
     <script type="module" src="js/videos.js"></script>
     <script type="module" src="js/chat.js"></script>
     <script type="module" src="js/stream.js"></script>
 
-    <!-- Ein kurzer Start-Befehl, wenn alles geladen ist -->
     <script type="module">
+        // Startet alles, sobald die Module geladen sind
         document.addEventListener("DOMContentLoaded", () => {
-            // Falls bestimmte Setup-Skripte manuell angeschubst werden sollen,
-            // passiert das durch das window.onload in der script.js automatisch!
+            console.log("Phil Shorts Module erfolgreich geladen! 🚀");
         });
     </script>
 </body>
